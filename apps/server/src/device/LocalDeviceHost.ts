@@ -106,11 +106,33 @@ interface RunningHost {
 
 const platformReason = Effect.fn("LocalDeviceHost.platformReason")(function* (
   platform: DevicePlatform,
-): Effect.fn.Return<string | null, never, FileSystem.FileSystem | Path.Path> {
+): Effect.fn.Return<
+  string | null,
+  never,
+  FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner
+> {
   const hostPlatform = yield* HostProcessPlatform;
   if (platform === "ios") {
     if (hostPlatform !== "darwin") return "iOS Simulators need macOS with Xcode.";
     if (!(yield* isCommandAvailable("xcrun"))) return "Xcode command line tools were not found.";
+    const runner = yield* ProcessRunner.ProcessRunner;
+    const environment = yield* HostProcessEnvironment;
+    // Command Line Tools include xcrun, but only full Xcode supplies simctl.
+    const simctl = yield* runner
+      .run({
+        command: "xcrun",
+        args: ["--find", "simctl"],
+        env: environment,
+        timeout: Duration.seconds(5),
+      })
+      .pipe(
+        Effect.map(
+          (result) => !result.timedOut && result.code === 0 && result.stdout.trim().length > 0,
+        ),
+        Effect.orElseSucceed(() => false),
+      );
+    if (!simctl)
+      return "iOS Simulators need full Xcode selected in Xcode Settings → Locations → Command Line Tools. The current developer tools do not provide simctl. Android devices are unaffected.";
     return null;
   }
   const sdk = yield* androidSdk;
@@ -247,6 +269,7 @@ export const make = Effect.fn("LocalDeviceHost.make")(function* () {
     platform: DevicePlatform,
   ): Effect.fn.Return<DevicePlatformAvailability> {
     const reason = yield* platformReason(platform).pipe(
+      Effect.provideService(ProcessRunner.ProcessRunner, runner),
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(Path.Path, path),
     );

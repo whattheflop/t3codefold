@@ -423,7 +423,16 @@ export const makeWithHosts = Effect.fn("DeviceService.makeWithHosts")(function* 
         }
       }
     }
-    return { devices, detail: list.errors?.map((error) => error.message).join("\n") || undefined };
+    const iosAvailability = list.errors?.some((error) => error.message.startsWith("[apple-utils]"))
+      ? yield* host.platformAvailability("ios")
+      : undefined;
+    const details =
+      list.errors?.map((error) =>
+        error.message.startsWith("[apple-utils]")
+          ? `iOS simulator discovery: ${iosAvailability && !iosAvailability.available && iosAvailability.reason ? iosAvailability.reason : error.message}`
+          : error.message,
+      ) ?? [];
+    return { devices, detail: details.join("\n") || undefined };
   });
 
   const refresh = Effect.fn("DeviceService.refresh")(function* (ready: DeviceReadiness) {

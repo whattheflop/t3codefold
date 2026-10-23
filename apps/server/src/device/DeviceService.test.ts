@@ -75,6 +75,9 @@ const fixture = Effect.fn("fixture")(function* (
   const agentStarts: string[] = [];
   const agentStops: string[] = [];
   const requests: string[] = [];
+  const diagnostics: { errors: Array<{ message: string }>; iosUnavailableReason?: string } = {
+    errors: [],
+  };
   let booted = false;
   let shutDown = false;
   const ready: DeviceHost.DeviceHostReady = {
@@ -104,7 +107,12 @@ const fixture = Effect.fn("fixture")(function* (
       hubInstalled: true,
       agentDeviceInstalled: false,
     }),
-    platformAvailability: (platform) => Effect.succeed({ platform, available: true }),
+    platformAvailability: (platform) =>
+      Effect.succeed(
+        platform === "ios" && diagnostics.iosUnavailableReason
+          ? { platform, available: false, reason: diagnostics.iosUnavailableReason }
+          : { platform, available: true },
+      ),
     ensureReady: (onPhase) =>
       Effect.gen(function* () {
         if (runtimeFailure) return yield* runtimeFailure;
@@ -194,6 +202,7 @@ const fixture = Effect.fn("fixture")(function* (
           return HttpClientResponse.fromWeb(
             request,
             Response.json({
+              errors: diagnostics.errors,
               simulators: [],
               emulators: booted
                 ? [
@@ -213,8 +222,29 @@ const fixture = Effect.fn("fixture")(function* (
       ),
     ),
   );
-  return { service, starts, agentStarts, agentStops, requests, settings };
+  return { service, starts, agentStarts, agentStops, requests, settings, diagnostics };
 });
+
+it.effect("explains missing Simulator tools while keeping Android devices available", () =>
+  Effect.gen(function* () {
+    const { service, diagnostics } = yield* fixture();
+    diagnostics.errors.push({
+      message: "[apple-utils] Failed to run `xcrun simctl list devices --json`:",
+    });
+    diagnostics.iosUnavailableReason = "Full Xcode is required; Android devices are unaffected.";
+    yield* service.configure({ enabled: true });
+    const state = yield* service.list;
+    expect(state.hostStatus).toBe("ready");
+    expect(state.hostStatusDetail).toBe(
+      "iOS simulator discovery: Full Xcode is required; Android devices are unaffected.",
+    );
+    expect(state.devices.some((device) => device.platform === "android")).toBe(true);
+    delete diagnostics.iosUnavailableReason;
+    expect((yield* service.list).hostStatusDetail).toContain(
+      "iOS simulator discovery: [apple-utils]",
+    );
+  }).pipe(Effect.scoped),
+);
 
 describe("device setup consent", () => {
   it.effect(

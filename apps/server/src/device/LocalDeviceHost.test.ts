@@ -28,6 +28,9 @@ const diagnose = (
   LocalDeviceHost.__testing.platformReason("android").pipe(
     Effect.provideService(HostProcessEnvironment, environment),
     Effect.provideService(HostProcessPlatform, platform),
+    Effect.provideService(ProcessRunner.ProcessRunner, {
+      run: () => Effect.die("Android SDK inspection must not invoke Xcode"),
+    }),
     Effect.provideService(
       FileSystem.FileSystem,
       FileSystem.makeNoop({
@@ -36,6 +39,56 @@ const diagnose = (
     ),
     Effect.provide(platform === "win32" ? NodePath.layerWin32 : NodePath.layerPosix),
   );
+
+describe("iOS simulator availability", () => {
+  it.effect.each([
+    {
+      name: "full Xcode",
+      code: 0,
+      stdout: "/selected/Xcode/Developer/usr/bin/simctl\n",
+      available: true,
+    },
+    { name: "Command Line Tools", code: 72, stdout: "", available: false },
+    { name: "missing simctl path", code: 0, stdout: "", available: false },
+  ])("requires simctl with $name selected", ({ code, stdout, available }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const directory = yield* fs.makeTempDirectoryScoped();
+      yield* fs.writeFileString(`${directory}/xcrun`, "");
+      yield* fs.chmod(`${directory}/xcrun`, 0o755);
+      const environment = { PATH: directory, DEVELOPER_DIR: "/selected/Xcode/Developer" };
+      let probes = 0;
+      const reason = yield* LocalDeviceHost.__testing.platformReason("ios").pipe(
+        Effect.provideService(HostProcessPlatform, "darwin"),
+        Effect.provideService(HostProcessEnvironment, environment),
+        Effect.provideService(ProcessRunner.ProcessRunner, {
+          run: (input) => {
+            probes++;
+            expect(input.command).toBe("xcrun");
+            expect(input.args).toEqual(["--find", "simctl"]);
+            expect(input.env).toEqual(environment);
+            return Effect.succeed({
+              code: ChildProcessSpawner.ExitCode(code),
+              stdout,
+              stderr: "",
+              timedOut: false,
+              stdoutTruncated: false,
+              stderrTruncated: false,
+              stdoutInvalidUtf8: false,
+              stderrInvalidUtf8: false,
+            });
+          },
+        }),
+      );
+      expect(probes).toBe(1);
+      if (available) expect(reason).toBeNull();
+      else {
+        expect(reason).toContain("full Xcode selected");
+        expect(reason).toContain("Android devices are unaffected");
+      }
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+});
 
 describe("Android SDK availability", () => {
   it.effect("explains that adb alone is insufficient to launch an emulator", () =>
