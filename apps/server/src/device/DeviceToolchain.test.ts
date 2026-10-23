@@ -10,9 +10,111 @@ import * as ProcessRunner from "../processRunner.ts";
 import {
   deviceToolVersions,
   DEVICE_HUB_VERSION,
+  DEVICE_HUB_PACKAGE_VERSION,
   ensureDeviceHub,
   isDeviceHubInstalled,
 } from "./DeviceToolchain.ts";
+import { deviceHubScrcpyPatch } from "./deviceHubPatch.ts";
+
+// The relevant upstream argument boundary, independent of the patch's replacement text.
+const scrcpySource =
+  'const args = [\n            "control=true",\n            `send_dummy_byte=${video}`,\n];';
+const installed = {
+  code: ChildProcessSpawner.ExitCode(0),
+  stdout: "",
+  stderr: "",
+  timedOut: false,
+  stdoutTruncated: false,
+  stderrTruncated: false,
+  stdoutInvalidUtf8: false,
+  stderrInvalidUtf8: false,
+};
+
+const fakeHubInstall = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  source: string,
+  requested: string[],
+) =>
+  ProcessRunner.ProcessRunner.of({
+    run: ({ args }) =>
+      Effect.gen(function* () {
+        requested.push(args.at(-1)!);
+        const root = path.join(args[args.indexOf("--prefix") + 1]!, "node_modules/expo-device-hub");
+        yield* fs.makeDirectory(path.join(root, "dist/server"), { recursive: true });
+        yield* fs.writeFileString(path.join(root, "dist/server/cli.mjs"), "");
+        const file = path.join(root, deviceHubScrcpyPatch.file);
+        yield* fs.makeDirectory(path.dirname(file), { recursive: true });
+        yield* fs.writeFileString(file, source);
+        return installed;
+      }).pipe(Effect.orDie),
+  });
+
+it.effect(
+  "fresh and reinstalled hubs preserve power without reusing or modifying the old install",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const base = yield* fs.makeTempDirectoryScoped();
+      const old = path.join(base, "tools/expo-device-hub", DEVICE_HUB_PACKAGE_VERSION);
+      yield* fs.makeDirectory(path.join(old, "node_modules/expo-device-hub/dist/server"), {
+        recursive: true,
+      });
+      yield* fs.writeFileString(
+        path.join(old, "node_modules/expo-device-hub/dist/server/cli.mjs"),
+        "old hub",
+      );
+      yield* fs.writeFileString(path.join(old, ".install-complete"), DEVICE_HUB_PACKAGE_VERSION);
+      expect(yield* isDeviceHubInstalled(base)).toBe(false);
+      const requested: string[] = [];
+      const ensure = ensureDeviceHub(base).pipe(
+        Effect.provideService(
+          ProcessRunner.ProcessRunner,
+          fakeHubInstall(fs, path, scrcpySource, requested),
+        ),
+      );
+      const first = yield* ensure;
+      expect(first.installDir).not.toBe(old);
+      expect(yield* isDeviceHubInstalled(base)).toBe(true);
+      expect(yield* ensure).toEqual(first);
+      expect(requested).toEqual([`expo-device-hub@${DEVICE_HUB_PACKAGE_VERSION}`]);
+      yield* fs.remove(first.installDir, { recursive: true });
+      const second = yield* ensure;
+      expect(requested).toHaveLength(2);
+      const source = yield* fs.readFileString(
+        path.join(second.installDir, "node_modules/expo-device-hub", deviceHubScrcpyPatch.file),
+      );
+      expect(source).toContain('"power_on=false"');
+      expect(source).toContain('"control=true"');
+      expect(
+        yield* fs.readFileString(
+          path.join(old, "node_modules/expo-device-hub/dist/server/cli.mjs"),
+        ),
+      ).toBe("old hub");
+      expect((yield* deviceToolVersions(base))?.hub.installedVersions).toEqual([
+        DEVICE_HUB_PACKAGE_VERSION,
+        DEVICE_HUB_VERSION,
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect.each(["unexpected upstream source", scrcpySource + scrcpySource])(
+  "does not publish a hub when the power-state patch cannot match exactly once: %s",
+  (source) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const base = yield* fs.makeTempDirectoryScoped();
+      const error = yield* ensureDeviceHub(base).pipe(
+        Effect.provideService(ProcessRunner.ProcessRunner, fakeHubInstall(fs, path, source, [])),
+        Effect.flip,
+      );
+      expect(error.step).toBe("matching the scrcpy power-state patch");
+      expect(yield* isDeviceHubInstalled(base)).toBe(false);
+      expect(yield* fs.readDirectory(path.join(base, "tools/expo-device-hub"))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
 
 it.effect("failed installation cleans staging and exposes only a safe failure message", () =>
   Effect.gen(function* () {

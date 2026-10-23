@@ -1,5 +1,10 @@
 import { deviceToolMaintenanceScript } from "./deviceToolMaintenance.ts";
-import { AGENT_DEVICE_VERSION, DEVICE_HUB_VERSION } from "./DeviceToolchain.ts";
+import {
+  AGENT_DEVICE_VERSION,
+  DEVICE_HUB_PACKAGE_VERSION,
+  DEVICE_HUB_VERSION,
+} from "./DeviceToolchain.ts";
+import { deviceHubScrcpyPatch } from "./deviceHubPatch.ts";
 
 export const quoteRemoteArg = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
 
@@ -27,6 +32,8 @@ export const remoteDeviceScript = (
 const owner = ${JSON.stringify(owner)};
 const mode = ${JSON.stringify(mode)};
 const hubVersion = ${JSON.stringify(DEVICE_HUB_VERSION)};
+const hubPackageVersion = ${JSON.stringify(DEVICE_HUB_PACKAGE_VERSION)};
+const hubScrcpyPatch = ${JSON.stringify(deviceHubScrcpyPatch)};
 const agentVersion = ${JSON.stringify(AGENT_DEVICE_VERSION)};
 ` +
   deviceToolMaintenanceScript +
@@ -120,9 +127,17 @@ async function install(name, version, entry) {
   try {
     if (complete()) return file;
     staging = fs.mkdtempSync(path.join(path.dirname(dir), '.install-'));
-    const result = run('npm', ['install', '--prefix', staging, '--no-fund', '--no-audit', name + '@' + version], { timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
+    const packageVersion = name === 'expo-device-hub' ? hubPackageVersion : version;
+    const result = run('npm', ['install', '--prefix', staging, '--no-fund', '--no-audit', name + '@' + packageVersion], { timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
     if (result.status !== 0) throw Error('Installing ' + name + ': ' + (result.error?.message || result.stderr?.slice(-2000)));
     if (!fs.existsSync(path.join(staging, 'node_modules', name, entry))) throw Error('Missing installed entry for ' + name);
+    if (name === 'expo-device-hub') {
+      const patch = hubScrcpyPatch;
+      const file = path.join(staging, 'node_modules', name, patch.file);
+      const source = fs.readFileSync(file, 'utf8');
+      if (source.split(patch.before).length !== 2) throw Error('Could not match the scrcpy power-state patch');
+      fs.writeFileSync(file, source.replace(patch.before, patch.after));
+    }
     fs.writeFileSync(path.join(staging, '.install-complete'), version);
     fs.rmSync(dir, { recursive: true, force: true });
     fs.renameSync(staging, dir);

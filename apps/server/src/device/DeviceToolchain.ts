@@ -24,9 +24,12 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
 import * as ProcessRunner from "../processRunner.ts";
+import { deviceHubScrcpyPatch } from "./deviceHubPatch.ts";
 
 const DEVICE_HUB_PACKAGE = "expo-device-hub";
-export const DEVICE_HUB_VERSION = "0.15.3";
+export const DEVICE_HUB_PACKAGE_VERSION = "0.15.3";
+// A separate install revision prevents reuse of an unpatched install or running SSH hub.
+export const DEVICE_HUB_VERSION = `${DEVICE_HUB_PACKAGE_VERSION}-t3.1`;
 const AGENT_DEVICE_PACKAGE = "agent-device";
 export const AGENT_DEVICE_VERSION = "0.21.12";
 
@@ -63,12 +66,14 @@ export class DeviceToolchainInstallError extends Schema.TaggedError<DeviceToolch
 interface ToolSpec {
   readonly name: string;
   readonly version: string;
+  readonly packageVersion?: string;
   readonly entry: ReadonlyArray<string>;
 }
 
 const HUB_SPEC: ToolSpec = {
   name: DEVICE_HUB_PACKAGE,
   version: DEVICE_HUB_VERSION,
+  packageVersion: DEVICE_HUB_PACKAGE_VERSION,
   entry: ["dist", "server", "cli.mjs"],
 };
 
@@ -138,7 +143,7 @@ const installTool = Effect.fn("DeviceToolchain.installTool")(function* (
       stagingDir,
       "--no-fund",
       "--no-audit",
-      `${spec.name}@${spec.version}`,
+      `${spec.name}@${spec.packageVersion ?? spec.version}`,
     ];
     const result = yield* runner
       .run({ command: "npm", args: installArgs, timeout: INSTALL_TIMEOUT })
@@ -170,6 +175,20 @@ const installTool = Effect.fn("DeviceToolchain.installTool")(function* (
         tool: spec.name,
         step: "verifying the installed entry point",
       });
+    }
+    if (spec.name === DEVICE_HUB_PACKAGE) {
+      const patch = deviceHubScrcpyPatch;
+      const file = path.join(stagingDir, "node_modules", spec.name, patch.file);
+      const source = yield* fs.readFileString(file).pipe(Effect.mapError(fail("reading scrcpy")));
+      if (source.split(patch.before).length !== 2) {
+        return yield* new DeviceToolchainInstallError({
+          tool: spec.name,
+          step: "matching the scrcpy power-state patch",
+        });
+      }
+      yield* fs
+        .writeFileString(file, source.replace(patch.before, patch.after))
+        .pipe(Effect.mapError(fail("patching scrcpy to preserve device power")));
     }
     yield* fs
       .writeFileString(path.join(stagingDir, ".install-complete"), `${spec.version}\n`)

@@ -8,7 +8,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
 import { quoteRemoteArg, remoteDeviceEnvironment, remoteDeviceScript } from "./sshDeviceScript.ts";
-import { AGENT_DEVICE_VERSION, DEVICE_HUB_VERSION } from "./DeviceToolchain.ts";
+import {
+  AGENT_DEVICE_VERSION,
+  DEVICE_HUB_PACKAGE_VERSION,
+  DEVICE_HUB_VERSION,
+} from "./DeviceToolchain.ts";
+import { deviceHubScrcpyPatch } from "./deviceHubPatch.ts";
 
 const exec = NodeUtil.promisify(NodeChildProcess.execFile);
 
@@ -115,12 +120,22 @@ else { const child=spawn(process.execPath,[path.join(path.dirname(process.argv[1
         await expect(NodeFSP.stat(NodePath.join(root, "hosts/one/hub.json"))).rejects.toThrow();
         const template = NodePath.join(home, "hub-template");
         await NodeFSP.cp(hubDir, template, { recursive: true });
+        const scrcpyRelative = NodePath.join(
+          "node_modules/expo-device-hub",
+          deviceHubScrcpyPatch.file,
+        );
+        await NodeFSP.mkdir(NodePath.dirname(NodePath.join(template, scrcpyRelative)), {
+          recursive: true,
+        });
+        const scrcpySource =
+          'const args = [\n            "control=true",\n            `send_dummy_byte=${video}`,\n];';
+        await NodeFSP.writeFile(NodePath.join(template, scrcpyRelative), scrcpySource);
         await NodeFSP.rm(NodePath.join(hubDir, ".install-complete"));
         const installLock = hubDir + ".lock";
         await NodeFSP.symlink("2147483647:exited-installer", installLock);
         await NodeFSP.writeFile(
           NodePath.join(bin, "npm"),
-          `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);if(args[0]==='--version'){console.log('10.0.0');process.exit(0);}fs.cpSync(${JSON.stringify(template)},args[args.indexOf('--prefix')+1],{recursive:true});`,
+          `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);if(args[0]==='--version'){console.log('10.0.0');process.exit(0);}if(args.at(-1)!==${JSON.stringify(`expo-device-hub@${DEVICE_HUB_PACKAGE_VERSION}`)})process.exit(1);fs.cpSync(${JSON.stringify(template)},args[args.indexOf('--prefix')+1],{recursive:true});`,
           { mode: 0o755 },
         );
         await NodeFSP.mkdir(NodePath.join(root, "hosts/one"), { recursive: true });
@@ -129,11 +144,28 @@ else { const child=spawn(process.execPath,[path.join(path.dirname(process.argv[1
         await NodeFSP.writeFile(NodePath.join(root, "tools/.maintenance-lock"), "blocked");
         await NodeFSP.writeFile(NodePath.join(root, "tools/.users"), "unwritable lease directory");
         try {
+          await NodeFSP.writeFile(
+            NodePath.join(template, scrcpyRelative),
+            "unexpected upstream source",
+          );
+          await expect(invoke("one", "start")).rejects.toThrow(
+            "Could not match the scrcpy power-state patch",
+          );
+          await expect(NodeFSP.stat(NodePath.join(hubDir, ".install-complete"))).rejects.toThrow();
+          expect(
+            (await NodeFSP.readdir(NodePath.dirname(hubDir))).some((name) =>
+              name.startsWith(".install-"),
+            ),
+          ).toBe(false);
+          await NodeFSP.writeFile(NodePath.join(template, scrcpyRelative), scrcpySource);
           const [manual, concurrent] = await Promise.all([
             invoke("one", "start"),
             invoke("one", "start"),
           ]);
           expect(concurrent.hubPort).toBe(manual.hubPort);
+          expect(await NodeFSP.readFile(NodePath.join(hubDir, scrcpyRelative), "utf8")).toContain(
+            '"power_on=false"',
+          );
           expect(manual.daemonPort).toBeUndefined();
           await expect(
             NodeFSP.stat(NodePath.join(root, "hosts/one/daemon.json")),
