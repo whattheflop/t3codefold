@@ -6,13 +6,23 @@ import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { useDeviceControls, type DeviceControls } from "./useDeviceControls";
 
 type Result = { _tag: "Success"; value: DeviceDetail } | { _tag: "Failure"; cause: unknown };
-const { read, action, subscribe } = vi.hoisted(() => ({
+const { read, action, subscribe, refreshAccess } = vi.hoisted(() => ({
   read: vi.fn<() => Promise<Result>>(),
   action: vi.fn<() => Promise<Result>>(),
   subscribe:
-    vi.fn<(_target: unknown, onChange: (app: { id: string } | null) => void) => () => void>(),
+    vi.fn<
+      (
+        _target: unknown,
+        onChange: (app: { id: string } | null) => void,
+        onUnauthorized?: () => void,
+      ) => () => void
+    >(),
+  refreshAccess: vi.fn(),
 }));
-vi.mock("~/state/device", () => ({ deviceEnvironment: { detail: "detail", action: "action" } }));
+vi.mock("~/state/device", () => ({
+  deviceEnvironment: { detail: "detail", action: "action" },
+  refreshDeviceHubAccess: refreshAccess,
+}));
 vi.mock("~/state/use-atom-command", () => ({
   useAtomCommand: (command: string) => (command === "detail" ? read : action),
 }));
@@ -47,12 +57,25 @@ function deferred() {
 }
 let renderer: ReactTestRenderer | undefined;
 let controls: DeviceControls;
-function Probe({ visible, access = null }: { visible: boolean; access?: DeviceHubAccess | null }) {
+function Probe({
+  visible,
+  access = null,
+  watchForeground = true,
+  environmentId = EnvironmentId.make("environment"),
+  target = device,
+}: {
+  visible: boolean;
+  access?: DeviceHubAccess | null;
+  watchForeground?: boolean;
+  environmentId?: EnvironmentId;
+  target?: DeviceSummary;
+}) {
   const next = useDeviceControls({
-    environmentId: EnvironmentId.make("environment"),
-    device,
+    environmentId,
+    device: target,
     access,
     visible,
+    watchForeground,
   });
   useEffect(() => {
     controls = next;
@@ -64,6 +87,7 @@ beforeEach(() => {
   read.mockReset();
   action.mockReset();
   subscribe.mockReset();
+  refreshAccess.mockReset();
   subscribe.mockReturnValue(() => {});
   read.mockResolvedValue(snapshot("light"));
 });
@@ -230,3 +254,91 @@ it.each(["hidden", "access renewed"] as const)(
     expect(controls.foregroundApp?.id).toBe("current.live.app");
   },
 );
+
+const access: DeviceHubAccess = {
+  httpBase: "https://remote.test/api/device-hub",
+  wsBase: "wss://remote.test/api/device-hub",
+  query: { hostId: "remote", wsTicket: "old-ticket" },
+  credentials: false,
+};
+
+it("only observes foreground apps while Tools and the device are visible", async () => {
+  const stop = vi.fn();
+  subscribe.mockReturnValue(stop);
+  await act(async () => {
+    renderer = create(<Probe visible access={access} watchForeground={false} />);
+  });
+  expect(subscribe).not.toHaveBeenCalled();
+  await act(async () => renderer!.update(<Probe visible access={access} watchForeground />));
+  expect(subscribe).toHaveBeenCalledOnce();
+  const onChange = subscribe.mock.calls[0]![1];
+  await act(() => onChange({ id: "current.app" }));
+  expect(controls.foregroundApp).toEqual({ id: "current.app" });
+  await act(async () =>
+    renderer!.update(<Probe visible access={access} watchForeground={false} />),
+  );
+  expect(stop).toHaveBeenCalledOnce();
+  await act(() => onChange({ id: "stale.app" }));
+  expect(controls.foregroundApp).toBeNull();
+  await act(async () =>
+    renderer!.update(<Probe visible={false} access={access} watchForeground />),
+  );
+  expect(subscribe).toHaveBeenCalledOnce();
+});
+
+it("renews the current environment's foreground access and ignores detached callbacks", async () => {
+  const stop = vi.fn();
+  subscribe.mockReturnValue(stop);
+  await act(async () => {
+    renderer = create(<Probe visible access={access} />);
+  });
+  const unauthorized = subscribe.mock.calls[0]![2]!;
+  await act(() => unauthorized());
+  expect(refreshAccess).toHaveBeenCalledWith(EnvironmentId.make("environment"));
+  const renewedAccess = { ...access, query: { hostId: "remote", wsTicket: "new-ticket" } };
+  await act(async () => renderer!.update(<Probe visible access={renewedAccess} />));
+  expect(stop).toHaveBeenCalledOnce();
+  expect(subscribe).toHaveBeenCalledTimes(2);
+  await act(() => unauthorized());
+  expect(refreshAccess).toHaveBeenCalledOnce();
+  const currentUnauthorized = subscribe.mock.calls[1]![2]!;
+  await act(async () => renderer!.update(<Probe visible={false} access={renewedAccess} />));
+  await act(() => currentUnauthorized());
+  expect(refreshAccess).toHaveBeenCalledOnce();
+});
+
+it("detaches foreground callbacks when the environment changes", async () => {
+  await act(async () => {
+    renderer = create(<Probe visible access={access} />);
+  });
+  const onChange = subscribe.mock.calls[0]![1];
+  const unauthorized = subscribe.mock.calls[0]![2]!;
+  await act(() => onChange({ id: "previous.app" }));
+  const nextEnvironment = EnvironmentId.make("next-environment");
+  await act(async () =>
+    renderer!.update(<Probe visible access={access} environmentId={nextEnvironment} />),
+  );
+  await act(() => {
+    onChange({ id: "stale.app" });
+    unauthorized();
+  });
+  expect(controls.foregroundApp).toBeNull();
+  expect(refreshAccess).not.toHaveBeenCalled();
+  expect(subscribe).toHaveBeenCalledTimes(2);
+  await act(() => subscribe.mock.calls[1]![2]!());
+  expect(refreshAccess).toHaveBeenCalledWith(nextEnvironment);
+});
+
+it("detaches foreground callbacks when switching hosts with the same device id", async () => {
+  await act(async () => {
+    renderer = create(<Probe visible access={access} />);
+  });
+  const onChange = subscribe.mock.calls[0]![1];
+  await act(() => onChange({ id: "previous.app" }));
+  await act(async () =>
+    renderer!.update(<Probe visible access={access} target={{ ...device, hostId: "other" }} />),
+  );
+  await act(() => onChange({ id: "stale.app" }));
+  expect(controls.foregroundApp).toBeNull();
+  expect(subscribe).toHaveBeenCalledTimes(2);
+});
