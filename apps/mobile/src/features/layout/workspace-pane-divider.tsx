@@ -1,158 +1,98 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, type AccessibilityActionEvent } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Platform, Pressable, StyleSheet, View, type AccessibilityActionEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-
+import { runOnJS } from "react-native-reanimated";
 import { cn } from "../../lib/cn";
-import { resolvePaneDividerRelease, type PaneDividerRelease } from "../../lib/foldable-pane-layout";
 
 const ACCESSIBILITY_RESIZE_STEP = 24;
-const HANDLE_FADE = { duration: 120 } as const;
 
 interface WorkspacePaneDividerProps {
   readonly accessibilityLabel: string;
-  /** Rendered width of the trailing pane this divider resizes. */
-  readonly width: number;
-  readonly range: { readonly min: number; readonly max: number };
-  readonly maximized: boolean;
-  /** Resting widths worth snapping to, such as the hinge of a foldable. */
-  readonly snapWidths?: ReadonlyArray<number>;
-  readonly onRelease: (release: PaneDividerRelease) => void;
-  readonly onToggleMaximized: () => void;
+  readonly currentWidth: number;
+  readonly resizeDirection: 1 | -1;
+  readonly onResizeStart?: () => void;
+  readonly onResizeBy: (delta: number) => void;
+  readonly onResizeEnd?: () => void;
 }
 
-/**
- * The drag handle between the chat and the trailing pane.
- *
- * While dragging only the handle moves, on the UI thread; the panes lay out
- * once on release. Resizing the chat feed or a terminal on every frame both
- * drops frames and makes full-screen terminal programs repaint for widths the
- * user never stops at. Dragging past either end maximizes or closes the pane,
- * and tapping the grip toggles maximize.
- */
 export function WorkspacePaneDivider(props: WorkspacePaneDividerProps) {
   const latestProps = useRef(props);
   latestProps.current = props;
-  const translationX = useSharedValue(0);
-  const active = useSharedValue(0);
-
-  // The handle keeps its dragged offset until the panes re-lay out around it,
-  // so it never jumps back to the old edge for a frame. The release count
-  // covers a release the layout clamps back to the same width.
-  const [releaseCount, setReleaseCount] = useState(0);
-  useEffect(() => {
-    translationX.value = 0;
-  }, [props.width, props.maximized, releaseCount, translationX]);
-
-  const release = useCallback(
-    (finalTranslationX: number) => {
-      const current = latestProps.current;
-      const result = resolvePaneDividerRelease({
-        startWidth: current.width,
-        translationX: finalTranslationX,
-        range: current.range,
-        ...(current.snapWidths ? { snapWidths: current.snapWidths } : {}),
-      });
-      const unchanged =
-        (result.kind === "maximize" && current.maximized) ||
-        (result.kind === "resize" && !current.maximized && result.width === current.width);
-      if (unchanged) {
-        translationX.value = withTiming(0, HANDLE_FADE);
-        return;
-      }
-      current.onRelease(result);
-      setReleaseCount((count) => count + 1);
-    },
-    [translationX],
+  const [dragging, setDragging] = useState(false);
+  const handleResizeStart = useCallback(() => {
+    setDragging(true);
+    latestProps.current.onResizeStart?.();
+  }, []);
+  const handleResize = useCallback((translationX: number) => {
+    latestProps.current.onResizeBy(translationX * latestProps.current.resizeDirection);
+  }, []);
+  const handleResizeEnd = useCallback(() => {
+    setDragging(false);
+    latestProps.current.onResizeEnd?.();
+  }, []);
+  const resizeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-4, 4])
+        .failOffsetY([-24, 24])
+        .onStart(() => {
+          runOnJS(handleResizeStart)();
+        })
+        .onUpdate((event) => {
+          runOnJS(handleResize)(event.translationX);
+        })
+        .onFinalize(() => {
+          runOnJS(handleResizeEnd)();
+        }),
+    [handleResize, handleResizeEnd, handleResizeStart],
   );
-  const toggleMaximized = useCallback(() => latestProps.current.onToggleMaximized(), []);
-
-  const gesture = useMemo(() => {
-    const pan = Gesture.Pan()
-      .activeOffsetX([-6, 6])
-      .failOffsetY([-24, 24])
-      .onStart(() => {
-        active.value = withTiming(1, HANDLE_FADE);
-      })
-      .onUpdate((event) => {
-        translationX.value = event.translationX;
-      })
-      .onEnd((event, success) => {
-        if (success) runOnJS(release)(event.translationX);
-        else translationX.value = withTiming(0, HANDLE_FADE);
-      })
-      .onFinalize(() => {
-        active.value = withTiming(0, HANDLE_FADE);
-      });
-    const tap = Gesture.Tap().onEnd((_event, success) => {
-      if (success) runOnJS(toggleMaximized)();
-    });
-    return Gesture.Exclusive(pan, tap);
-  }, [active, release, toggleMaximized, translationX]);
-
-  const handleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translationX.value }],
-  }));
-  const activeStyle = useAnimatedStyle(() => ({ opacity: active.value }));
 
   const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
-    const { width, range, onRelease, onToggleMaximized } = latestProps.current;
-    switch (event.nativeEvent.actionName) {
-      case "increment":
-        onRelease({
-          kind: "resize",
-          width: Math.min(range.max, width + ACCESSIBILITY_RESIZE_STEP),
-        });
-        return;
-      case "decrement":
-        onRelease({
-          kind: "resize",
-          width: Math.max(range.min, width - ACCESSIBILITY_RESIZE_STEP),
-        });
-        return;
-      case "activate":
-        onToggleMaximized();
-        return;
+    props.onResizeStart?.();
+    if (event.nativeEvent.actionName === "increment") {
+      props.onResizeBy(ACCESSIBILITY_RESIZE_STEP);
+    } else if (event.nativeEvent.actionName === "decrement") {
+      props.onResizeBy(-ACCESSIBILITY_RESIZE_STEP);
     }
+    props.onResizeEnd?.();
   };
 
   return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View
-        // Straddles the seam; a maximized pane's seam is the screen edge, so the
-        // handle sits just inside it instead of half off-screen.
-        className={cn(
-          "relative z-[100] w-6 self-stretch items-center justify-center",
-          props.maximized ? "-mr-6" : "-mx-3",
-        )}
-        accessible
+    <GestureDetector gesture={resizeGesture}>
+      <Pressable
+        className="relative z-[100] -mx-[22px] w-11 self-stretch justify-center"
         accessibilityActions={[
           { name: "increment", label: "Make pane wider" },
           { name: "decrement", label: "Make pane narrower" },
-          { name: "activate", label: props.maximized ? "Restore pane" : "Maximize pane" },
         ]}
         accessibilityLabel={props.accessibilityLabel}
         accessibilityRole="adjustable"
         accessibilityValue={{
-          now: Math.round(props.width),
-          text: props.maximized ? "Maximized" : `${Math.round(props.width)} points wide`,
+          now: Math.round(props.currentWidth),
+          text: `${Math.round(props.currentWidth)} points wide`,
         }}
         onAccessibilityAction={handleAccessibilityAction}
-        style={handleStyle}
       >
-        <View className="absolute inset-y-0 w-px bg-border" />
-        <Animated.View className="absolute inset-y-0 w-0.5 bg-primary" style={activeStyle} />
-        <View className="h-10 w-1.5 rounded-full bg-border" />
-        <Animated.View
-          className="absolute h-14 w-1.5 rounded-full bg-primary"
-          style={activeStyle}
+        <View
+          className={cn(
+            "h-full self-center bg-border opacity-70",
+            dragging ? "w-0.5 bg-primary opacity-100" : "w-px",
+            Platform.OS === "android" && !dragging && "opacity-0",
+          )}
+          style={[styles.line, dragging && styles.activeLine]}
         />
-      </Animated.View>
+      </Pressable>
     </GestureDetector>
   );
 }
+
+const styles = StyleSheet.create({
+  line: {
+    alignSelf: "center",
+    height: "100%",
+    width: StyleSheet.hairlineWidth,
+  },
+  activeLine: {
+    width: 2,
+  },
+});

@@ -19,7 +19,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useClientSettings } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
-import { useMergedPullRequests } from "./state/entities";
+import { useMergedPullRequests } from "./state/foldMergedPullRequests";
 import {
   getStandardThemeColors,
   getThemeColorsForMode,
@@ -103,7 +103,7 @@ export function useThemeDerivedBackdropColors(): readonly [string, string, strin
 }
 
 /**
- * Renders the splatter for the active theme and hands it to index.css as
+ * Renders the splatter for the active theme and hands it to fold.css as
  * blob URLs on the root: two corner clusters and the field beneath them. Blob URLs rather than data URIs keep a ~100 kB SVG
  * out of every style recalculation that reads the custom property.
  */

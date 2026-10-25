@@ -2,10 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   constrainFoldablePaneWidth,
+  deriveFoldWorkspacePaneLayout,
   deriveHingeSnapWidths,
   deriveWorkspaceFoldRegions,
   resolvePaneDividerRelease,
 } from "./foldable-pane-layout";
+import { deriveLayout } from "./layout";
 
 describe("constrainFoldablePaneWidth", () => {
   it("lets either pane become compact in an unfolded workspace", () => {
@@ -138,5 +140,145 @@ describe("fold workspace regions", () => {
     expect(deriveWorkspaceFoldRegions({ ...input, width: 1400, hinges: [] }).presetKey).not.toBe(
       deriveWorkspaceFoldRegions({ ...input, hinges: [] }).presetKey,
     );
+  });
+});
+
+describe("Fold-class deriveLayout", () => {
+  it.each([
+    { posture: "folded portrait", width: 384, height: 832, expected: "compact" },
+    { posture: "unfolded portrait", width: 768, height: 900, expected: "split" },
+    { posture: "unfolded landscape", width: 900, height: 768, expected: "split" },
+    { posture: "half-width multi-window", width: 600, height: 900, expected: "compact" },
+    { posture: "short landscape or tabletop", width: 900, height: 450, expected: "compact" },
+  ])(
+    "uses the $expected workspace for a Fold-class $posture window",
+    ({ width, height, expected }) => {
+      expect(deriveLayout({ width, height }).variant).toBe(expected);
+    },
+  );
+});
+
+describe("Android adaptive windows", () => {
+  it("supports a wide short Android window without changing iPhone landscape", () => {
+    expect(deriveLayout({ width: 840, height: 360, platform: "android" }).usesSplitView).toBe(true);
+    expect(deriveLayout({ width: 840, height: 360, platform: "ios" }).usesSplitView).toBe(false);
+    expect(deriveLayout({ width: 600, height: 900, platform: "android" }).usesSplitView).toBe(
+      false,
+    );
+    expect(deriveLayout({ width: 840, height: 280, platform: "android" }).usesSplitView).toBe(
+      false,
+    );
+  });
+});
+
+describe("deriveFoldWorkspacePaneLayout", () => {
+  // Galaxy Z Fold-class inner display, landscape.
+  const foldLayout = deriveLayout({ width: 900, height: 700 });
+  const tabletLayout = deriveLayout({ width: 1_366, height: 1_024 });
+  const base = {
+    primarySidebarPreferredVisible: true,
+    auxiliaryPanePreferredVisible: true,
+    auxiliaryPaneRegistered: true,
+  } as const;
+
+  it("shows sidebar, chat and inspector together when the chat stays readable", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({ ...base, layout: tabletLayout, viewportWidth: 1_366 }),
+    ).toMatchObject({
+      primarySidebarVisible: true,
+      primarySidebarSuppressedByAuxiliary: false,
+      auxiliaryPaneVisible: true,
+      auxiliaryPaneWidth: 276,
+      contentPaneWidth: 1_366 - 380 - 276,
+    });
+  });
+
+  it("lets the sidebar yield when the inspector would squeeze the chat", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({ ...base, layout: foldLayout, viewportWidth: 900 }),
+    ).toMatchObject({
+      primarySidebarVisible: false,
+      primarySidebarSuppressedByAuxiliary: true,
+      auxiliaryPaneWidth: 260,
+      contentPaneWidth: 900 - 260,
+    });
+  });
+
+  it("takes no space until a route registers inspector content", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: foldLayout,
+        viewportWidth: 900,
+        auxiliaryPaneRegistered: false,
+      }),
+    ).toMatchObject({
+      primarySidebarVisible: true,
+      auxiliaryPaneVisible: false,
+      contentPaneWidth: 900 - (foldLayout.listPaneWidth ?? 0),
+    });
+  });
+
+  it("gives a maximized inspector the whole workspace and remembers the sidebar", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: tabletLayout,
+        viewportWidth: 1_366,
+        auxiliaryPaneMaximized: true,
+      }),
+    ).toMatchObject({
+      primarySidebarVisible: false,
+      primarySidebarSuppressedByAuxiliary: true,
+      auxiliaryPaneMaximized: true,
+      auxiliaryPaneWidth: 1_366,
+      contentPaneWidth: 0,
+    });
+  });
+
+  it("ignores maximize while the inspector is hidden", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: tabletLayout,
+        viewportWidth: 1_366,
+        auxiliaryPanePreferredVisible: false,
+        auxiliaryPaneMaximized: true,
+      }),
+    ).toMatchObject({ auxiliaryPaneMaximized: false, primarySidebarVisible: true });
+  });
+
+  it("lets either side of the divider become a compact sliver", () => {
+    const wide = deriveFoldWorkspacePaneLayout({
+      ...base,
+      layout: foldLayout,
+      viewportWidth: 900,
+      auxiliaryPanePreferredWidth: 2_000,
+    });
+    expect(wide).toMatchObject({ auxiliaryPaneWidth: 828, contentPaneWidth: 72 });
+    expect(wide.auxiliaryPaneWidthRange).toEqual({ min: 72, max: 828 });
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: foldLayout,
+        viewportWidth: 900,
+        auxiliaryPanePreferredWidth: 0,
+      }).auxiliaryPaneWidth,
+    ).toBe(72);
+  });
+
+  it("never exposes workspace panes in compact layouts", () => {
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: deriveLayout({ width: 390, height: 844 }),
+        viewportWidth: 390,
+      }),
+    ).toMatchObject({
+      primarySidebarVisible: false,
+      supportsAuxiliaryPane: false,
+      auxiliaryPaneVisible: false,
+      contentPaneWidth: 390,
+    });
   });
 });

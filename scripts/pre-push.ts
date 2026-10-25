@@ -348,14 +348,24 @@ function main() {
   if (plan.typecheck.length > 0) {
     run(repoRoot, "typecheck", ["run", "--cache", ...filters(plan.typecheck), "typecheck"]);
   }
-  if (plan.tests.length > 0) {
+  // Cache instrumentation substitutes osh for /bin/sh and virtualizes filesystem
+  // paths. SSH and packaging tests verify the native shell and real path identity.
+  const needsNativeProcess = (name: string) =>
+    name === "@t3tools/ssh" || name === "@t3tools/scripts";
+  const nativeShellTests = plan.tests.filter(needsNativeProcess);
+  const cachedTests = plan.tests.filter((name) => !needsNativeProcess(name));
+  for (const [cache, tests] of [
+    ["--cache", cachedTests],
+    ["--no-cache", nativeShellTests],
+  ] as const) {
+    if (tests.length === 0) continue;
     // One package at a time, so suites do not compete for cores.
     run(repoRoot, "tests", [
       "run",
-      "--cache",
+      cache,
       "--concurrency-limit",
       "1",
-      ...filters(plan.tests),
+      ...filters(tests),
       "test",
       // Workers share one Vite transform server; past half the cores, cold imports queue up
       // behind each other and trip hook timeouts in large suites such as web's.

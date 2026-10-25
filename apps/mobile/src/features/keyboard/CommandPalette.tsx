@@ -1,5 +1,5 @@
 import { dismissAndroidKeyboard } from "../../lib/android-back";
-import { useNavigation } from "@react-navigation/native";
+import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
 import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -19,10 +19,10 @@ import {
 
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { GlassSurface } from "../../components/GlassSurface";
-import { RowPressable } from "../../components/RowPressable";
-import { AppText as Text } from "../../components/AppText";
-import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
+import { GlassSurface } from "../../components/ui/GlassSurface";
+import { RowPressable } from "../../components/ui/RowPressable";
+import { AppText as Text } from "../../components/ui/AppText";
+import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { cn } from "../../lib/cn";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
@@ -30,7 +30,9 @@ import { useProjects, useThreadShell, useThreadShells } from "../../state/entiti
 import { useThreadSearch } from "../../state/queries";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { androidWorkspaceNavigationState } from "../../lib/android-workspace-navigation";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
+import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { ThreadSearchMatchExcerpt } from "../threads/thread-search-match";
 import {
@@ -146,6 +148,7 @@ export function CommandPalette(props: {
   readonly onCommand: (command: HardwareKeyboardCommand) => void;
 }) {
   const navigation = useNavigation();
+  const workspaceTabs = useWorkspaceTabs();
   const { themeVariables } = useAppearancePreferences();
   const { selectThread } = useAdaptiveWorkspaceLayout();
   const runCommand = props.onCommand;
@@ -261,7 +264,14 @@ export function CommandPalette(props: {
         kind: "action",
         title: "Pull requests",
         searchTerms: ["pr", "review", "code review", "github"],
-        run: () => navigation.navigate("PullRequests"),
+        // Android shows pull requests as a workspace tab, like its navigation rail.
+        run: () => {
+          if (!workspaceTabs) return navigation.navigate("PullRequests");
+          workspaceTabs.dispatch({ type: "select", tab: "pullRequests" });
+          navigation.dispatch((state) =>
+            CommonActions.reset(androidWorkspaceNavigationState(state)),
+          );
+        },
       },
       {
         key: "archive",
@@ -366,6 +376,7 @@ export function CommandPalette(props: {
     savedConnectionsById,
     selectThread,
     threads,
+    workspaceTabs,
   ]);
   const results = useMemo(
     () => filterCommandPaletteItems(items, query, matchedThreadKeys),

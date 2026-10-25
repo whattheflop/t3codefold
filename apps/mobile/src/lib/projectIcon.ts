@@ -1,69 +1,6 @@
 import type { ProjectIconColor, ProjectIconOverride } from "@t3tools/contracts";
 
-/**
- * The Lucide names mobile draws, a curated set rather than the whole library so the
- * Hermes bundle carries only these glyphs. ProjectLucideGlyph maps each to an icon.
- */
-export const MOBILE_LUCIDE_ICON_NAMES = [
-  "alarm-clock",
-  "book",
-  "book-open",
-  "bot",
-  "box",
-  "braces",
-  "brain",
-  "bug",
-  "chart-bar",
-  "circuit-board",
-  "cloud",
-  "cloud-cog",
-  "code",
-  "code-2",
-  "code-xml",
-  "cpu",
-  "database",
-  "file-text",
-  "flask-conical",
-  "folder",
-  "folder-code",
-  "gamepad-2",
-  "git-branch",
-  "globe",
-  "globe-2",
-  "heart",
-  "house",
-  "image",
-  "layers",
-  "layers-3",
-  "lock",
-  "mail",
-  "map",
-  "monitor",
-  "music",
-  "package",
-  "palette",
-  "rocket",
-  "server",
-  "settings",
-  "shield-check",
-  "shopping-bag",
-  "smartphone",
-  "sparkles",
-  "star",
-  "terminal",
-  "users",
-  "video",
-  "wrench",
-  "zap",
-] as const;
-
-export type MobileLucideIconName = (typeof MOBILE_LUCIDE_ICON_NAMES)[number];
-
-const MOBILE_LUCIDE_ICON_NAME_SET: ReadonlySet<string> = new Set(MOBILE_LUCIDE_ICON_NAMES);
-
-function isMobileLucideIconName(name: string): name is MobileLucideIconName {
-  return MOBILE_LUCIDE_ICON_NAME_SET.has(name);
-}
+import { isMobileLucideIconName, type MobileLucideIconName } from "./projectLucideIcons";
 
 export type ProjectIconGlyph =
   | { readonly kind: "emoji"; readonly emoji: string }
@@ -75,14 +12,13 @@ export type ProjectIconGlyph =
     };
 
 /**
- * Visible glyph count for sizing monogram text. Hermes has no Intl.Segmenter, so combining
- * marks are folded into their base character instead of full grapheme segmentation.
+ * Hermes has no Intl.Segmenter, so combining marks are folded into their base
+ * character instead of full grapheme segmentation.
  */
 export function countGlyphs(text: string): number {
   return Array.from(text.replace(/\p{M}/gu, "")).length;
 }
 
-/** Mirrors the automatic monogram web derives from a project name when it has no favicon. */
 export function projectMonogram(projectName: string): string {
   const words =
     projectName

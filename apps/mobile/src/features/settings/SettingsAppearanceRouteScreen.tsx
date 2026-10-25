@@ -1,4 +1,4 @@
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -21,19 +21,11 @@ export function SettingsAppearanceRouteScreen() {
           paddingBottom: Math.max(insets.bottom, 18) + 18,
         }}
       >
-        <AppearanceSettingsSections />
+        <ThemeAppearanceSection />
+        <TextAppearanceSection />
+        <TerminalAppearanceSection />
+        <CodeAppearanceSection />
       </ScrollView>
     </SettingsScreen>
-  );
-}
-
-export function AppearanceSettingsSections() {
-  return (
-    <>
-      <ThemeAppearanceSection />
-      <TextAppearanceSection />
-      <TerminalAppearanceSection />
-      <CodeAppearanceSection />
-    </>
   );
 }

@@ -15,7 +15,6 @@ import { getDesktopUpdateReleaseUrl } from "./desktopUpdate.logic";
 
 type ClickableElement = ReactElement<{ readonly onClick?: () => void }>;
 
-/** Walks the rendered description, invoking function components, to find the link button. */
 function findReleaseNotesLink(node: ReactNode): ClickableElement | null {
   if (Array.isArray(node)) {
     for (const child of node) {

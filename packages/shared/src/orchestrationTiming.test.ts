@@ -112,7 +112,6 @@ describe("deriveActiveWorkStartedAt", () => {
     ).toBeNull();
   });
 
-  // A session restarting with no new turn must not resurrect the old one.
   it("does not count a settled turn while a session is starting again", () => {
     expect(
       deriveActiveWorkStartedAt(

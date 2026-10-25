@@ -6,11 +6,11 @@ on:
       version:
         description: Linux desktop and server version
         required: true
-        default: 0.4.3
+        default: 0.4.4
       release_tag:
-        description: Fold release to attach Linux installers to
-        required: true
-        default: fold-preview-v0.4.3
+        description: Optional release tag (defaults to fold-preview-vVERSION)
+        required: false
+        default: ""
       desktop_only:
         description: Rebuild Linux installers using an already published server version
         type: boolean
@@ -33,7 +33,7 @@ jobs:
       - name: Reserve desktop release tags before building
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag || format('fold-preview-v{0}', inputs.version) }}
           CHANNEL: ${{ contains(inputs.version, '-nightly.') && 'nightly' || 'latest' }}
         run: node scripts/prepare-fold-release-tags.ts "$RELEASE_TAG" "fold-desktop-$CHANNEL"
   server:
@@ -46,7 +46,7 @@ jobs:
       version: ${{ inputs.version }}
       channel: ${{ contains(inputs.version, '-nightly.') && 'nightly' || 'latest' }}
   linux:
-    if: ${{ !cancelled() && (needs.server.result == 'success' || (inputs.desktop_only && needs.server.result == 'skipped')) }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.server.result == 'success' || (inputs.desktop_only && needs.server.result == 'skipped')) }}
     needs: [prepare, server]
     concurrency:
       group: fold-desktop-linux
@@ -79,6 +79,6 @@ jobs:
       - name: Publish Fold desktop feed
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag || format('fold-preview-v{0}', inputs.version) }}
           FOLD_VERSION: ${{ inputs.version }}
         run: node scripts/publish-fold-desktop.ts release-assets "$RELEASE_TAG" "$FOLD_VERSION"

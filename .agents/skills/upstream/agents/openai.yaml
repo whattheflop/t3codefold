@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upstream Fold"
+  short_description: "Sync upstream while preserving every Fold feature"
+  default_prompt: "Use $upstream to sync the latest upstream main into Fold and verify its features."

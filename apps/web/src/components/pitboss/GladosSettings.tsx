@@ -99,6 +99,7 @@ function useWorkerModelCatalog(environmentId: EnvironmentId, saved: ReadonlyArra
             applyProviderInstanceSettings(
               deriveProviderInstanceEntries(config.providers),
               config.settings,
+              null,
             ),
           )
         : [],
@@ -130,7 +131,13 @@ function useWorkerModelCatalog(environmentId: EnvironmentId, saved: ReadonlyArra
           .map((model): ModelSelection => ({ instanceId: entry.instanceId, model: model.slug }))
       : [],
   );
-  return { entries, modelOptions, available, planModeEnabled: settings.planModeEnabled };
+  return {
+    environmentId,
+    entries,
+    modelOptions,
+    available,
+    planModeEnabled: settings.planModeEnabled,
+  };
 }
 
 function WorkerModelPicker({
@@ -150,6 +157,7 @@ function WorkerModelPicker({
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
       <ProviderModelPicker
+        environmentId={catalog.environmentId}
         activeInstanceId={value.instanceId}
         model={value.model}
         lockedProvider={null}

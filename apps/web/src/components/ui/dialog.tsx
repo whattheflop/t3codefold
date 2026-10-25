@@ -72,7 +72,7 @@ function DialogPopup({
 }) {
   return (
     <DialogPortal keepMounted={keepMounted}>
-      {/* Media can open from another overlay, so its backdrop must share the elevated layer. */}
+      {/* Media opens from inside other overlays (a composer chip, a popover), so it sits above them. */}
       <DialogBackdrop className={variant === "media" ? "z-[60]" : undefined} variant={variant} />
       <DialogViewport
         className={cn(

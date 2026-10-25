@@ -24,12 +24,11 @@
     "build:marketing": "vp run --filter @t3tools/marketing build",
     "build:desktop": "vp run --filter @t3tools/desktop --filter t3 build",
     "build:resource-monitor": "cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml",
-    "mobile:ota:publish": "node scripts/publish-mobile-github-ota.ts",
     "typecheck": "vp run -r --concurrency-limit 2 typecheck",
     "tc": "vp run -r --concurrency-limit 2 typecheck",
     "lint": "vp lint --report-unused-disable-directives",
     "knip": "knip --preprocessor ./scripts/knip-schemas.ts",
-    "knip:check": "knip --include files,dependencies --no-config-hints && knip --workspace apps/server --workspace apps/desktop --workspace apps/web --workspace packages/client-runtime --workspace packages/contracts --workspace packages/effect-acp --workspace packages/effect-codex-app-server --workspace packages/shared --workspace packages/ssh --workspace packages/tailscale --exports --preprocessor ./scripts/knip-schemas.ts --no-config-hints",
+    "knip:check": "knip --include files,dependencies --no-config-hints && knip --workspace apps/server --workspace apps/desktop --workspace apps/web --workspace packages/client-runtime --workspace packages/contracts --workspace packages/effect-acp --workspace packages/effect-codex-app-server --workspace packages/shared --workspace packages/ssh --workspace packages/tailscale --workspace packages/provider-core --workspace packages/provider-acp --workspace packages/provider-acp-registry --workspace packages/provider-testing --workspace packages/provider-pi --workspace packages/provider-muse --workspace packages/provider-opencode --workspace packages/provider-cursor --workspace packages/provider-grok --workspace packages/source-control-core --workspace packages/source-control-azure-devops --workspace packages/source-control-bitbucket --workspace packages/source-control-forgejo --workspace packages/source-control-gitcafe --workspace packages/source-control-github --workspace packages/source-control-gitlab --workspace packages/source-control-testing --exports --preprocessor ./scripts/knip-schemas.ts --no-config-hints",
     "knip:production": "knip --production --preprocessor ./scripts/knip-schemas.ts",
     "lint:mobile": "node scripts/mobile-native-static-check.ts",
     "test": "vp run -r test",
@@ -50,9 +49,10 @@
     "release:smoke": "node scripts/release-smoke.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
     "sync:repos": "node scripts/sync-reference-repos.ts",
+    "mobile:ota:publish": "node scripts/publish-mobile-github-ota.ts",
     "test:pitboss:local": "vp test run apps/server/src/pitboss/Home.test.ts apps/server/src/pitboss/Setup.test.ts apps/server/src/pitboss/Decisions.test.ts apps/server/src/pitboss/Verification.test.ts apps/server/src/pitboss/VerificationRuntime.test.ts apps/server/src/pitboss/VerificationRunner.test.ts apps/server/src/pitboss/WorkRuntime.test.ts apps/server/src/pitboss/Leads.test.ts apps/server/src/pitboss/Work.test.ts apps/server/src/pitboss/WorkStore.test.ts apps/server/src/cli/work.test.ts apps/server/src/orchestration-v2/ProviderTurnStartService.test.ts apps/server/src/mcp/OrchestratorMcpToolkit.integration.test.ts apps/server/src/mcp/toolkits/worktree/registration.test.ts apps/server/src/mcp/toolkits/work/handlers.test.ts apps/server/src/pitboss/OrchestrationSeams.test.ts apps/server/src/orchestration-v2/runtimeLayer.test.ts apps/server/src/persistence/importFoldDatabase.test.ts",
     "test:pitboss:coordination": "vp test run apps/server/src/pitboss/Coordination.test.ts apps/server/src/pitboss/PeerService.test.ts apps/server/src/pitboss/TaskSources.test.ts apps/server/src/pitboss/TaskSources.live.test.ts",
-    "test:pitboss:mobile": "vp test run apps/mobile/src/features/threads/glados-inbox.test.ts apps/mobile/src/lib/layout.test.ts apps/mobile/plugins/withAndroidTabletOrientation.test.mjs apps/mobile/modules/t3-markdown-text/src/androidSelectableMarkdown.test.ts"
+    "test:pitboss:mobile": "vp test run apps/mobile/src/features/threads/glados-inbox.test.ts apps/mobile/src/lib/layout.test.ts apps/mobile/plugins/withAndroidTabletOrientation.test.mjs"
   },
   "devDependencies": {
     "@coderabbitai/config": "1.1.0",
@@ -60,6 +60,7 @@
     "@shadcn/lint": "0.1.5",
     "@types/node": "catalog:",
     "knip": "6.34.0",
+    "tsc-rs": "0.7.0",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   },

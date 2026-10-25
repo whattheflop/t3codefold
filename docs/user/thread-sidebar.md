@@ -140,6 +140,13 @@ sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
 runs a command, such as a dev server, stays open.
 
+To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
+thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
+`t3.json` script, for example `cargo clean`. It runs each time a thread in its own
+worktree settles, manually or automatically, even if a terminal there still runs a
+command such as a dev server. Threads in the project's main checkout skip it. Its terminal
+closes when the command succeeds and stays open when it fails.
+
 On web and desktop, press a thread's **Settle** button and drag up or down to
 settle every thread in that section between it and the one you release on.
 The **Un-settle** and **Wake** buttons work the same way in their sections.
@@ -149,7 +156,8 @@ By default, environments settle inactive threads after three days and settle
 threads whose pull request merged. A closed pull request can also settle an idle
 thread. Work in progress, pending questions or approvals, and live background work
 prevent automatic settlement. An open pull request does not prevent inactivity
-settlement, but an old closed or merged pull request does not settle work you
+settlement unless you turn on **Keep threads with a PR** in **Settings → General**,
+but an old closed or merged pull request does not settle work you
 resumed after it closed. Only your own messages count as resuming. A turn that
 finished background work or a pull request watch starts on its own does not.
 
@@ -224,22 +232,7 @@ Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it
 finishes; the call's own result shows its status.
 
-## Android foldable workspace
-
-In a wide window, keep chat beside Files, Terminal, or Git. Pane sizes are remembered
-separately for different postures and window sizes. Use **Settings → Organization →
-Reset pane sizes** to return to the fold or default split.
-
-In tabletop posture, chat stays above the horizontal fold and its composer below it.
-If the keyboard leaves too little room below the fold, the composer uses the normal
-keyboard layout so you can keep typing. A physical hinge stays clear of pane content.
-
-Enable **Thumb navigation** in **Settings → Organization** to use the bottom handle.
-Swipe sideways through recently visited threads, up for the thread list, or down for
-the inspector. Turn the setting off to remove the handle.
-
-In a source file, long-press a line and drag the selection handles. Choose **Attach
-lines** to add the selection to the current thread's draft, or **Copy** to use it elsewhere.
+See [Android foldable workspace](./foldable-workspace.md) for side-by-side panes on unfolded phones.
 
 ## Snooze until later
 

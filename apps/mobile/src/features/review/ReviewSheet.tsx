@@ -1,10 +1,11 @@
-import { RefreshControl } from "react-native";
 import { useVoiceViewContext } from "../voice-input/VoiceWorkspaceProvider";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
-import { ScreenHeader } from "../../components/ScreenHeader";
-import type { ScreenHeaderMenuItem } from "../../components/ScreenHeader.types";
+import { AppBar } from "../../components/ui/AppBar";
+import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import type { ReviewSectionItem } from "./reviewModel";
 import { useReviewHeaderPresentation } from "./useReviewHeaderPresentation";
 import { Screen, ScreenStack, ScreenStackHeaderConfig } from "react-native-screens";
@@ -20,21 +21,22 @@ import {
   useState,
 } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   type NativeSyntheticEvent,
   StyleSheet,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 
-import { AppText as Text } from "../../components/AppText";
-import { SymbolView } from "../../components/AppSymbol";
-import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
+import { AppText as Text } from "../../components/ui/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { ScreenContent } from "../../components/ui/ScreenContent";
 import { cn } from "../../lib/cn";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironmentPresentation } from "../../state/presentation";
@@ -81,10 +83,7 @@ function ReviewHeader(
 ) {
   const { panes, toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const presentation = useReviewHeaderPresentation(props);
-  const sectionAction = (
-    section: ReviewSectionItem | null,
-    title: string,
-  ): ScreenHeaderMenuItem => ({
+  const sectionAction = (section: ReviewSectionItem | null, title: string): AppBarMenuItem => ({
     id: section ? `section:${section.id}` : `unavailable:${title}`,
     title,
     disabled: section === null,
@@ -94,7 +93,7 @@ function ReviewHeader(
     },
   });
   return (
-    <ScreenHeader
+    <AppBar
       title={presentation.title}
       subtitle={presentation.subtitle}
       onBack={props.onReturnToThread}
@@ -157,7 +156,6 @@ function ReviewHeader(
   );
 }
 
-const REVIEW_HEADER_SPACING = 0;
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 
 const ReviewNotice = memo(function ReviewNotice(props: { readonly notice: string }) {
@@ -250,7 +248,6 @@ const ReviewFileNavigatorRow = memo(function ReviewFileNavigatorRow(props: {
   readonly onSelectFile: (fileId: string | null) => void;
 }) {
   const { file, selected, onSelectFile } = props;
-  // Tapping the selected file again returns to the all-files diff.
   const handlePress = useCallback(() => {
     onSelectFile(selected ? null : file.id);
   }, [file.id, onSelectFile, selected]);
@@ -283,9 +280,11 @@ const ReviewFileNavigatorRow = memo(function ReviewFileNavigatorRow(props: {
       </Text>
       <View className="mt-1 flex-row gap-2">
         <Text className="text-2xs font-t3-bold text-adaptive-emerald-700-300">
-          +{file.additions}
+          +{formatDiffCount(file.additions)}
         </Text>
-        <Text className="text-2xs font-t3-bold text-adaptive-rose-700-300">-{file.deletions}</Text>
+        <Text className="text-2xs font-t3-bold text-adaptive-rose-700-300">
+          -{formatDiffCount(file.deletions)}
+        </Text>
       </View>
     </Pressable>
   );
@@ -372,9 +371,7 @@ export function ReviewFileNavigator({
       contentContainerStyle={{
         paddingHorizontal: 8,
         paddingBottom: 8,
-        // The nested native header is translucent; start the list below it so
-        // the scroll-edge effect can sample the content (same treatment as
-        // FileTreeBrowser in the Files pane).
+
         paddingTop: Platform.OS === "ios" ? insets.top + IOS_NAV_BAR_HEIGHT + 8 : 8,
       }}
       scrollIndicatorInsets={
@@ -438,7 +435,7 @@ export function ReviewFileNavigator({
           </View>
         </View>
       )}
-      <MaterialScreenContent insetHorizontal>{fileList}</MaterialScreenContent>
+      <ScreenContent insetHorizontal>{fileList}</ScreenContent>
     </View>
   );
 }
@@ -462,10 +459,11 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const { draftMessage } = useThreadDraftForThread({ environmentId, threadId });
   const reviewCache = useReviewCacheForThread({ environmentId, threadId });
   const { selectedThreadCwd } = useSelectedThreadWorktree();
-  // With a solid (non-overlay) header the content lays out below the header
-  // natively, so no manual top inset is needed. (Android renders its own
-  // in-flow AndroidScreenHeader, so it needs no inset either.)
-  const topContentInset = 0;
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const safeArea = columnMetrics?.safeArea ?? insets;
+  const topContentInset = Platform.OS === "ios" ? safeArea.top : 0;
+  const bottomContentInset =
+    Platform.OS === "ios" ? safeArea.bottom + 8 : Math.max(insets.bottom, 18) + 18;
 
   useEffect(() => {
     showAuxiliaryPane();
@@ -511,7 +509,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
   const NativeReviewDiffView = resolveNativeReviewDiffView();
   const nativeReviewDiffViewRef = useRef<NativeReviewDiffViewHandle>(null);
   const showcasedReviewDrawRef = useRef<string | null>(null);
-  // Native pull-to-refresh on the diff surface (replaces the old Refresh menu item).
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const handlePullToRefresh = useCallback(async () => {
     setIsPullRefreshing(true);
@@ -600,8 +597,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
       <ReviewFileNavigator
         ref={reviewFileNavigatorRef}
         files={nativeReviewDiffData.files}
-        // The workspace inspector column spans the full window height, so the
-        // pane clears the status bar itself.
         headerInset={insets.top}
         sectionId={selectedSection?.id ?? null}
         onSelectFile={handleSelectFile}
@@ -734,7 +729,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
         onReturnToThread={handleReturnToThread}
       />
 
-      <MaterialScreenContent>
+      <ScreenContent>
         <View className="flex-1 bg-sheet android:bg-sheet-solid">
           {showConnectionNotice ? (
             <View className="flex-1" style={{ paddingTop: topContentInset }}>
@@ -760,7 +755,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
             >
               <View
                 className="min-w-0 flex-1"
-                style={{ paddingTop: topContentInset + REVIEW_HEADER_SPACING }}
+                style={listHeader ? { paddingTop: topContentInset } : undefined}
               >
                 {listHeader}
                 <View className="min-w-0 flex-1" collapsable={false}>
@@ -777,6 +772,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
                     collapsedCommentIdsJson={nativeBridge.collapsedCommentIdsJson}
                     contentResetKey={`${reviewCache.threadKey}:${selectedSection.id}`}
                     contentWidth={NATIVE_REVIEW_DIFF_CONTENT_WIDTH}
+                    contentInsetTop={listHeader ? 0 : topContentInset}
+                    contentInsetBottom={bottomContentInset}
                     nativeViewRef={nativeReviewDiffViewRef}
                     rowHeight={nativeReviewDiffStyle.rowHeight}
                     rowsJson={nativeBridge.rowsJson}
@@ -807,12 +804,10 @@ export function ReviewSheet(props: ReviewSheetProps) {
                   : undefined
               }
               contentInsetAdjustmentBehavior="never"
-              contentInset={{ top: topContentInset, bottom: Math.max(insets.bottom, 18) + 18 }}
+              contentInset={{ top: topContentInset, bottom: bottomContentInset }}
               contentOffset={{ x: 0, y: -topContentInset }}
-              scrollIndicatorInsets={{
-                top: topContentInset,
-                bottom: Math.max(insets.bottom, 18) + 18,
-              }}
+              automaticallyAdjustsScrollIndicatorInsets={false}
+              scrollIndicatorInsets={{ top: topContentInset, bottom: bottomContentInset }}
               showsVerticalScrollIndicator={false}
               className="flex-1"
               refreshControl={
@@ -828,23 +823,25 @@ export function ReviewSheet(props: ReviewSheetProps) {
             >
               {listHeader}
               {!selectedSection ? (
-                <View
-                  className={
-                    Platform.OS === "android"
-                      ? "items-center px-6 py-5"
-                      : "border-b border-border bg-card px-4 py-5"
-                  }
-                >
-                  <Text className="text-sm font-t3-bold text-foreground">No review diffs</Text>
-                  <Text
-                    className={cn(
-                      "text-xs leading-normal text-foreground-muted",
-                      Platform.OS === "android" && "mt-2 text-center",
-                    )}
+                error ? null : (
+                  <View
+                    className={
+                      Platform.OS === "android"
+                        ? "items-center px-6 py-5"
+                        : "border-b border-border bg-card px-4 py-5"
+                    }
                   >
-                    This thread has no ready turn diffs and the worktree diff is empty.
-                  </Text>
-                </View>
+                    <Text className="text-sm font-t3-bold text-foreground">No review diffs</Text>
+                    <Text
+                      className={cn(
+                        "text-xs leading-normal text-foreground-muted",
+                        Platform.OS === "android" && "mt-2 text-center",
+                      )}
+                    >
+                      This thread has no ready turn diffs and the worktree diff is empty.
+                    </Text>
+                  </View>
+                )
               ) : selectedSection.isLoading && selectedSection.diff === null ? (
                 <View
                   className={cn(
@@ -852,7 +849,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
                     Platform.OS !== "android" && "border-b border-border bg-card",
                   )}
                 >
-                  <ActivityIndicator size="small" />
+                  <AppActivityIndicator size="small" />
                   <Text className="text-xs text-foreground-muted">Loading diff…</Text>
                 </View>
               ) : parsedDiff.kind === "empty" ? (
@@ -890,8 +887,6 @@ export function ReviewSheet(props: ReviewSheetProps) {
                   </ScrollView>
                 </View>
               ) : parsedDiff.kind === "files" ? (
-                // The native diff surface could not be resolved on this binary;
-                // degrade to the raw patch instead of crashing the app.
                 <View
                   className={cn(
                     "gap-3 bg-card px-4 py-4",
@@ -917,7 +912,7 @@ export function ReviewSheet(props: ReviewSheetProps) {
             onClear={commentSelection.clearSelection}
           />
         </View>
-      </MaterialScreenContent>
+      </ScreenContent>
     </>
   );
 }

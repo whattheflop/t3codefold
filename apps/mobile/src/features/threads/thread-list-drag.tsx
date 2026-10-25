@@ -15,7 +15,7 @@ import {
   type RefObject,
 } from "react";
 import { Pressable, View, useWindowDimensions, type ViewInstance } from "react-native";
-import { Gesture } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, {
   measure,
   useAnimatedRef,
@@ -27,7 +27,7 @@ import Reanimated, {
   type SharedValue,
 } from "react-native-reanimated";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentServerConfigsAtom } from "../../state/server";
@@ -37,12 +37,12 @@ import { queuedThreadKeysAtom } from "../../state/use-thread-outbox";
 import {
   completeThreadDragGeometry,
   resolveThreadDrop,
-  threadDragGapOffset,
   threadDropInsertionOffset,
   threadDragReturnDestination,
   type ThreadDragRow,
   type ThreadDropDestination,
-} from "./threadDragGap";
+} from "./threadDragDrop";
+import { threadDragGapOffset } from "./threadDragGap";
 import {
   getThreadListV2OrderedSection,
   isThreadListV2ListItem,
@@ -801,4 +801,18 @@ export function useThreadListDragTarget(input: {
     [callbacks, menuOpen],
   );
   return { gesture, style, onMenuOpen, ref: row };
+}
+
+/** The lifted wrapper for a row using `useThreadListDragTarget`. */
+export function ThreadListDragRow(props: {
+  readonly drag: ReturnType<typeof useThreadListDragTarget>;
+  readonly children: ReactNode;
+}) {
+  return (
+    <GestureDetector gesture={props.drag.gesture}>
+      <Reanimated.View ref={props.drag.ref} collapsable={false} style={props.drag.style}>
+        {props.children}
+      </Reanimated.View>
+    </GestureDetector>
+  );
 }

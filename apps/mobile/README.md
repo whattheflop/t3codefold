@@ -35,7 +35,7 @@ The helper compares a local Expo fingerprint and the installed binary with its l
 build record. It builds and installs missing, stale, or unverified clients and reuses matching ones.
 Android builds are incremental: they keep this worktree's generated project and build only the
 connected emulator's ABI. Rerun the command after an interruption rather than starting over.
-See [shared Android build caches](../../docs/operations/development.md#shared-android-build-caches)
+See [shared Android build caches](../../docs/operations/fold.md#shared-android-build-caches)
 for what is and is not reused between worktrees.
 Use `check` instead of `ensure` for a read-only decision: exit 0 means compatible, 2 means a build is
 needed, and 1 means an operational error. Run it on the simulator host; no EAS login is required.

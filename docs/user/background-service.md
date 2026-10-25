@@ -5,19 +5,29 @@ to keep a terminal open.
 
 ## Manage the service
 
-After installing the Fold CLI, run these commands on the host machine:
+Install the `t3` CLI first ([Install T3 Code](./install.md#command-line)), then
+run these commands on the machine that will host T3 Code:
 
-| Task                    | Command                |
-| ----------------------- | ---------------------- |
-| Install or repair       | `t3 service install`   |
-| Inspect status and logs | `t3 service status`    |
-| Update the CLI          | `t3 update`            |
-| Restart the service     | `t3 service restart`   |
-| Remove from startup     | `t3 service uninstall` |
+| Task                            | Command                |
+| ------------------------------- | ---------------------- |
+| Install and start               | `t3 service install`   |
+| Inspect status and log location | `t3 service status`    |
+| Move to a newer release         | `t3 update`            |
+| Restart                         | `t3 service restart`   |
+| Stop and remove from startup    | `t3 service uninstall` |
 
 Uninstalling the service leaves your projects, threads, and settings intact.
-Finish active work before restarting the service. To match a remote client's
-version, follow [Updating T3 Code](./updating.md).
+Running `t3 service install` again repairs a service that `t3 service status`
+reports as broken.
+
+`t3 update` downloads the newest release on your channel and switches `t3`
+and the service to it. Restarting interrupts running agent turns, terminals,
+and remote clients, so it asks first; answer no and the service keeps running
+the old version until you run `t3 service restart`. Pass `--yes` from a
+script. A server you started by hand is left running; stop and start it again
+to pick up the new version. Wait for any remote update already in progress
+before updating; to match a remote client's version, follow
+[Updating T3 Code](./updating.md).
 
 Pass an exact version (`t3 update 0.0.42`) to pin one, `--channel nightly` to
 switch trains, or `--allow-downgrade` to move backwards. `preview` is a
@@ -25,40 +35,10 @@ maintainers' test train: its builds can be broken and are never offered as
 updates, so the installer and `t3 update` ask for confirmation before
 installing one.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/whattheflop/T3codefold/main/scripts/install.sh | sh
-```
-
-On Windows, run `irm https://raw.githubusercontent.com/whattheflop/T3codefold/main/scripts/install.ps1 | iex` in PowerShell instead.
-
-It places `t3` in `~/.local/bin` and reuses the same download when you later
-run `t3 service install`. It follows the stable train by default; set
-`T3CODE_CHANNEL=nightly` for nightlies, `T3CODE_VERSION` to pin an exact
-version, or `T3CODE_RELEASE_BASE_URL` to download from a mirror.
-
-`preview` is a third train that maintainers cut from unreleased branches to
-exercise the release pipeline. Those builds can be broken, receive no fixes,
-and are never offered as updates; the installer and `t3 update` only take you
-there when you ask for the channel explicitly, and warn you when they do.
-
-Once a self-contained `t3` is installed, `t3 update` moves the machine to a
-newer one without npm: it downloads the newest release on the channel the
-running `t3` came from, verifies it, and points the `t3` launcher at it. When
-a background service is installed for the same T3 home it asks before
-restarting it, since a restart interrupts running agent turns, terminals, and
-remote clients; answer no and the running process stays on the old version until you run
-`t3 service restart`. From a script there is no prompt, so pass `--yes` to
-restart the service. A server you started by hand is never touched; the
-command tells you it is still on the old version so you can restart it
-yourself. Pass an exact version (`t3 update 0.0.41-preview.20260912.1595`) to
-pin one, `--channel` to follow a different release train (moving onto preview from stable or nightly asks for confirmation), or
-`--allow-downgrade` to move backwards.
-
-`t3 uninstall` reverses the install script: it shows what it found (the
-background service, the `t3` launcher, every downloaded version under
-`~/.t3/runtime/fold`), asks once, and removes them. Your projects, threads, and
-settings under `~/.t3/userdata` are kept; delete that directory yourself if
-you want them gone too. Pass `--yes` from a script.
+`t3 uninstall` removes the background service, the `t3` launcher, and the
+downloaded versions after showing you the list and asking once. Your projects,
+threads, and settings under `~/.t3/userdata` are kept. Pass `--yes` from a
+script.
 
 ## Platform support
 
@@ -115,3 +95,27 @@ Downloads, it may need Full Disk Access for the `t3` executable listed in
 
 For failures after signing in to T3 Connect, see
 [connection troubleshooting](./remote-access.md#t3-connect-troubleshooting).
+
+## Reclaim database space
+
+T3 Code removes superseded internal history on its own while it runs; your
+conversations are kept. Databases created before this shrank automatically
+still hold the freed space on disk until a one-time offline repair returns it
+and turns on automatic shrinking. Settings > Storage (web and desktop) or
+Settings > Maintenance (mobile) suggests the repair when at least 1 GiB can be
+reclaimed.
+
+Run `t3 doctor` on the machine that hosts the environment. It reports the
+database size and the space it can reclaim, then asks which repairs to run;
+pass `--fix` to run the recommended ones without a prompt (for scripts), or
+`--dry-run` to only report. An installed background service for the same data
+directory is stopped for the repair and started again afterwards, also when
+the repair fails. Quit a server you started by hand, or the desktop app, first:
+the repair refuses to touch a database that is in use. Use `--base-dir` for a
+different data directory.
+
+The repair can take several minutes on a large database. It rebuilds the
+database through a temporary copy, so it needs free space of about the
+database's size twice over: once in the system temporary directory (`TMPDIR`
+or `/tmp` on Linux and macOS) and once next to the database for its
+write-ahead log.

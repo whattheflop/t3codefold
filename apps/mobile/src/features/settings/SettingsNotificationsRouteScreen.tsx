@@ -1,4 +1,7 @@
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import * as Dialog from "../../components/ui/Dialog";
+import { AuthRelayWriteScope } from "@t3tools/contracts";
+import { readEnvironmentScope } from "../../state/session";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAuth } from "@clerk/expo";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import * as Notifications from "expo-notifications";
@@ -6,10 +9,10 @@ import { useNavigation } from "@react-navigation/native";
 import * as Effect from "effect/Effect";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, AppState, Linking, Platform } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import {
   isAtomCommandInterrupted,
   reportAtomCommandResult,
@@ -38,15 +41,12 @@ import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { LocalNotificationSettingsScreen } from "./LocalNotificationSettingsScreen";
 import { resolveAgentAwarenessPlatformPresentation } from "./SettingsRouteScreen.logic";
 
 type NotificationStatus = "checking" | "enabled" | "disabled" | "unsupported";
 type LiveActivityStatus = "checking" | "enabled" | "disabled" | "signed-out" | "linking";
 
-// Reflects whether the relay actually accepted this device's registration.
-// The notification and Live Activity switches are gated on this so they can
-// never read as enabled when the device cannot receive anything (e.g. the
-// registration request timed out).
 function useDeviceRegistered(): boolean {
   const status = useSyncExternalStore(
     subscribeAgentAwarenessRegistrationStatus,
@@ -57,97 +57,26 @@ function useDeviceRegistered(): boolean {
 }
 
 export function SettingsNotificationsRouteScreen() {
-  const insets = useSafeAreaInsets();
-  return (
-    <SettingsScreen title="Notifications">
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-        contentContainerClassName="gap-6 px-5 pt-4"
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-      >
-        <NotificationSettingsSection />
-      </ScrollView>
-    </SettingsScreen>
-  );
-}
-
-/** Agent activity notifications and Live Activities for this device. */
-export function NotificationSettingsSection() {
   if (!hasCloudPublicConfig()) {
-    if (Platform.OS === "android") return <LocalNotificationSettingsSection />;
+    if (Platform.OS === "android") return <LocalNotificationSettingsScreen />;
     return (
-      <Text className="px-2 text-base text-foreground-muted">
-        Notifications require T3 Connect in this app build.
-      </Text>
+      <SettingsScreen title="Notifications">
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerClassName="px-5 pt-4"
+        >
+          <Text className="text-base text-foreground-muted">
+            Notifications require T3 Connect in this app build.
+          </Text>
+        </ScrollView>
+      </SettingsScreen>
     );
   }
 
-  return <ConfiguredNotificationSettingsSection />;
+  return <ConfiguredSettingsNotificationsRouteScreen />;
 }
 
-function LocalNotificationSettingsSection() {
-  const preferences = useAtomValue(mobilePreferencesAtom);
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const [granted, setGranted] = useState(false);
-  const [busy, setBusy] = useState(true);
-  useEffect(() => {
-    const refresh = async () => {
-      const result = await settlePromise(() => Notifications.getPermissionsAsync());
-      if (result._tag === "Success") setGranted(result.value.granted);
-      else reportAtomCommandResult(result, { label: "notification permission refresh" });
-      setBusy(false);
-    };
-    void refresh();
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refresh();
-    });
-    return () => subscription.remove();
-  }, []);
-  const changeEnabled = async (enabled: boolean) => {
-    if (!enabled) {
-      savePreferences({ notificationsEnabled: false });
-      return;
-    }
-    setBusy(true);
-    const result = await settleAsyncResult(() =>
-      runtime.runPromiseExit(requestAgentNotificationPermission),
-    );
-    setBusy(false);
-    if (result._tag === "Failure") {
-      reportAtomCommandResult(result, { label: "notification permission request" });
-      return;
-    }
-    const allowed = result.value.type === "granted";
-    setGranted(allowed);
-    if (allowed) savePreferences({ notificationsEnabled: true });
-    else if (result.value.type === "denied" && !result.value.canAskAgain) {
-      Alert.alert("Notifications disabled", "Open system Settings to enable notifications.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Open Settings", onPress: () => void Linking.openSettings() },
-      ]);
-    }
-  };
-  return (
-    <SettingsSection title="Agent activity">
-      <SettingsSwitchRow
-        icon="bell.badge"
-        label="Device Notifications"
-        subtitle="While connected in the background"
-        disabled={busy || !AsyncResult.isSuccess(preferences)}
-        value={
-          granted &&
-          AsyncResult.isSuccess(preferences) &&
-          preferences.value.notificationsEnabled === true
-        }
-        onValueChange={(enabled) => void changeEnabled(enabled)}
-      />
-    </SettingsSection>
-  );
-}
-
-function ConfiguredNotificationSettingsSection() {
+function ConfiguredSettingsNotificationsRouteScreen() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const agentAwarenessPushAvailable = supportsAgentAwarenessPush();
@@ -156,6 +85,7 @@ function ConfiguredNotificationSettingsSection() {
     Platform.OS === "android" && !agentAwarenessPushAvailable
       ? "Install a newer app build to enable notifications"
       : agentAwarenessPlatform.subtitle;
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { getToken, isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -231,7 +161,7 @@ function ConfiguredNotificationSettingsSection() {
     if (result._tag === "Failure") {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        Alert.alert(
+        Dialog.alert(
           "Notifications unavailable",
           error instanceof Error ? error.message : "Could not request notification permission.",
         );
@@ -247,9 +177,9 @@ function ConfiguredNotificationSettingsSection() {
       // Permission alone is not enough: the switch stays off until the relay
       // registration succeeds, so tell the user the truth about which happened.
       if (getAgentAwarenessRegistrationStatus() === "registered") {
-        Alert.alert("Notifications enabled", "Agent notifications are enabled for this device.");
+        Dialog.alert("Notifications enabled", "Agent notifications are enabled for this device.");
       } else {
-        Alert.alert(
+        Dialog.alert(
           "Couldn't finish enabling notifications",
           "Notification access was granted, but this device could not be registered with T3 Connect. Notifications will start once registration succeeds.",
         );
@@ -258,7 +188,7 @@ function ConfiguredNotificationSettingsSection() {
     }
     if (result.value.type === "unsupported") {
       setNotificationStatus("unsupported");
-      Alert.alert(
+      Dialog.alert(
         "Notifications unavailable",
         "Agent notifications are unavailable on this platform.",
       );
@@ -266,10 +196,10 @@ function ConfiguredNotificationSettingsSection() {
     }
     setNotificationStatus("disabled");
     if (result.value.canAskAgain) {
-      Alert.alert("Notifications disabled", "Notifications were not enabled.");
+      Dialog.alert("Notifications disabled", "Notifications were not enabled.");
       return;
     }
-    Alert.alert(
+    Dialog.alert(
       "Notifications disabled",
       "Notifications were denied for this app. Open Settings to enable them.",
       [
@@ -280,7 +210,7 @@ function ConfiguredNotificationSettingsSection() {
   }, [savePreferences]);
 
   const promptSignIn = useCallback(() => {
-    Alert.alert(
+    Dialog.alert(
       "Sign in to T3 Connect",
       "Live Activity updates require T3 Connect so relay can deliver updates to this device.",
       [
@@ -307,7 +237,7 @@ function ConfiguredNotificationSettingsSection() {
       if (permission._tag === "Failure") {
         setLiveActivityStatus("disabled");
         const error = squashAtomCommandFailure(permission);
-        Alert.alert(
+        Dialog.alert(
           "Ongoing activity unavailable",
           error instanceof Error ? error.message : "Could not enable agent notifications.",
         );
@@ -315,7 +245,7 @@ function ConfiguredNotificationSettingsSection() {
       }
       if (permission.value.type !== "granted") {
         setLiveActivityStatus("disabled");
-        Alert.alert(
+        Dialog.alert(
           "Notification permission needed",
           "Enable notifications in system Settings to show ongoing agent activity.",
           [
@@ -331,7 +261,7 @@ function ConfiguredNotificationSettingsSection() {
     if (tokenResult._tag === "Failure") {
       setLiveActivityStatus("disabled");
       const error = squashAtomCommandFailure(tokenResult);
-      Alert.alert(
+      Dialog.alert(
         Platform.OS === "android" ? "Ongoing activity unavailable" : "Live Activities unavailable",
         error instanceof Error ? error.message : "Could not enable agent activity updates.",
       );
@@ -346,6 +276,8 @@ function ConfiguredNotificationSettingsSection() {
     const updateResult = await settleAsyncResult(() =>
       runtime.runPromiseExit(
         setLiveActivityUpdatesEnabled({
+          canConfigureEnvironment: (environmentId) =>
+            readEnvironmentScope(environmentId, AuthRelayWriteScope),
           enabled: true,
           previousEnabled: liveActivitiesPreferenceEnabled,
           clerkToken: tokenResult.value,
@@ -357,7 +289,7 @@ function ConfiguredNotificationSettingsSection() {
       setLiveActivityStatus("disabled");
       if (!isAtomCommandInterrupted(updateResult)) {
         const error = squashAtomCommandFailure(updateResult);
-        Alert.alert(
+        Dialog.alert(
           Platform.OS === "android"
             ? "Ongoing activity unavailable"
             : "Live Activities unavailable",
@@ -374,14 +306,14 @@ function ConfiguredNotificationSettingsSection() {
     // (the push-to-start token the relay needs) has not — don't claim Live
     // Activities are live until the device is actually registered.
     if (getAgentAwarenessRegistrationStatus() === "registered") {
-      Alert.alert(
+      Dialog.alert(
         Platform.OS === "android" ? "Ongoing activity enabled" : "Live Activities enabled",
         environmentCount > 0
-          ? `${environmentCount} environment${environmentCount === 1 ? "" : "s"} linked for agent activity updates.`
+          ? "Agent activity updates are enabled for environments this connection can configure."
           : "Agent activity updates are enabled. Add an environment to start receiving updates.",
       );
     } else {
-      Alert.alert(
+      Dialog.alert(
         "Couldn't finish enabling activity updates",
         "This device could not be registered with T3 Connect, so activity updates won't appear yet. They'll start once registration succeeds.",
       );
@@ -411,7 +343,7 @@ function ConfiguredNotificationSettingsSection() {
         savePreferences({ notificationsEnabled: false });
         return;
       }
-      Alert.alert(
+      Dialog.alert(
         "Disable notifications",
         "Open system Settings to disable notifications for T3 Code.",
         [
@@ -449,6 +381,8 @@ function ConfiguredNotificationSettingsSection() {
             const updateResult = await settleAsyncResult(() =>
               runtime.runPromiseExit(
                 setLiveActivityUpdatesEnabled({
+                  canConfigureEnvironment: (environmentId) =>
+                    readEnvironmentScope(environmentId, AuthRelayWriteScope),
                   enabled: false,
                   previousEnabled: liveActivitiesPreferenceEnabled,
                   clerkToken: token,
@@ -495,76 +429,85 @@ function ConfiguredNotificationSettingsSection() {
   );
 
   return (
-    <SettingsSection title="Agent activity">
-      <SettingsSwitchRow
-        icon="bell.badge"
-        label="Device Notifications"
-        disabled={
-          !agentAwarenessPlatform.supported ||
-          (Platform.OS !== "android" && !agentAwarenessPushAvailable) ||
-          notificationStatus === "checking" ||
-          notificationStatus === "unsupported"
-        }
-        subtitle={agentAwarenessSubtitle}
-        // Only reads as on when this device is actually registered with the
-        // relay; otherwise notifications cannot be delivered regardless of
-        // the local iOS permission.
-        value={
-          Platform.OS === "android"
-            ? notificationStatus === "enabled" &&
-              AsyncResult.isSuccess(preferencesResult) &&
-              preferencesResult.value.notificationsEnabled === true
-            : agentAwarenessPushAvailable && notificationStatus === "enabled" && deviceRegistered
-        }
-        onValueChange={handleDeviceNotificationsChange}
-      />
-      <SettingsSwitchRow
-        disabled={
-          !agentAwarenessPlatform.supported ||
-          !agentAwarenessPushAvailable ||
-          !isLoaded ||
-          liveActivityStatus === "checking" ||
-          liveActivityStatus === "linking"
-        }
-        icon="bolt.circle"
-        label={
-          Platform.OS === "android"
-            ? supportsAndroidLiveUpdateSettings()
-              ? "Agent Live Updates"
-              : "Ongoing Agent Activity"
-            : "Live Activity Updates"
-        }
-        subtitle={agentAwarenessSubtitle}
-        // Same gate: a saved preference is meaningless until the device
-        // registration the relay needs to push updates has succeeded.
-        value={
-          agentAwarenessPushAvailable &&
-          (liveActivityStatus === "enabled" || liveActivityStatus === "linking") &&
-          deviceRegistered
-        }
-        onValueChange={handleLiveActivitiesChange}
-      />
-      {liveActivityStatus === "signed-out" && canClearLiveActivitiesPreference ? (
-        <SettingsRow
-          icon="bolt.circle"
-          label="Turn off Live Activity preference"
-          onPress={() => handleLiveActivitiesChange(false)}
-        />
-      ) : null}
-      {supportsAndroidLiveUpdateSettings() ? (
-        <SettingsRow
-          icon="bolt.circle"
-          label="Live Update Settings"
-          onPress={() => {
-            void openAndroidLiveUpdateSettings().catch(() => {
-              Alert.alert(
-                "Couldn't open Settings",
-                "Open Android Settings, select T3 Code, then enable Live Updates in Notifications.",
-              );
-            });
-          }}
-        />
-      ) : null}
-    </SettingsSection>
+    <SettingsScreen title="Notifications">
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="gap-6 px-5 pt-4"
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 18) + 18,
+        }}
+      >
+        <SettingsSection title="Agent activity">
+          <SettingsSwitchRow
+            icon="bell.badge"
+            label="Device Notifications"
+            disabled={
+              !agentAwarenessPlatform.supported ||
+              (Platform.OS !== "android" && !agentAwarenessPushAvailable) ||
+              notificationStatus === "checking" ||
+              notificationStatus === "unsupported"
+            }
+            subtitle={agentAwarenessSubtitle}
+            value={
+              Platform.OS === "android"
+                ? notificationStatus === "enabled" &&
+                  AsyncResult.isSuccess(preferencesResult) &&
+                  preferencesResult.value.notificationsEnabled === true
+                : agentAwarenessPushAvailable &&
+                  notificationStatus === "enabled" &&
+                  deviceRegistered
+            }
+            onValueChange={handleDeviceNotificationsChange}
+          />
+          <SettingsSwitchRow
+            disabled={
+              !agentAwarenessPlatform.supported ||
+              !agentAwarenessPushAvailable ||
+              !isLoaded ||
+              liveActivityStatus === "checking" ||
+              liveActivityStatus === "linking"
+            }
+            icon="bolt.circle"
+            label={
+              Platform.OS === "android"
+                ? supportsAndroidLiveUpdateSettings()
+                  ? "Agent Live Updates"
+                  : "Ongoing Agent Activity"
+                : "Live Activity Updates"
+            }
+            subtitle={agentAwarenessSubtitle}
+            value={
+              agentAwarenessPushAvailable &&
+              (liveActivityStatus === "enabled" || liveActivityStatus === "linking") &&
+              deviceRegistered
+            }
+            onValueChange={handleLiveActivitiesChange}
+          />
+          {liveActivityStatus === "signed-out" && canClearLiveActivitiesPreference ? (
+            <SettingsRow
+              icon="bolt.circle"
+              label="Turn off Live Activity preference"
+              onPress={() => handleLiveActivitiesChange(false)}
+            />
+          ) : null}
+          {supportsAndroidLiveUpdateSettings() ? (
+            <SettingsRow
+              icon="bolt.circle"
+              label="Live Update Settings"
+              onPress={() => {
+                void openAndroidLiveUpdateSettings().catch(() => {
+                  Dialog.alert(
+                    "Couldn't open Settings",
+                    "Open Android Settings, select T3 Code, then enable Live Updates in Notifications.",
+                  );
+                });
+              }}
+            />
+          ) : null}
+        </SettingsSection>
+      </ScrollView>
+    </SettingsScreen>
   );
 }

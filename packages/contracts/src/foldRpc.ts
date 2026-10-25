@@ -1,7 +1,7 @@
 /**
  * Fold-only WebSocket RPCs: pitboss (GLaDOS work), fleet routing and realtime
  * voice. `rpc.ts` spreads `FOLD_WS_METHODS` into `WS_METHODS` and merges
- * `FoldRpcGroup` into `WsRpcGroup`, so upstream syncs touch two lines there.
+ * `FoldRpcGroup` into `WsRpcGroup`, so upstream syncs touch only those lines there.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
@@ -34,7 +34,7 @@ import {
   ProviderRealtimeVoiceStartInput,
   ProviderRealtimeVoiceStartResult,
   ProviderRealtimeVoiceStopInput,
-} from "./provider.ts";
+} from "./realtimeVoice.ts";
 
 export const FOLD_WS_METHODS = {
   // Pitboss (GLaDOS managed work)

@@ -167,6 +167,16 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       }
     }
 
+  var readOnly: Boolean = false
+    set(value) {
+      field = value
+      inputView.isEnabled = !value
+      if (value) {
+        inputView.clearFocus()
+        hideKeyboard()
+      }
+    }
+
   var autoFocus: Boolean = true
     set(value) {
       field = value
@@ -309,6 +319,7 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
     inputView.setPadding(0, 0, 0, 0)
     inputView.setOnEditorActionListener { _, actionId, event ->
+      if (readOnly) return@setOnEditorActionListener true
       // A single-line EditText moves focus to the next view on an unconsumed hardware
       // Enter key-up, which would leave the terminal deaf to the next keys.
       if (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_UP) {
@@ -328,6 +339,7 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       }
     }
     inputView.setOnKeyListener { _, keyCode, event ->
+      if (readOnly) return@setOnKeyListener true
       when {
         event.action != KeyEvent.ACTION_DOWN -> false
         TerminalHardwareKeys.shouldEncode(keyCode, event.metaState) && sendHardwareKey(event) -> true
@@ -343,11 +355,11 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
 
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+          if (readOnly) return
           if (clearingInput || s == null || count <= 0) return
           val end = (start + count).coerceAtMost(s.length)
-          if (start >= end) return
-          val insertedText = s.subSequence(start, end).toString()
-          if (insertedText.isNotEmpty()) {
+          if (start < end) {
+            val insertedText = s.subSequence(start, end).toString()
             onInput(mapOf("data" to insertedText))
           }
         }
@@ -515,7 +527,7 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   private fun emitResponse(response: ByteArray) {
-    if (response.isNotEmpty()) {
+    if (!readOnly && response.isNotEmpty()) {
       onInput(mapOf("data" to String(response, Charsets.UTF_8)))
     }
   }
@@ -543,6 +555,7 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   private fun requestKeyboardFocus() {
+    if (readOnly) return
     inputView.requestFocus()
     val inputMethodManager = context.getSystemService(
       Context.INPUT_METHOD_SERVICE

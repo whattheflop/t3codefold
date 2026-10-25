@@ -1,10 +1,27 @@
+import type { EnvironmentId } from "@t3tools/contracts";
+
+export function resolveAutoSettleReferenceEnvironmentId(
+  environments: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly canWriteSettings: boolean | null;
+  }>,
+): EnvironmentId | null {
+  for (const environment of environments) {
+    if (environment.canWriteSettings === null) return null;
+    if (environment.canWriteSettings) return environment.environmentId;
+  }
+  return environments[0]?.environmentId ?? null;
+}
+
 export function resolveAgentAwarenessPlatformPresentation(platform: string): {
   readonly supported: boolean;
   readonly subtitle: string | undefined;
 } {
-  if (platform === "ios") return { supported: true, subtitle: undefined };
+  // Fold delivers Android agent notifications locally, so they need a live connection.
   if (platform === "android") {
     return { supported: true, subtitle: "While connected in the background" };
   }
-  return { supported: false, subtitle: "Not supported" };
+  return platform === "ios" || platform === "android"
+    ? { supported: true, subtitle: undefined }
+    : { supported: false, subtitle: "Unavailable on this platform" };
 }

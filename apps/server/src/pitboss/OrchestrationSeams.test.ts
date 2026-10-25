@@ -10,8 +10,8 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { ThreadRetentionGuard } from "../orchestration-v2/Orchestrator.ts";
-import { TurnPreamble } from "../orchestration-v2/ProviderTurnStartService.ts";
+import { ThreadRetentionGuard } from "../orchestration-v2/ThreadRetentionGuard.ts";
+import { TurnPreamble } from "../orchestration-v2/TurnPreamble.ts";
 import { ELECTED_THREAD_RETENTION_REASON, orchestrationSeamsLayer } from "./OrchestrationSeams.ts";
 import { emptyWork } from "./Work.ts";
 import { WorkStore } from "./WorkStore.ts";

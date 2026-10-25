@@ -27,7 +27,7 @@ import { emptyWork } from "./pitboss/Work.ts";
 import { PeerService } from "./pitboss/PeerService.ts";
 import { SourceService } from "./pitboss/SourceService.ts";
 import { WorkStore } from "./pitboss/WorkStore.ts";
-import { makeFoldWsHandlers } from "./ws.ts";
+import { makeFoldWsHandlers } from "./foldWs.ts";
 
 const projectId = ProjectId.make("tools");
 const threadId = ThreadId.make("missing");

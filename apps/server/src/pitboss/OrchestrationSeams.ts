@@ -4,8 +4,8 @@ import * as Layer from "effect/Layer";
 import {
   ThreadRetentionGuard,
   ThreadRetentionGuardError,
-} from "../orchestration-v2/Orchestrator.ts";
-import { TurnPreamble } from "../orchestration-v2/ProviderTurnStartService.ts";
+} from "../orchestration-v2/ThreadRetentionGuard.ts";
+import { TurnPreamble } from "../orchestration-v2/TurnPreamble.ts";
 import { WorkStore } from "./WorkStore.ts";
 
 /** Commands that would hide, unpin or remove a thread. */

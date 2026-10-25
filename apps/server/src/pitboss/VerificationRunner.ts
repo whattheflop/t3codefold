@@ -1,7 +1,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Artifact digests are computed synchronously over in-memory bytes.
 import * as NodeCrypto from "node:crypto";
 import { EnvironmentId } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as FileSystem from "effect/FileSystem";
 import * as DateTime from "effect/DateTime";
 import * as Paths from "effect/Path";
@@ -29,7 +29,7 @@ export class VerificationRunner extends Context.Service<
 export const layer = Layer.effect(
   VerificationRunner,
   Effect.gen(function* () {
-    const platform = yield* HostProcessPlatform;
+    const platform = yield* HostProcess.Platform;
     const Fs = yield* FileSystem.FileSystem;
     const Path = yield* Paths.Path;
     const processRunner = yield* ProcessRunner;

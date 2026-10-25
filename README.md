@@ -58,7 +58,7 @@ Open a Codex thread and choose **Talk to Codex** for a live, two-way voice conve
 - Keep the call going while you browse other threads, files and diffs.
 - On Android, calls continue with the screen locked, can be ended from the ongoing notification, and use system speaker or Bluetooth call routing.
 
-[Voice setup and requirements](docs/user/providers-codex.md#talk-to-codex-fold-beta).
+[Voice setup and requirements](docs/user/codex-voice.md).
 
 ## Splatter backdrop
 
@@ -73,21 +73,25 @@ Paint splatter across the chat canvas in your theme's colours, on the unfolded p
 
 ## More than upstream
 
-Compared with upstream `main` at [bfec2387b8](https://github.com/pingdotgg/t3code/commit/bfec2387b8), synced **7 October 2026**, Fold adds the features below. They describe the code on Fold's `main`; an older published installer may not include every change.
+Compared with upstream `main` at [70d60e03a7](https://github.com/pingdotgg/t3code/commit/70d60e03a7), synced **17 October 2026**, Fold adds the features below. They describe the code on Fold's `main`; an older published installer may not include every change.
 
-| Feature                              | What you get                                                                                                                                                                                                        | Available in                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **Foldable workspace**               | Side-by-side chat, files, terminal and git, with a resizable, fold-aware divider and remembered layout.                                                                                                             | Android                                  |
-| **Hardware keyboard and Vim**        | Laptop-style shortcuts, a keyboard-friendly composer and optional Vim navigation.                                                                                                                                   | Android · Web · Desktop                  |
-| **Live Codex voice**                 | Two-way voice with transcripts, separate mutes, background calls and Bluetooth routing.                                                                                                                             | Web · Desktop · Mobile                   |
-| **Handoffs between machines**        | An agent can discover connected environments, start or message a thread elsewhere, and read or wait for its response.                                                                                               | Server · Connected clients               |
-| **Fleet CLI**                        | `t3 fleet` discovers environments and projects, creates threads, sends messages, reads results and waits. Retried requests keep their original receipt.                                                             | CLI                                      |
-| **Task handoff skill**               | Give another thread ownership of work with its objective, progress, code location, constraints and a return contact. [Handoff instructions](.agents/skills/t3-handoff/SKILL.md).                                    | Agents with T3 tools or CLI              |
-| **Older-server compatibility**       | Connect the same client to pre-orchestration and current servers; browse threads, send messages, and answer approvals and questions. [Compatibility guide](docs/user/updating.md#compatibility-with-older-servers). | Web · Desktop, including macOS · Android |
-| **Agent activity notifications**     | Local alerts for completed or failed work, approvals and questions; tap to return to the thread. Requires the app to stay connected.                                                                                | Android                                  |
-| **Shared project colours and icons** | Automatic colours, custom icons and emoji configured on desktop show up for projects on the same server.                                                                                                            | Android                                  |
-| **Optional Cite bubble**             | Hide the selection bubble through **Settings → General → Show Cite on text selection**, without disabling text selection.                                                                                           | Web · Desktop                            |
-| **Splatter backdrop**                | Theme-coloured paint across the chat canvas, with patterns, amount, glow and dynamic splats.                                                                                                                        | Web · Desktop · Mobile                   |
+| Feature                              | What you get                                                                                                                                                                                                                                  | Available in                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **Foldable workspace**               | Side-by-side chat, files, terminal and git, with a resizable, fold-aware divider and remembered layout.                                                                                                                                       | Android                                  |
+| **Hardware keyboard and Vim**        | Laptop-style shortcuts, a keyboard-friendly composer and optional Vim navigation.                                                                                                                                                             | Android · Web · Desktop                  |
+| **Live Codex voice**                 | Two-way voice with transcripts, separate mutes, background calls and Bluetooth routing.                                                                                                                                                       | Web · Desktop · Mobile                   |
+| **Handoffs between machines**        | An agent can discover connected environments, start or message a thread elsewhere, and read or wait for its response.                                                                                                                         | Server · Connected clients               |
+| **Fleet CLI**                        | `t3 fleet` discovers environments and projects, creates threads, sends messages, reads results and waits. Retried requests keep their original receipt.                                                                                       | CLI                                      |
+| **Task handoff skill**               | Give another thread ownership of work with its objective, progress, code location, constraints and a return contact. [Handoff instructions](.agents/skills/t3-handoff/SKILL.md).                                                              | Agents with T3 tools or CLI              |
+| **Older-server compatibility**       | Connect the same client to pre-orchestration and current servers; browse threads, send messages, and answer approvals and questions. [Compatibility guide](docs/user/updating.md#compatibility-with-older-servers).                           | Web · Desktop, including macOS · Android |
+| **Agent activity notifications**     | Local alerts for completed or failed work, approvals and questions; tap to return to the thread. Requires the app to stay connected.                                                                                                          | Android                                  |
+| **Gaming HUD**                       | Optional, off by default: a small status strip above your game shows running agents and attention needed across local and remote environments. Enable it in **Settings → General → Gaming HUD**. [Guide](docs/user/appearance.md#gaming-hud). | Desktop                                  |
+| **Shared project colours and icons** | Automatic colours, custom icons and emoji configured on desktop show up for projects on the same server.                                                                                                                                      | Android                                  |
+| **Optional Cite bubble**             | Hide the selection bubble through **Settings → General → Show Cite on text selection**, without disabling text selection.                                                                                                                     | Web · Desktop                            |
+| **Splatter backdrop**                | Theme-coloured paint across the chat canvas, with patterns, amount, glow and dynamic splats.                                                                                                                                                  | Web · Desktop · Mobile                   |
+| **GLaDOS**                           | An elected, pinned coordinator thread per environment that keeps your priorities, hands bounded tasks to worker threads, and reviews their evidence. Workers use the `t3 work` CLI and MCP tools. Set it up in **Settings → GLaDOS**.         | Web · Desktop · Mobile                   |
+| **Thread wrapping**                  | On very wide screens, a long conversation flows into 2–4 side-by-side columns. Set the maximum in **Settings → Appearance**.                                                                                                                  | Web · Desktop                            |
+| **On-device dictation**              | Dictate into the composer with a downloaded Moonshine model that runs offline on the phone. [Voice input on Android](docs/user/composer.md#voice-input-on-android).                                                                           | Android                                  |
 
 ### Fold installs and updates
 
@@ -107,21 +111,9 @@ Compared with upstream `main` at [bfec2387b8](https://github.com/pingdotgg/t3cod
 
 </details>
 
-### Upstream orchestration integrated early
-
-Fold also includes [upstream's orchestration work](https://github.com/pingdotgg/t3code/commit/415ed0f73), merged ahead of the upstream `main` baseline above. These capabilities come from that integration; Fold's cross-environment routing builds on it.
-
-| Capability                      | What it enables                                                                                                                                     |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Agent thread tools**          | Start, list, read, message, and wait for threads, with task delegation through T3's orchestration tools.                                            |
-| **Subagent threads**            | Represent supported provider subagents as child threads with their own activity and relationship to the parent.                                     |
-| **Forks and provider handoffs** | Branch work, switch providers, and merge work back where supported. Portable context has limits: [handoff details](docs/user/portable-handoffs.md). |
-| **Server-owned message queues** | Queue work after an active turn and edit, reorder, remove, or promote queued messages. [Queue controls](docs/user/composer.md#queued-messages).     |
-| **Cursor SDK runtime**          | Run Cursor through its SDK, including streamed task activity and child-thread projections. [Setup and capability limits](docs/user/cursor.md).      |
-
 Upgrading an older server also migrates its conversation transcripts into the new runtime. Read [older-thread migration](docs/user/thread-migration.md) for what carries over and how sessions resume.
 
-Upstream already supplies the core clients, remote connections, provider support, voice dictation, source-control tools, and much of the project styling. The September 9 sync also includes desktop window capture, question-answer attachments, Android wallpaper colors and optional Material You layout, minimap turn navigation, and pull-request merge defaults. These are shared upstream features, not Fold-only additions. The tables above describe Fold's additions or extensions to that foundation. Recheck them after upstream merges overlapping functionality; Pebble's separate watch app and its legacy compatibility branch are not features of this main branch.
+Upstream already supplies the core clients, remote connections, orchestration (agent thread tools, subagents, forks, message queues), provider support, voice dictation, source-control tools, and much of the project styling. The tables above describe Fold's additions or extensions to that foundation; recheck them after upstream merges overlapping functionality.
 
 ## About upstream T3 Code
 
@@ -157,7 +149,7 @@ Tip: Use `npx --yes --prefer-online --package=https://github.com/whattheflop/T3c
 
 ### Desktop app
 
-Download Fold desktop builds from [GitHub Releases](https://github.com/whattheflop/T3codefold/releases). The upstream Homebrew, winget, and AUR packages install regular T3 Code.
+Download Fold desktop builds from [GitHub Releases](https://github.com/whattheflop/T3codefold/releases). The upstream Homebrew, winget, Scoop, and AUR packages install regular T3 Code.
 
 ## Some notes
 
@@ -179,6 +171,7 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Project settings](./docs/user/project-settings.md)
 - [Appearance preferences](./docs/user/appearance.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
+- [Connect Claude Code, Codex, ChatGPT and other agents over MCP](./docs/user/outside-agents.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
 - Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)

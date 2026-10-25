@@ -33,6 +33,17 @@ The controls retreat as the composer docks after you send the first message.
 Turn on **Composer context** to keep those controls visible after the thread starts. This preference
 applies to the web and desktop clients.
 
+## Thread wrapping
+
+On web and desktop, enable **Thread wrapping** in **Settings → Appearance** to read long threads
+across two to four columns when the window is wide enough. Scroll over any column. The bottom
+of each column connects to the top of the next; scrolling backward reverses the same flow.
+Narrowing the window or turning the setting off returns to one column.
+**Portals**, below Thread wrapping, shows orange and blue markers at the connected edges by default.
+Turn it off to hide the markers while keeping the same scrolling behavior.
+
+Move the pointer over the part of an embedded app you want to use, or open the app's full view.
+
 ## Motion
 
 The main sidebar, right panel, and terminal drawer open and close immediately by default. Move the
@@ -97,3 +108,20 @@ view.
 
 Write updates to a temporary file and rename it into place so clients never read a partial theme.
 Invalid files are not published.
+
+## Gaming HUD
+
+Gaming HUD is a Fold desktop feature and is **off by default**. Enable it in
+**Settings → General → Gaming HUD** to see agent activity while using another app
+or playing a game. Choose a corner on the display containing
+the T3 Code window. The HUD passes clicks and keyboard input through to your game.
+Use windowed or borderless mode; exclusive fullscreen and some window managers may
+keep other windows hidden.
+
+The HUD includes connected local and remote environments. It separates running agents
+from agents waiting on background work in a small status strip. The attention count
+includes input or approval requests, failures, usage limits, and unseen completions.
+A red dot indicates disconnected environments, which are excluded from counts.
+Open T3 Code to respond, and disable **Gaming HUD** in the same settings section
+when you no longer need it. Keep the desktop app open, including
+minimized, for status updates. This preference is saved on this device.

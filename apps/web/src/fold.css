@@ -1,0 +1,338 @@
+/* Fold's web styles, loaded after index.css (main.tsx) so they keep the
+   cascade position they had at the end of their index.css sections. All rules
+   are unlayered, like the index.css rules they sit beside. */
+
+/* Backdrop artwork for the chat canvas: paint splatter in the active theme's
+   colours. Layout lives here; the images come from the runtime renderer
+   described below.
+
+   Two corner clusters over a full-canvas field. The clusters carry the
+   composition: a single SVG scaled with `cover` has to crop roughly 60% of its
+   width on a phone, which throws the composition away, while corner-anchored
+   clusters keep their proportions and stay clear of the centre column at every
+   aspect ratio. They grow with the viewport's height as well as its width, so
+   a 4K canvas gets them in proportion rather than a laptop-sized pair. The
+   field is spray and small throws with no composition to lose, so it takes
+   `cover` and fills whatever the canvas is.
+
+   Cluster geometry is mirrored by splatterLayout() in
+   packages/shared/src/splatterBackdrop.ts, which draws the settings previews
+   and the mobile canvas. Keep the two in step.
+
+   A last layer carries a grain tile. The chat canvas paints over the inset's
+   own grain, so without it the splatter would sit on the one surface in the
+   app with no texture beneath it. It is a separate tile from --surface-grain
+   rather than a reuse: the shared one is tuned to be almost subliminal on
+   chrome, and at that strength it disappears entirely behind the splatter.
+
+   Everything paints onto the canvas's own background rather than a fixed
+   overlay on top of it, and nothing animates, so the layers rasterize once and
+   are never re-blended afterwards. See the --surface-grain note in index.css for what
+   a full-viewport overlay cost us last time. */
+[data-chat-canvas] {
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-position:
+    top right,
+    bottom left,
+    center,
+    center,
+    0 0;
+  background-size:
+    min(58vw, max(720px, 60vh)) auto,
+    min(66vw, max(820px, 68vh)) auto,
+    cover,
+    cover,
+    200px 200px;
+}
+
+/* On a phone both clusters scale up to stay legible, and the lower one lifts
+   clear of the composer, which would otherwise bury its largest splat. */
+@media (max-width: 640px) {
+  [data-chat-canvas] {
+    background-position:
+      top right,
+      left -18vw bottom 12%,
+      center,
+      center,
+      0 0;
+    background-size:
+      125vw auto,
+      130vw auto,
+      cover,
+      cover,
+      200px 200px;
+  }
+}
+
+/* The art itself is rendered per theme at runtime (apps/web/src/themeBackdrop.tsx,
+   packages/shared/src/splatterBackdrop.ts), which sets --backdrop-a/-b/-field to blob
+   URLs (plus --backdrop-merges, the day's merged-PR splats, in dynamic mode) and data-theme-backdrop="on" whenever Settings -> Appearance -> Splatter
+   backdrop applies to the active theme. */
+
+/* Desaturated, so the grain thickens the surface instead of tinting it the way
+   the app-wide tile's raw RGBA turbulence would once it got this strong. The
+   light half takes less: the same noise over a near-white canvas reads as dirt
+   long before it reads as texture. Defined for every canvas, but only painted
+   while the backdrop is on. */
+[data-chat-canvas] {
+  --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.07'/%3E%3C/svg%3E");
+}
+
+html.dark [data-chat-canvas] {
+  --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.12'/%3E%3C/svg%3E");
+}
+
+html[data-theme-backdrop="on"] [data-chat-canvas] {
+  background-image:
+    var(--backdrop-a), var(--backdrop-b), var(--backdrop-merges, none), var(--backdrop-field),
+    var(--canvas-grain);
+}
+
+/* The messages wrapper paints the theme background so a thread switch never
+   flashes through; the backdrop has to show through it instead. */
+html[data-theme-backdrop="on"] [data-chat-canvas] [data-chat-messages] {
+  background-color: transparent;
+}
+
+/* Thread wrapping's ribbon (useThreadRibbon). Once a thread is taller than
+   one screen and the timeline fits several reading-width columns, LegendList's
+   content pins as a screen-height window and scrolling feeds the whole thread
+   through it. Rows keep their single-column layout; the hook carries each one
+   into its column with a transform and this window's clip cuts it at the
+   seams, so nothing here fragments. */
+:root[data-thread-wrap] {
+  --thread-wrap-column-width: 42rem;
+  --thread-wrap-gap: 3.5rem;
+}
+
+[data-thread-ribbon] > .legend-list-content-container {
+  --thread-ribbon-stride: calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap));
+  --thread-ribbon-rule: color-mix(in srgb, var(--border) 80%, transparent);
+  /* Keep the offset on the first child from collapsing through the window
+     and shortening the scroll range. LegendList sets display: block inline. */
+  display: flow-root !important;
+  position: sticky;
+  top: var(--thread-ribbon-top);
+  margin-top: var(--thread-ribbon-top);
+  margin-inline: auto;
+  max-width: calc(
+    var(--thread-ribbon-columns) * var(--thread-wrap-column-width) +
+      (var(--thread-ribbon-columns) - 1) * var(--thread-wrap-gap)
+  );
+  height: var(--thread-ribbon-page-height);
+  min-height: 0 !important;
+  /* LegendList's anchored end space would only add blank columns here. */
+  padding-bottom: 0 !important;
+  overflow: clip;
+  /* One rule per gap; the tile after the last column falls outside the box. */
+  background-image: linear-gradient(
+    to right,
+    transparent calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap) / 2),
+    var(--thread-ribbon-rule) 0,
+    var(--thread-ribbon-rule)
+      calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap) / 2 + 1px),
+    transparent 0
+  );
+  background-size: var(--thread-ribbon-stride) 100%;
+  background-repeat: repeat-x;
+}
+
+/* Every row is one column wide. LegendList spans rows edge to edge inline. */
+[data-thread-ribbon-layer] > div:not([data-thread-ribbon-mirrors]),
+[data-thread-ribbon-mirrors] > div {
+  width: var(--thread-wrap-column-width) !important;
+  right: auto !important;
+}
+
+[data-thread-ribbon-mirrors] {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 0;
+}
+
+/* Imperative overlays stay outside the measured row layer. The zero-height
+   host contributes no length to LegendList's single-column scroll range. */
+[data-thread-ribbon-portals] {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+[data-thread-ribbon-portal] {
+  position: absolute;
+  left: calc(var(--thread-ribbon-portal-column) * var(--thread-ribbon-stride));
+  width: var(--thread-wrap-column-width);
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 5px color-mix(in srgb, currentColor 55%, transparent);
+}
+
+html[data-thread-wrap-portals="off"] [data-thread-ribbon-portals] {
+  display: none;
+}
+
+[data-thread-ribbon-portal="exit"] {
+  top: calc(var(--thread-ribbon-page-height) - 2px);
+  color: var(--color-orange-400, #fb923c);
+}
+
+[data-thread-ribbon-portal="entry"] {
+  top: 0;
+  color: var(--color-sky-400, #38bdf8);
+}
+
+[data-thread-ribbon-embed] {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+[data-thread-ribbon-embed] > span {
+  padding: 0.75rem;
+}
+
+/* A mirror is a still copy of a live row: no input, no selection, no motion. */
+[data-thread-ribbon-mirror] {
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-thread-ribbon-mirror] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* The window already stops above the composer. */
+[data-thread-ribbon] [data-timeline-composer-inset] {
+  height: 0 !important;
+}
+
+/* ChatCanvas sizes its width probe to the widest ribbon the canvas fits, so
+   the workspace card and floating preview steer clear of the columns. This
+   reads the canvas, not the timeline, so it cannot feed back into the
+   ribbon's own column count. Thresholds add the timeline's side padding. */
+:root[data-thread-wrap] [data-chat-canvas] {
+  container: thread-wrap-canvas / inline-size;
+}
+
+@container thread-wrap-canvas (width >= 96rem) {
+  :root[data-thread-wrap]
+    [data-chat-canvas]:has([data-thread-ribbon])
+    > [data-chat-canvas-width-probe] {
+    --thread-wrap-columns: 2;
+    width: calc(
+      var(--thread-wrap-columns) * var(--thread-wrap-column-width) +
+        (var(--thread-wrap-columns) - 1) * var(--thread-wrap-gap)
+    );
+  }
+}
+
+@container thread-wrap-canvas (width >= 142rem) {
+  :root:is([data-thread-wrap="3"], [data-thread-wrap="4"])
+    [data-chat-canvas]:has([data-thread-ribbon])
+    > [data-chat-canvas-width-probe] {
+    --thread-wrap-columns: 3;
+  }
+}
+
+@container thread-wrap-canvas (width >= 188rem) {
+  :root[data-thread-wrap="4"]
+    [data-chat-canvas]:has([data-thread-ribbon])
+    > [data-chat-canvas-width-probe] {
+    --thread-wrap-columns: 4;
+  }
+}
+
+/* A reply that finishes on screen sweeps in once, left to right. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-thread-ribbon] [data-thread-wrap-reveal] > [data-assistant-citation-source] {
+    animation: thread-wrap-reveal 1100ms cubic-bezier(0.45, 0, 0.25, 1) backwards;
+  }
+}
+
+@keyframes thread-wrap-reveal {
+  from {
+    mask-image: linear-gradient(90deg, #000 40%, rgb(0 0 0 / 12%) 60%);
+    mask-size: 250% 100%;
+    mask-position: 100% 0;
+    opacity: 0.35;
+    transform: translateY(0.375rem);
+  }
+  to {
+    mask-image: linear-gradient(90deg, #000 40%, rgb(0 0 0 / 12%) 60%);
+    mask-size: 250% 100%;
+    mask-position: 0 0;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Sidebar thread rows (sidebar-thread-choice): hover wash and focus accent. */
+/* Short, transform-only accents settle completely between interactions. */
+.sidebar-thread-choice {
+  isolation: isolate;
+  transition: background-color 120ms ease-out;
+}
+
+/* The angled wash leaves text stationary and preserves active/selected surfaces. */
+.sidebar-thread-choice::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  background: var(--primary);
+  clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition:
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 100ms ease-out;
+}
+
+.sidebar-thread-choice:is(:hover, :focus-visible)::before {
+  opacity: 0.035;
+  transform: translateX(0);
+}
+
+.sidebar-thread-choice:focus-visible {
+  background-color: var(--sidebar-row-hover);
+  color: var(--sidebar-foreground);
+  outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.sidebar-thread-choice::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 18% auto 18% 1px;
+  width: 3px;
+  background: var(--primary);
+  opacity: 0;
+  transform: translateX(-4px) skewY(-18deg) scaleY(0.55);
+  transition:
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 100ms ease-out;
+}
+
+.sidebar-thread-choice:focus-visible::after {
+  opacity: 1;
+  transform: translateX(0) skewY(-18deg) scaleY(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-thread-choice,
+  .sidebar-thread-choice::before,
+  .sidebar-thread-choice::after {
+    transition: none;
+  }
+}

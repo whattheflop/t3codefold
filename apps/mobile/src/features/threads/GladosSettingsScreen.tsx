@@ -13,9 +13,9 @@ import { type ComponentProps, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { uuidv4 } from "../../lib/uuid";
 import { buildModelOptions } from "../../lib/modelOptions";
 import { useEnvironments } from "../../state/environments";
@@ -23,9 +23,9 @@ import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { ListRowLayout } from "../../components/ui/ListRowLayout";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsChoiceRow } from "../settings/components/SettingsChoiceRow";
-import { SettingsControlRow } from "../settings/components/SettingsControlRow";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { SettingsSection } from "../settings/components/SettingsSection";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
@@ -392,7 +392,8 @@ function HowGladosWorks(props: {
   const autonomy = pitbossAutonomy(props.brief);
   const model = props.brief.workerModel;
   const modelLabel = useMemo(() => {
-    const option = buildModelOptions(props.config, model).find(
+    // The brief may span several projects, so the label reads from the unfiltered catalog.
+    const option = buildModelOptions(props.config, model, undefined, null).find(
       (entry) =>
         entry.selection.instanceId === model.instanceId && entry.selection.model === model.model,
     );
@@ -440,18 +441,12 @@ function HowGladosWorks(props: {
           }}
         />
         <View className="border-t border-border-subtle">
-          <SettingsControlRow
+          <ListRowLayout
             icon="brain"
             label="Model"
-            subtitle="Used by new workers. Change models on web or desktop."
-          >
-            <Text
-              className="max-w-[160px] text-right text-base text-foreground-muted"
-              numberOfLines={2}
-            >
-              {modelLabel}
-            </Text>
-          </SettingsControlRow>
+            description="Used by new workers. Change models on web or desktop."
+            detail={modelLabel}
+          />
         </View>
       </SettingsSection>
       {autonomy === "custom" ? (
@@ -553,33 +548,29 @@ function GladosConnections(props: {
   return (
     <>
       <SettingsSection title="Connections">
-        <SettingsControlRow
+        <ListRowLayout
           icon="ticket"
           label="Task sources"
-          subtitle={
+          description={
             sources.error
               ? sources.error
               : failing
                 ? `${failing} ${failing === 1 ? "source needs" : "sources need"} attention`
                 : undefined
           }
-        >
-          <Text className="text-base text-foreground-muted">
-            {sources.data
+          detail={
+            sources.data
               ? `${sourceList.filter((source) => source.config.enabled).length} connected`
-              : "—"}
-          </Text>
-        </SettingsControlRow>
+              : "—"
+          }
+        />
         <View className="border-t border-border-subtle">
-          <SettingsControlRow
+          <ListRowLayout
             icon="point.3.connected.trianglepath.dotted"
             label="Peers"
-            subtitle={error ?? peers.error ?? undefined}
-          >
-            <Text className="text-base text-foreground-muted">
-              {peers.data ? `${peerList.length} paired` : "—"}
-            </Text>
-          </SettingsControlRow>
+            description={error ?? peers.error ?? undefined}
+            detail={peers.data ? `${peerList.length} paired` : "—"}
+          />
         </View>
         {peerList.map((peer) => (
           <View key={peer.config.id} className="gap-2 border-t border-border-subtle p-4">
@@ -657,25 +648,30 @@ function Stepper(props: {
   readonly onChange: (value: number) => void;
 }) {
   return (
-    <SettingsControlRow icon={props.icon} label={props.label} subtitle={props.subtitle}>
-      <View className="flex-row items-center gap-3">
-        <StepButton
-          symbol="minus"
-          label={`Fewer ${props.label.toLowerCase()}`}
-          disabled={props.disabled || props.value <= props.min}
-          onPress={() => props.onChange(props.value - 1)}
-        />
-        <Text className="min-w-6 text-center text-lg tabular-nums text-foreground">
-          {props.value}
-        </Text>
-        <StepButton
-          symbol="plus"
-          label={`More ${props.label.toLowerCase()}`}
-          disabled={props.disabled || props.value >= props.max}
-          onPress={() => props.onChange(props.value + 1)}
-        />
-      </View>
-    </SettingsControlRow>
+    <ListRowLayout
+      icon={props.icon}
+      label={props.label}
+      description={props.subtitle}
+      accessory={
+        <View className="flex-row items-center gap-3">
+          <StepButton
+            symbol="minus"
+            label={`Fewer ${props.label.toLowerCase()}`}
+            disabled={props.disabled || props.value <= props.min}
+            onPress={() => props.onChange(props.value - 1)}
+          />
+          <Text className="min-w-6 text-center text-lg tabular-nums text-foreground">
+            {props.value}
+          </Text>
+          <StepButton
+            symbol="plus"
+            label={`More ${props.label.toLowerCase()}`}
+            disabled={props.disabled || props.value >= props.max}
+            onPress={() => props.onChange(props.value + 1)}
+          />
+        </View>
+      }
+    />
   );
 }
 

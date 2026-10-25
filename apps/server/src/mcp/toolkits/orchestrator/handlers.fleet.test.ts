@@ -15,6 +15,7 @@ import * as Stream from "effect/Stream";
 import type { Tool, Toolkit } from "effect/ai";
 
 import * as ServerConfig from "../../../config.ts";
+import * as ServerSettings from "../../../serverSettings.ts";
 import * as ThreadLaunch from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.ts";
@@ -62,6 +63,7 @@ const setup = (remoteResult: unknown) => {
   const layer = Layer.mergeAll(
     NodeCrypto.layer,
     NodeServices.layer,
+    ServerSettings.layerTest(),
     ServerConfig.layerTest(process.cwd(), { prefix: "t3-fleet-routing-" }).pipe(
       Layer.provide(NodeServices.layer),
     ),

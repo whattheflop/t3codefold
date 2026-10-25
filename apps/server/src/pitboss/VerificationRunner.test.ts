@@ -11,7 +11,7 @@ import * as Paths from "effect/Path";
 import { EnvironmentId, ProjectId, type PitbossVerification } from "@t3tools/contracts";
 import { ServerConfig, layerTest } from "../config.ts";
 import { ProcessRunner, layer as processes } from "../processRunner.ts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { VerificationRunner, layer } from "./VerificationRunner.ts";
 
 it.live(
@@ -22,7 +22,7 @@ it.live(
       const Path = yield* Paths.Path;
       const runner = yield* VerificationRunner;
       const processRunner = yield* ProcessRunner;
-      const platform = yield* HostProcessPlatform;
+      const platform = yield* HostProcess.Platform;
       const config = yield* ServerConfig;
       const root = yield* Fs.makeTempDirectoryScoped({ prefix: "verification-fixture-" });
       const git = (args: string[]) => processRunner.run({ command: "git", args, cwd: root });
@@ -170,7 +170,7 @@ it.live(
       const Path = yield* Paths.Path;
       const config = yield* ServerConfig;
       const runner = yield* VerificationRunner;
-      const platform = yield* HostProcessPlatform;
+      const platform = yield* HostProcess.Platform;
       const root = yield* Fs.makeTempDirectoryScoped({ prefix: "verification-nongit-" });
       const environmentId = EnvironmentId.make("test-environment");
       yield* Fs.makeDirectory(Path.dirname(config.environmentIdPath), { recursive: true });

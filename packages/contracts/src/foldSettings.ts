@@ -3,6 +3,7 @@
  * `ClientSettingsPatch` in `settings.ts`, so upstream syncs touch two lines
  * there instead of every field.
  */
+import { GamingHudPosition } from "./gamingHud.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -42,7 +43,20 @@ export const ThemeBackdropSeed = Schema.Int.check(
 );
 export type ThemeBackdropSeed = typeof ThemeBackdropSeed.Type;
 
+/** Most columns thread wrapping may split a long reply into on very wide screens. */
+export const ThreadWrapMaxColumns = Schema.Int.check(Schema.isBetween({ minimum: 2, maximum: 4 }));
+export const DEFAULT_THREAD_WRAP_MAX_COLUMNS = 3;
+
 export const FoldClientSettingsFields = {
+  gamingHudEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  gamingHudPosition: GamingHudPosition.pipe(
+    Schema.withDecodingDefault(Effect.succeed("top-right" as const)),
+  ),
+  threadWrapEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  threadWrapPortalsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  threadWrapMaxColumns: ThreadWrapMaxColumns.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_WRAP_MAX_COLUMNS)),
+  ),
   /** Paint-splatter backdrop behind the conversation, on themes that ship one. */
   themeBackdropEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   themeBackdropScope: ThemeBackdropScope.pipe(
@@ -66,6 +80,11 @@ export const FoldClientSettingsFields = {
 };
 
 export const FoldClientSettingsPatchFields = {
+  gamingHudEnabled: Schema.optionalKey(Schema.Boolean),
+  gamingHudPosition: Schema.optionalKey(GamingHudPosition),
+  threadWrapEnabled: Schema.optionalKey(Schema.Boolean),
+  threadWrapPortalsEnabled: Schema.optionalKey(Schema.Boolean),
+  threadWrapMaxColumns: Schema.optionalKey(ThreadWrapMaxColumns),
   themeBackdropEnabled: Schema.optionalKey(Schema.Boolean),
   themeBackdropScope: Schema.optionalKey(ThemeBackdropScope),
   themeBackdropColors: Schema.optionalKey(Schema.NullOr(ThemeBackdropColors)),

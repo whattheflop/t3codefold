@@ -1,6 +1,6 @@
-import * as Schema from "effect/Schema";
-import * as Option from "effect/Option";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+import { COMPUTER_USE_TOOL_SOURCE, dynamicToolSurface } from "@t3tools/shared/toolActivity";
+import { foldPreviewToolIcon } from "./foldPreviewToolIcon.ts";
 import type {
   ToolActivityIcon,
   ToolActivityNativeAppReference,
@@ -109,55 +109,27 @@ function activitySource(value: unknown): ToolActivitySource | undefined {
   return { key, name, kind, ...(icon ? { icon } : {}) };
 }
 
-const decodePreviewResult = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
-
-/** V2 retains dynamic-tool output; recover the preview page without legacy activity projection. */
-function previewToolIcon(
-  payload: Record<string, unknown> | undefined,
-): ToolActivityIcon | undefined {
-  const name = payload?.toolName;
-  if (typeof name !== "string" || !/^(?:mcp__)?(?:t3-code|t3_code|t3code)_{1,2}preview_/.test(name))
-    return undefined;
-  if (
-    payload?.status === "failed" ||
-    payload?.status === "declined" ||
-    payload?.status === "cancelled"
-  )
-    return undefined;
-  let output: unknown = payload?.output;
-  for (let depth = 0; depth < 4; depth++) {
-    if (typeof output === "string") {
-      if (output.length > 2 * 1024 * 1024) return undefined;
-      const decoded = decodePreviewResult(output);
-      if (Option.isNone(decoded)) return undefined;
-      output = decoded.value;
-    }
-    const result = asRecord(output);
-    if (!result || result.isError === true || result.is_error === true) return undefined;
-    const pageUrl = trimmedString(
-      asRecord(result.toolIcon)?.pageUrl ??
-        (/preview_(?:open|navigate|status|snapshot)$/.test(name) ? result.url : undefined),
-      4096,
-    );
-    if (pageUrl) return activityIcon({ _tag: "website", pageUrl });
-    const content = Array.isArray(result.content) ? result.content : [];
-    output =
-      result.structuredContent ??
-      content.map(asRecord).find((block) => block?.type === "text")?.text;
-  }
-  return undefined;
-}
-
 export function extractToolActivityPresentation(
   payloadValue: unknown,
 ): ExtractedToolActivityPresentation {
   const payload = asRecord(payloadValue);
+  const retainedSource = activitySource(payload?.toolSource);
   const toolSurface =
     payload?.toolSurface === "browser" || payload?.toolSurface === "computer"
       ? payload.toolSurface
-      : undefined;
-  const toolIcon = activityIcon(payload?.toolIcon) ?? previewToolIcon(payload);
-  const toolSource = activitySource(payload?.toolSource);
+      : retainedSource?.kind === "computer" || retainedSource?.kind === "browser"
+        ? retainedSource.kind
+        : payload?.type === "dynamic_tool"
+          ? dynamicToolSurface(
+              typeof payload.toolName === "string" ? payload.toolName : undefined,
+              payload.input,
+            )
+          : undefined;
+  const toolSource =
+    toolSurface === "computer" && retainedSource?.kind !== "computer"
+      ? COMPUTER_USE_TOOL_SOURCE
+      : retainedSource;
+  const toolIcon = activityIcon(payload?.toolIcon) ?? activityIcon(foldPreviewToolIcon(payload));
   const viewedImagePath = trimmedString(payload?.viewedImagePath, 4096);
   return {
     ...(toolSurface ? { toolSurface } : {}),

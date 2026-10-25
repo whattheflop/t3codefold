@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
-import type { ProviderAdapterV2SessionRuntime } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2SessionRuntime } from "@t3tools/provider-core/server/ProviderAdapter";
 import { makeRealtimeVoiceSessionResolver } from "./RealtimeVoiceSession.ts";
 class TestRuntime extends Context.Service<TestRuntime, ProviderAdapterV2SessionRuntime>()(
   "t3/orchestration-v2/RealtimeVoiceSession.test/TestRuntime",

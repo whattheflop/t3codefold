@@ -53,6 +53,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
   private val verticalScroller = OverScroller(context)
   private val horizontalScroller = OverScroller(context)
   private var dragAxis: DragAxis? = null
+  private var scrollEnabled = true
   private var horizontalDragTarget: HorizontalPanTarget? = null
   private var lastTouchX = 0f
   private var lastTouchY = 0f
@@ -104,6 +105,14 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
 
   init {
     canvasView.onAttachSelection = { start, end -> onAttachSelection(mapOf("startIndex" to start, "endIndex" to end)) }
+    canvasView.onContentHeightChanged = { height ->
+      onDebug(
+        mapOf(
+          "message" to "metrics",
+          "contentHeight" to height / resources.displayMetrics.density
+        )
+      )
+    }
     canvasView.onRowTap = { row, gesture, target -> handleRowTap(row, gesture, target) }
     canvasView.onVisibleRowsChanged = { first, last ->
       onDebug(
@@ -187,6 +196,12 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
     canvasView.contentWidthPx = max(width, dp(value).toInt())
   }
 
+  fun setContentInsetBottom(value: Float) {
+    canvasView.setPadding(0, 0, 0, max(0, dp(value).toInt()))
+    canvasView.setVerticalOffset(canvasView.verticalOffset())
+    canvasView.invalidate()
+  }
+
   fun setInitialRowIndex(value: Double) {
     initialRowIndex = value.toInt().coerceAtLeast(0)
     pendingInitialScroll = true
@@ -253,6 +268,14 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
     scrollToY(canvasView.rowTop(index), animated)
   }
 
+  fun setScrollEnabled(enabled: Boolean) {
+    scrollEnabled = enabled
+    if (!enabled) {
+      verticalScroller.forceFinished(true)
+      canvasView.setVerticalOffset(0)
+    }
+  }
+
   fun scrollToTop(animated: Boolean) {
     scrollToY(0, animated)
   }
@@ -268,7 +291,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
         horizontalDragTarget = canvasView.horizontalPanTarget(event.y)
         lastTouchX = event.x
         lastTouchY = event.y
-        parent?.requestDisallowInterceptTouchEvent(true)
+        parent?.requestDisallowInterceptTouchEvent(scrollEnabled)
         return false
       }
       MotionEvent.ACTION_MOVE -> {
@@ -277,7 +300,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
           val deltaY = event.y - lastTouchY
           if (max(abs(deltaX), abs(deltaY)) > touchSlop) {
             dragAxis = if (abs(deltaY) >= abs(deltaX)) {
-              DragAxis.VERTICAL
+              if (scrollEnabled) DragAxis.VERTICAL else null
             } else {
               horizontalDragTarget
                 ?.takeIf { canvasView.maxHorizontalOffset(it) > 0 }
@@ -285,6 +308,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
             }
           }
         }
+        if (dragAxis == DragAxis.HORIZONTAL) parent?.requestDisallowInterceptTouchEvent(true)
         return dragAxis != null
       }
       MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return dragAxis != null
@@ -857,6 +881,7 @@ private class DiffCanvasView(context: Context) : View(context) {
     }
   var onRowTap: ((DiffRow, String, RowTapTarget) -> Unit)? = null
   var onVisibleRowsChanged: ((Int, Int) -> Unit)? = null
+  var onContentHeightChanged: ((Int) -> Unit)? = null
 
   fun prepareRows() = drawing.prepareRows(tokensByRowId, style, width)
   fun useCodeLayouts(layouts: CodeLayoutCache) {
@@ -912,7 +937,7 @@ private class DiffCanvasView(context: Context) : View(context) {
   fun rowTop(index: Int): Int = rowOffsets[index.coerceIn(0, max(0, rowOffsets.size - 2))]
 
   fun setVerticalOffset(value: Int) {
-    val maxOffset = max(0, (rowOffsets.lastOrNull() ?: 0) - height)
+    val maxOffset = maxVerticalOffset()
     val nextOffset = value.coerceIn(0, maxOffset)
     if (verticalOffset == nextOffset) return
     verticalOffset = nextOffset
@@ -926,7 +951,8 @@ private class DiffCanvasView(context: Context) : View(context) {
 
   fun verticalOffset(): Int = verticalOffset
 
-  fun maxVerticalOffset(): Int = max(0, (rowOffsets.lastOrNull() ?: 0) - height)
+  fun maxVerticalOffset(): Int =
+    max(0, (rowOffsets.lastOrNull() ?: 0) + paddingBottom - height)
 
   fun setHorizontalOffset(value: Int) {
     val nextOffset = value.coerceIn(0, maxHorizontalOffset())
@@ -989,6 +1015,7 @@ private class DiffCanvasView(context: Context) : View(context) {
     setVerticalOffset(verticalOffset)
     setHorizontalOffset(horizontalOffset)
     clampHeaderPathOffsets()
+    onContentHeightChanged?.invoke(rowOffsets.last())
   }
 
   private fun rowHeight(row: DiffRow): Int = when (row.kind) {
@@ -1025,8 +1052,9 @@ private class DiffCanvasView(context: Context) : View(context) {
         return rows.getOrNull(sticky.index)?.let { RowHit(it, sticky.top, sticky.bottom) }
       }
     }
-    val index = rowIndexAt(verticalOffset + y.toInt())
-    return rows.getOrNull(index)?.let {
+    val contentY = verticalOffset + y.toInt()
+    val index = rowIndexAt(contentY)
+    return rows.getOrNull(index)?.takeIf { contentY in 0 until rowOffsets.last() }?.let {
       RowHit(
         row = it,
         top = rowOffsets[index] - verticalOffset,
@@ -1311,14 +1339,7 @@ private class DiffCanvasView(context: Context) : View(context) {
     }
     val selected = selectedRowIds.contains(row.id) || (textSelectable && selection.contains(rowIndexAt(verticalOffset + top)))
     if (selected) {
-      fill(
-        canvas,
-        withAlpha(theme.hunkText, 56),
-        0f,
-        top.toFloat(),
-        width.toFloat(),
-        bottom.toFloat(),
-      )
+      // Keep the diff and syntax colors intact; selection lives in the gutter.
       fill(
         canvas,
         withAlpha(theme.hunkText, 242),

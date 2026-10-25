@@ -1,5 +1,7 @@
 # Development
 
+This fork has no CI. See the [pre-push gate](./fold.md#pre-push-gate) and [shared Android build caches](./fold.md#shared-android-build-caches).
+
 ## First checkout
 
 Install `vp` using the [root README](../../README.md#install-vp). The checkout requires Node 24;
@@ -106,33 +108,23 @@ vp lint <files>
 vp run --filter <package> typecheck
 ```
 
-Use `vp run lint:mobile` for native mobile changes.
+TypeScript workspaces typecheck with tsc-rs, which has Effect diagnostics built in.
+Keep `typescript`, `@effect/tsgo`, and the `effect-tsgo patch` prepare step: editors
+still use them for Effect quick fixes and refactors. Keep `@effect/tsgo` on the
+effect-tsgo version that tsc-rs ports (see the tsc-rs README), or the two disagree
+on rule names.
+Marketing keeps `astro check` for Astro files.
 
-### Pre-push gate
-
-The fork runs no CI; its test workflows are disabled in GitHub. Instead
-[pre-push.ts](../../scripts/pre-push.ts) runs on every `git push` for the workspaces the pushed
-commits change and the workspaces that depend on them: format on the changed files, lint on the
-changed lines, typecheck, and tests. Unchanged packages replay their last passing result from the
-`vp run --cache` task cache in `node_modules/.vite/task-cache`, so it stays fast after the first
-run in a checkout. The cache is per checkout; a new worktree warms its own.
-
-- Server tests are not gated yet: the suite takes over half an hour and still has failures
-  from before the gate. Run `vp test run <files>` for what you touch.
-- Lint blocks only errors on lines the push adds, because many files still carry older
-  errors.
-- Typecheck covers the workspaces listed in `TYPECHECK_GATED`; add a workspace there once it
-  typechecks cleanly.
-- Checks run against the working tree, so push the checked-out branch.
-- A test that writes files inside its own package can't be cached; keep test scratch files in
-  the OS temp directory.
-- `git push --no-verify` bypasses the gate for one push.
+Use `vp run lint:mobile` for native mobile changes. CI owns the full suite; see
+[ci.yml](../../.github/workflows/ci.yml) for its current jobs.
+The [manual Windows lane](../../.github/workflows/windows-tests.yml) is available for focused
+Windows investigation while that suite is not a required gate.
 
 ### Unused code
 
 `vp run knip:check` checks unused files and dependencies across the repo, then
 unused runtime exports in `apps/server`, `apps/desktop`, `apps/web`, and every internal package under
-`packages/`. The pre-push gate does not run it yet; knip still has findings on `main`.
+`packages/`. CI enforces both checks.
 Exported types and Effect schemas are allowed without consumers. The schema preprocessor
 recognizes schema types, including aliases and schema classes; functions that create or decode
 schemas remain checked. Canonical Effect service construction APIs stay exported with an explicit
@@ -141,42 +133,10 @@ Named exports in web UI component modules are kept as complete component sets. K
 unused exports in `apps/web/src/components/ui/*.tsx`, while still reporting an entire unused file.
 Use `vp run knip --workspace apps/web` to audit one workspace, including exports,
 or `vp run knip:production --workspace apps/web` to find code kept alive only by tests.
-The full export audit still has findings. Extend the
+The full export audit still has findings and is not a repo-wide CI gate. Extend the
 export check's workspace selectors as more workspaces become clean. Review callers before
 deleting code; production mode can also report development scripts and test fixtures.
 Runtime-discovered entrypoints and dependency exceptions belong in [knip.jsonc](../../knip.jsonc).
-
-## Shared Android build caches
-
-A cold Android build takes about an hour, almost all of it compiling NDK C++. Maintainers run many
-worktrees at once, and pnpm gives each one its own `node_modules`, so without shared caches every
-worktree pays that hour again. Two host-level caches avoid it, and they solve different halves of
-the problem:
-
-- **Gradle's local build cache** reuses JVM, resource, and dex task outputs. It lives in the Gradle
-  user home, not the project, so it is shared across worktrees as soon as it is enabled.
-  `withAndroidBuildCache.cjs` sets `org.gradle.caching` in the generated `gradle.properties`.
-- **ccache** reuses the compiled NDK objects, which Gradle cannot: `externalNativeBuild` tasks are
-  not cacheable. Install it once per machine (`sudo apt install ccache`, or Homebrew on macOS).
-  `mobile-native-client.ts` detects it and warns when it is absent.
-
-ccache only shares across worktrees because the build sets `CCACHE_BASEDIR` to the checkout root,
-which rewrites checkout-absolute paths to be relative before hashing, and relaxes the timestamp
-comparisons that differ between two pnpm copies of the same dependency. The Android NDK lives
-outside any checkout, so a toolchain change stays a miss, which is what you want. Precompiled
-headers are the exception to that path rewriting: they live under AGP's `.cxx/<variant>/<hash>`
-directory, whose hash derives from the absolute project path, so the same plugin turns PCH off for
-ccache builds. Leaving it on drops cross-worktree hits to about half. Those settings are only read
-when CMake configures, so a worktree that already configured `.cxx` before ccache was installed
-keeps missing until the next prebuild regenerates its native project.
-
-Do not try to share anything else. The generated `apps/mobile/android/` tree and its `.gradle`,
-`build`, and `.cxx` directories record absolute paths; symlinking or copying them between worktrees
-produces builds that fail in confusing ways. Keep them per-worktree and let the content-addressed
-caches carry the work across.
-
-Inspect effectiveness with `ccache -s`. Cleaning is a last resort, not routine hygiene: see the
-incremental-build rule in [AGENTS.md](../../AGENTS.md).
 
 ## Desktop artifacts
 

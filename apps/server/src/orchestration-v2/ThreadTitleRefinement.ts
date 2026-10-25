@@ -13,6 +13,16 @@ import type { ProjectionRecords } from "./ProjectionStore.ts";
 import { ThreadManagementService } from "./ThreadManagementService.ts";
 
 /**
+ * The server's title-completion command. `needsRefinement` marks an initial
+ * generated title as provisional, so ThreadTitleRefinement regenerates it once
+ * the first run completes. It is server-only and never crosses the wire.
+ */
+export type ThreadTitleRegenerationCompleteCommand = Extract<
+  OrchestrationV2ServerCommand,
+  { readonly type: "thread.title.regeneration.complete" }
+> & { readonly needsRefinement?: boolean };
+
+/**
  * The regeneration that replaces a provisional generated title, or null when
  * the thread has nothing to refine yet. The command carries the title version
  * it saw, so the orchestrator drops it if the title changed in the meantime.

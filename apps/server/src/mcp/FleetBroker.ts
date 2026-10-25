@@ -132,7 +132,7 @@ export const make = Effect.gen(function* () {
     }),
   );
   const invoke = Effect.fn("FleetBroker.invoke")(function* (request: FleetExecuteInput) {
-    const requestId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+    const requestId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
     const result = yield* Deferred.make<unknown, OrchestratorMcpFailure>();
     const lease = yield* SynchronizedRef.modify(state, (current) => {
       const target =

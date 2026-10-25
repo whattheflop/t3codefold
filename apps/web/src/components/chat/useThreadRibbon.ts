@@ -1,4 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { createThreadRibbonMirror } from "./threadRibbonMirrors";
+import { observeResize } from "../../lib/observeResize";
 
 // Keep in sync with --thread-wrap-column-width and --thread-wrap-gap.
 const COLUMN_WIDTH_REM = 42;
@@ -116,6 +118,9 @@ export function useThreadRibbon({
     const mirrorLayer = document.createElement("div");
     mirrorLayer.setAttribute("aria-hidden", "true");
     mirrorLayer.dataset.threadRibbonMirrors = "";
+    const portalLayer = document.createElement("div");
+    portalLayer.setAttribute("aria-hidden", "true");
+    portalLayer.dataset.threadRibbonPortals = "";
     const mirrored = new Map<HTMLElement, MirroredRow>();
     let columns = 0;
     let pageHeight = 0;
@@ -139,33 +144,6 @@ export function useThreadRibbon({
     const place = (element: HTMLElement, column: number) => {
       const value = placement(column);
       if (element.style.transform !== value) element.style.transform = value;
-    };
-
-    const mirrorOf = (row: HTMLElement) => {
-      const mirror = row.cloneNode(true) as HTMLElement;
-      mirror.inert = true;
-      mirror.dataset.threadRibbonMirror = "";
-      // Only the live row is a citation source or an anchor target.
-      for (const node of [
-        mirror,
-        ...mirror.querySelectorAll("[id], [data-assistant-citation-source]"),
-      ]) {
-        node.removeAttribute("id");
-        node.removeAttribute("data-assistant-citation-source");
-      }
-      // Embedded documents and canvases would start over in a copy; keep their footprint only.
-      const embeds = "iframe, canvas, video, audio";
-      const sources = row.querySelectorAll(embeds);
-      mirror.querySelectorAll(embeds).forEach((node, index) => {
-        const source = sources[index];
-        const stub = document.createElement("div");
-        if (source instanceof HTMLElement) {
-          stub.style.width = `${source.offsetWidth}px`;
-          stub.style.height = `${source.offsetHeight}px`;
-        }
-        node.replaceWith(stub);
-      });
-      return mirror;
     };
 
     const unmirror = (row: HTMLElement) => {
@@ -249,7 +227,7 @@ export function useThreadRibbon({
         for (const column of needed) {
           if (entry.mirrors.has(column)) continue;
           const reused = spare.pop();
-          const mirror = reused ? reused[1] : mirrorOf(row);
+          const mirror = reused ? reused[1] : createThreadRibbonMirror(row);
           if (!reused) mirrorLayer.append(mirror);
           entry.mirrors.set(column, mirror);
         }
@@ -257,12 +235,17 @@ export function useThreadRibbon({
         if (entry.stale) {
           entry.stale = false;
           for (const [column, mirror] of entry.mirrors) {
-            const fresh = mirrorOf(row);
+            const fresh = createThreadRibbonMirror(row);
             mirror.replaceWith(fresh);
             entry.mirrors.set(column, fresh);
           }
         }
-        for (const [column, mirror] of entry.mirrors) place(mirror, column);
+        for (const [column, mirror] of entry.mirrors) {
+          // Expanding an earlier row changes LegendList's offsets without
+          // changing this row's contents, so an existing copy must move too.
+          if (mirror.style.top !== row.style.top) mirror.style.top = row.style.top;
+          place(mirror, column);
+        }
       }
       for (const row of Array.from(mirrored.keys())) {
         if (!straddling.has(row)) unmirror(row);
@@ -295,6 +278,7 @@ export function useThreadRibbon({
       endRef.current = null;
       delete scroller.dataset.threadRibbon;
       spacer.remove();
+      portalLayer.remove();
       lead()?.style.removeProperty("margin-top");
       const layer = layerOf();
       if (layer) {
@@ -311,7 +295,7 @@ export function useThreadRibbon({
 
     // Rows move as LegendList lays them out and resize as they expand or
     // stream; either can change which columns a row touches.
-    const rowSizeObserver = new ResizeObserver(schedule);
+    let stopWatchingRowSizes = () => {};
     const rowStyleObserver = new MutationObserver(schedule);
     const rowListObserver = new MutationObserver(() => {
       watchRows();
@@ -319,14 +303,14 @@ export function useThreadRibbon({
     });
     const watchRows = () => {
       const layer = layerOf();
-      rowSizeObserver.disconnect();
+      stopWatchingRowSizes();
       rowStyleObserver.disconnect();
       rowListObserver.disconnect();
       if (!layer || endRef.current === null) return;
       rowListObserver.observe(layer, { childList: true });
-      for (const row of Array.from(layer.children)) {
-        if (row === mirrorLayer) continue;
-        rowSizeObserver.observe(row);
+      const rows = Array.from(layer.children).filter((row) => row !== mirrorLayer);
+      stopWatchingRowSizes = observeResize(rows, schedule);
+      for (const row of rows) {
         rowStyleObserver.observe(row, { attributes: true, attributeFilter: ["style"] });
       }
     };
@@ -358,6 +342,21 @@ export function useThreadRibbon({
       const end = Math.max(0, Math.ceil(length - columns * pageHeight));
       endRef.current = end;
       scroller.dataset.threadRibbon = "true";
+      if (portalLayer.childElementCount !== (columns - 1) * 2) {
+        portalLayer.replaceChildren();
+        for (let column = 0; column < columns - 1; column++) {
+          for (const edge of ["exit", "entry"] as const) {
+            const portal = document.createElement("span");
+            portal.dataset.threadRibbonPortal = edge;
+            portal.style.setProperty(
+              "--thread-ribbon-portal-column",
+              String(edge === "exit" ? column : column + 1),
+            );
+            portalLayer.append(portal);
+          }
+        }
+      }
+      if (portalLayer.parentElement !== content) content.append(portalLayer);
       scroller.style.setProperty("--thread-ribbon-columns", String(columns));
       scroller.style.setProperty("--thread-ribbon-page-height", `${pageHeight}px`);
       scroller.style.setProperty("--thread-ribbon-top", `${top}px`);
@@ -375,11 +374,10 @@ export function useThreadRibbon({
       follow();
     };
 
-    const shapeObserver = new ResizeObserver(measure);
+    let stopWatchingShape = () => {};
     const watchShape = () => {
-      shapeObserver.disconnect();
-      shapeObserver.observe(scroller);
-      for (const child of Array.from(content.children)) shapeObserver.observe(child);
+      stopWatchingShape();
+      stopWatchingShape = observeResize([scroller, ...Array.from(content.children)], measure);
     };
     // LegendList swaps its header and footer as history and anchoring change.
     const childObserver = new MutationObserver(() => {
@@ -400,9 +398,9 @@ export function useThreadRibbon({
     watchShape();
     measure();
     return () => {
-      shapeObserver.disconnect();
+      stopWatchingShape();
       childObserver.disconnect();
-      rowSizeObserver.disconnect();
+      stopWatchingRowSizes();
       rowStyleObserver.disconnect();
       rowListObserver.disconnect();
       scroller.removeEventListener("scroll", schedule);

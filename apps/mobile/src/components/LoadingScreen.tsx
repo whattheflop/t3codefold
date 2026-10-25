@@ -1,13 +1,13 @@
-import { ActivityIndicator, StatusBar, View } from "react-native";
+import { StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppActivityIndicator } from "./ui/AppActivityIndicator";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 
-import { AppText as Text } from "./AppText";
+import { AppText as Text } from "./ui/AppText";
 import { BrandMark } from "./BrandMark";
 
 export function LoadingScreen(props: {
   readonly message: string;
-  /** The enclosing pane owns its background and top inset. */
   readonly embedded?: boolean;
   readonly messagePlacement?: "above-spinner" | "below-spinner";
 }) {
@@ -26,7 +26,7 @@ export function LoadingScreen(props: {
         {messagePlacement === "above-spinner" ? (
           <Text className="font-t3-bold text-lg text-foreground">{props.message}</Text>
         ) : null}
-        <ActivityIndicator size="large" />
+        <AppActivityIndicator size="large" />
         {messagePlacement === "below-spinner" ? (
           <Text className="font-t3-bold text-lg text-foreground">{props.message}</Text>
         ) : null}

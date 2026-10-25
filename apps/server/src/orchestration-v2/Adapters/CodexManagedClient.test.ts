@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
-import { ProviderAdapterOpenSessionError } from "../ProviderAdapter.ts";
+import { ProviderAdapterOpenSessionError } from "@t3tools/provider-core/server/ProviderAdapter";
 import { makeManagedCodexClient } from "./CodexManagedClient.ts";
 
 type Client = CodexClient.CodexAppServerClient["Service"];

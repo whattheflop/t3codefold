@@ -4,7 +4,8 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 
-const [directory, tag, version] = process.argv.slice(2);
+const [directory, requestedTag, version] = process.argv.slice(2);
+const tag = requestedTag || `fold-preview-v${version}`;
 if (!directory || !tag || !version || !tag.startsWith("fold-preview-v")) {
   throw new Error("Usage: publish-fold-desktop.ts <directory> <fold-preview-vVERSION> <version>");
 }

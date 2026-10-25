@@ -2,7 +2,7 @@
  * Bakes the grain tile the mobile splatter backdrop tiles over the thread
  * canvas. The splatter art itself renders at runtime in the active theme's
  * colours (packages/shared/src/splatterBackdrop.ts); web draws its grain from
- * an feTurbulence data URI in index.css.
+ * an feTurbulence data URI in apps/web/src/fold.css.
  *
  * React Native has no feTurbulence, and SVG filter support across the two
  * platform decoders is not something to rely on, so the texture ships as a

@@ -851,7 +851,7 @@ export type SplatterFrame = { readonly x: number; readonly y: number; readonly s
 
 /**
  * Where the two square clusters sit on a canvas of this size, in its own
- * units. Mirrors the [data-chat-canvas] rules in apps/web/src/index.css; keep
+ * units. Mirrors the [data-chat-canvas] rules in apps/web/src/fold.css; keep
  * the two in step.
  *
  * Wide canvases anchor the clusters to the corners and size them by height as

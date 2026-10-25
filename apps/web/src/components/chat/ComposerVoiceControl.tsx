@@ -1,7 +1,10 @@
 import { memo, type PointerEventHandler, type ReactElement } from "react";
 import { MicIcon, MicOffIcon, PhoneOffIcon, Volume2Icon } from "lucide-react";
 
-import type { CodexRealtimeVoiceController } from "~/hooks/useCodexRealtimeVoice";
+import {
+  type CodexRealtimeVoiceController,
+  supportsCodexRealtimeVoiceVersion,
+} from "~/hooks/useCodexRealtimeVoice";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -131,3 +134,28 @@ export const ComposerVoiceControl = memo(function ComposerVoiceControl(props: {
     </div>
   );
 });
+
+/** True while a Codex call occupies the composer, so it keeps a visible control. */
+export function isComposerVoiceCallActive(voice: CodexRealtimeVoiceController): boolean {
+  return (
+    voice.status === "connecting" || voice.status === "live" || voice.status === "playback-blocked"
+  );
+}
+
+/** The composer's Codex voice control; Codex builds without realtime voice get a disabled button. */
+export function CodexComposerVoiceControl(props: {
+  readonly voice: CodexRealtimeVoiceController;
+  readonly providerVersion: string | null;
+  readonly disabled: boolean;
+}) {
+  const versionSupported = supportsCodexRealtimeVoiceVersion(props.providerVersion);
+  return (
+    <ComposerVoiceControl
+      voice={props.voice}
+      disabled={props.disabled || !versionSupported}
+      {...(!versionSupported
+        ? { disabledReason: "Update Codex to 0.145.0 or newer to use voice" }
+        : {})}
+    />
+  );
+}

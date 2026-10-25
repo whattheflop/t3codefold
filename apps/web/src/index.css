@@ -373,6 +373,25 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+/* Paint find results without changing rendered markdown or copied text. */
+::highlight(t3-thread-find) {
+  color: var(--app-theme-search-match-foreground, oklch(0.216164 0.028283 77.423));
+  background-color: var(--app-theme-search-match-background, oklch(0.915 0.11 85));
+
+  @variant dark {
+    color: var(--app-theme-search-match-foreground, oklch(0.970151 0 0));
+    background-color: var(--app-theme-search-match-background, oklch(0.55 0.1 85));
+  }
+}
+
+::highlight(t3-thread-find-active) {
+  color: var(--app-theme-search-match-active-foreground, oklch(0.216164 0.028283 77.423));
+  background-color: var(
+    --app-theme-search-match-active-background,
+    oklch(0.774202 0.151946 74.331)
+  );
+}
+
 @utility dialog-glass {
   background: color-mix(in srgb, var(--background) var(--glass-opacity), transparent);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
@@ -582,7 +601,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     transparent 100%
   );
   mask-repeat: no-repeat;
-  animation: live-activity-focus 2.2s linear infinite;
+  animation: live-activity-focus 2.2s steps(30) infinite;
   animation-play-state: var(--visible-animation-state, paused);
   will-change: var(--visible-animation-will-change, auto);
 
@@ -595,7 +614,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
 @utility live-activity-focus-counter {
   width: 100%;
-  animation: live-activity-focus-counter 2.2s linear infinite;
+  animation: live-activity-focus-counter 2.2s steps(30) infinite;
   animation-play-state: var(--visible-animation-state, paused);
   will-change: var(--visible-animation-will-change, auto);
 
@@ -664,6 +683,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
   * {
     @apply border-border outline-ring/50;
+  }
+  /* The app's 2px outlines stay inside controls at clipped and scrollport edges. */
+  *,
+  ::before,
+  ::after {
+    outline-offset: -2px;
   }
   :where([data-slot="menu-popup"], [data-slot="select-popup"], [data-slot="popover-popup"]):focus,
   :where(
@@ -868,10 +893,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   @keyframes settings-search-target-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 0 transparent;
+      box-shadow: inset 0 0 0 0 transparent;
     }
     50% {
-      box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 70%, transparent);
+      box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-primary) 70%, transparent);
     }
   }
 
@@ -996,14 +1021,14 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
   .settings-slider:focus-visible::-webkit-slider-thumb {
     box-shadow:
-      0 0 0 3px var(--background),
-      0 0 0 5px var(--ring);
+      inset 0 0 0 1px var(--background),
+      inset 0 0 0 3px var(--ring);
   }
 
   .settings-slider:focus-visible::-moz-range-thumb {
     box-shadow:
-      0 0 0 3px var(--background),
-      0 0 0 5px var(--ring);
+      inset 0 0 0 1px var(--background),
+      inset 0 0 0 3px var(--ring);
   }
 
   @media (forced-colors: active) {
@@ -1422,7 +1447,7 @@ html[data-theme-id] [data-chat-header] [data-slot="separator"] {
 /* Chat code blocks join the other code surfaces on the code tokens. The
    default look keeps its secondary/input tints; themed palettes tint those
    surfaces with the accent, which fights syntax highlighting. */
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock {
+html[data-theme-id] :is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock {
   background-color: var(--code-background);
   border-color: var(--contrast-border);
   color: var(--code-foreground);
@@ -1433,11 +1458,11 @@ html[data-theme-id] .chat-markdown pre {
   color: var(--code-foreground);
 }
 
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock pre {
+html[data-theme-id] :is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock pre {
   background-color: transparent;
 }
 
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock-header {
+html[data-theme-id] :is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock-header {
   color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
 }
 
@@ -1660,98 +1685,6 @@ body {
   --surface-grain-size: 256px 256px;
 }
 
-/* Backdrop artwork for the chat canvas: paint splatter in the active theme's
-   colours. Layout lives here; the images come from the runtime renderer
-   described below.
-
-   Two corner clusters over a full-canvas field. The clusters carry the
-   composition: a single SVG scaled with `cover` has to crop roughly 60% of its
-   width on a phone, which throws the composition away, while corner-anchored
-   clusters keep their proportions and stay clear of the centre column at every
-   aspect ratio. They grow with the viewport's height as well as its width, so
-   a 4K canvas gets them in proportion rather than a laptop-sized pair. The
-   field is spray and small throws with no composition to lose, so it takes
-   `cover` and fills whatever the canvas is.
-
-   Cluster geometry is mirrored by splatterLayout() in
-   packages/shared/src/splatterBackdrop.ts, which draws the settings previews
-   and the mobile canvas. Keep the two in step.
-
-   A last layer carries a grain tile. The chat canvas paints over the inset's
-   own grain, so without it the splatter would sit on the one surface in the
-   app with no texture beneath it. It is a separate tile from --surface-grain
-   rather than a reuse: the shared one is tuned to be almost subliminal on
-   chrome, and at that strength it disappears entirely behind the splatter.
-
-   Everything paints onto the canvas's own background rather than a fixed
-   overlay on top of it, and nothing animates, so the layers rasterize once and
-   are never re-blended afterwards. See the --surface-grain note above for what
-   a full-viewport overlay cost us last time. */
-[data-chat-canvas] {
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
-  background-position:
-    top right,
-    bottom left,
-    center,
-    center,
-    0 0;
-  background-size:
-    min(58vw, max(720px, 60vh)) auto,
-    min(66vw, max(820px, 68vh)) auto,
-    cover,
-    cover,
-    200px 200px;
-}
-
-/* On a phone both clusters scale up to stay legible, and the lower one lifts
-   clear of the composer, which would otherwise bury its largest splat. */
-@media (max-width: 640px) {
-  [data-chat-canvas] {
-    background-position:
-      top right,
-      left -18vw bottom 12%,
-      center,
-      center,
-      0 0;
-    background-size:
-      125vw auto,
-      130vw auto,
-      cover,
-      cover,
-      200px 200px;
-  }
-}
-
-/* The art itself is rendered per theme at runtime (apps/web/src/themeBackdrop.tsx,
-   packages/shared/src/splatterBackdrop.ts), which sets --backdrop-a/-b/-field to blob
-   URLs (plus --backdrop-merges, the day's merged-PR splats, in dynamic mode) and data-theme-backdrop="on" whenever Settings -> Appearance -> Splatter
-   backdrop applies to the active theme. */
-
-/* Desaturated, so the grain thickens the surface instead of tinting it the way
-   the app-wide tile's raw RGBA turbulence would once it got this strong. The
-   light half takes less: the same noise over a near-white canvas reads as dirt
-   long before it reads as texture. Defined for every canvas, but only painted
-   while the backdrop is on. */
-[data-chat-canvas] {
-  --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.07'/%3E%3C/svg%3E");
-}
-
-html.dark [data-chat-canvas] {
-  --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.12'/%3E%3C/svg%3E");
-}
-
-html[data-theme-backdrop="on"] [data-chat-canvas] {
-  background-image:
-    var(--backdrop-a), var(--backdrop-b), var(--backdrop-merges, none), var(--backdrop-field),
-    var(--canvas-grain);
-}
-
-/* The messages wrapper paints the theme background so a thread switch never
-   flashes through; the backdrop has to show through it instead. */
-html[data-theme-backdrop="on"] [data-chat-canvas] [data-chat-messages] {
-  background-color: transparent;
-}
-
 /* The live T3 Chat texture is a 128px grayscale tile with a constant 7/255
    alpha. Keep our procedural texture cheap while matching that scale and
    strength for the branded preset. */
@@ -1777,7 +1710,7 @@ code {
    Inline code stays relative to its sentence so it never towers over prose;
    diffs and file previews take the size through --diffs-font-size. */
 .chat-markdown .chat-markdown-shiki .shiki,
-.chat-markdown pre code {
+:is(.chat-markdown, .composer-tiptap) pre code {
   font-size: var(--font-size-code, inherit);
 }
 
@@ -1847,45 +1780,47 @@ code {
 .chat-markdown ol,
 .chat-markdown blockquote,
 .chat-markdown pre,
-.chat-markdown .chat-markdown-table-container {
+.chat-markdown .chat-markdown-table-container,
+.composer-tiptap ul,
+.composer-tiptap ol {
   margin: 0.65rem 0;
 }
 
-.chat-markdown h1,
-.chat-markdown h2,
-.chat-markdown h3,
-.chat-markdown h4,
-.chat-markdown h5,
-.chat-markdown h6 {
+:is(.chat-markdown, .composer-tiptap) h1,
+:is(.chat-markdown, .composer-tiptap) h2,
+:is(.chat-markdown, .composer-tiptap) h3,
+:is(.chat-markdown, .composer-tiptap) h4,
+:is(.chat-markdown, .composer-tiptap) h5,
+:is(.chat-markdown, .composer-tiptap) h6 {
   margin: 1.25rem 0 0.5rem;
   font-weight: 600;
   line-height: 1.3;
   color: var(--contrast-foreground);
 }
 
-.chat-markdown h1 {
+:is(.chat-markdown, .composer-tiptap) h1 {
   font-size: 1.25rem;
 }
 
-.chat-markdown h2 {
+:is(.chat-markdown, .composer-tiptap) h2 {
   font-size: 1.125rem;
 }
 
-.chat-markdown h3 {
+:is(.chat-markdown, .composer-tiptap) h3 {
   font-size: 1rem;
 }
 
-.chat-markdown h4,
-.chat-markdown h5,
-.chat-markdown h6 {
+:is(.chat-markdown, .composer-tiptap) h4,
+:is(.chat-markdown, .composer-tiptap) h5,
+:is(.chat-markdown, .composer-tiptap) h6 {
   font-size: 0.875rem;
 }
 
-.chat-markdown h6 {
+:is(.chat-markdown, .composer-tiptap) h6 {
   color: var(--contrast-muted-foreground);
 }
 
-.chat-markdown ul {
+:is(.chat-markdown, .composer-tiptap) ul {
   /* Reset for nested uls under a widened ol. --list-gutter is an inherited
      custom property, so without this a task-list under a multi-digit ordered
      list would inherit the outer gutter instead of its own default. */
@@ -1899,21 +1834,27 @@ code {
    widest marker has multiple characters so it isn't clipped by list-style-position:
    outside painting the marker past the padding box. Reset it here too so a
    nested ol without its own widened marker doesn't inherit the outer one. */
-.chat-markdown ol {
+:is(.chat-markdown, .composer-tiptap) ol {
   --list-gutter: 1.25rem;
   padding-left: var(--list-gutter, 1.25rem);
   list-style-type: decimal;
 }
 
-.chat-markdown ol > li::marker {
+:is(.chat-markdown, .composer-tiptap) ol > li::marker {
   font-variant-numeric: tabular-nums;
 }
 
-.chat-markdown ul ul {
+/* The composer shows the marker the source has, `3)` or a nested `7.`, not the
+   browser counter. Browsers without ::marker content fall back to `start`. */
+.composer-tiptap ol > li[data-marker]::marker {
+  content: attr(data-marker) " ";
+}
+
+:is(.chat-markdown, .composer-tiptap) ul ul {
   list-style-type: circle;
 }
 
-.chat-markdown ul ul ul {
+:is(.chat-markdown, .composer-tiptap) ul ul ul {
   list-style-type: square;
 }
 
@@ -1954,18 +1895,36 @@ code {
   color: var(--info-foreground);
 }
 
-.chat-markdown a:not(.chat-markdown-file-link):hover,
-.chat-markdown a:not(.chat-markdown-file-link):focus-visible {
+.chat-markdown a:not(.chat-markdown-file-link, [data-markdown-image-link]):hover,
+.chat-markdown a:not(.chat-markdown-file-link, [data-markdown-image-link]):focus-visible {
   background-image: radial-gradient(circle, currentcolor 0.75px, transparent 1px);
   background-position: left bottom;
   background-repeat: repeat-x;
   background-size: 4px 2px;
 }
 
-.chat-markdown blockquote {
+:is(.chat-markdown, .composer-tiptap) blockquote {
   border-left: 2px solid var(--contrast-border);
   padding-left: 0.8rem;
   color: var(--contrast-muted-foreground);
+}
+
+/* A quote in the composer is text the user is still writing; muting it reads
+   as disabled in an input, so the border alone carries the quote. */
+.composer-tiptap blockquote {
+  margin: 0.65rem 0;
+  color: var(--foreground);
+}
+
+/* Preflight already draws the 1px rule, as it does in chat; only the block
+   spacing needs to match. */
+.composer-tiptap hr {
+  margin: 0.65rem 0;
+}
+
+/* A heading at the top of a draft should not push the first line down. */
+.composer-tiptap :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
 }
 
 .chat-markdown section[data-footnotes] {
@@ -1999,6 +1958,8 @@ code {
 .chat-markdown :not(pre) > code {
   border: 1px solid var(--contrast-border);
   border-radius: 0.375rem;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   background: var(--muted);
   padding: 0.1rem 0.35rem;
   color: var(--contrast-foreground);
@@ -2031,23 +1992,23 @@ code {
   background: color-mix(in srgb, var(--contrast-border) 78%, transparent);
 }
 
-.chat-markdown .chat-markdown-codeblock-header {
+:is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock-header {
   color: color-mix(in srgb, var(--contrast-foreground) 72%, transparent);
 }
 
-.chat-markdown .chat-markdown-codeblock pre {
+:is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock pre {
   margin: 0;
   border: none;
   border-radius: 0;
   background: transparent;
 }
 
-.chat-markdown .chat-markdown-codeblock[data-wrap="true"] pre {
+:is(.chat-markdown, .composer-tiptap) .chat-markdown-codeblock[data-wrap="true"] pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.chat-markdown .chat-markdown-shiki .shiki {
+:is(.chat-markdown, .composer-tiptap) .chat-markdown-shiki .shiki {
   background: transparent !important;
 }
 
@@ -2130,134 +2091,6 @@ code {
   --chat-content-max-width: 100%;
 }
 
-/* Thread wrapping's ribbon (useThreadRibbon). Once a thread is taller than
-   one screen and the timeline fits several reading-width columns, LegendList's
-   content pins as a screen-height window and scrolling feeds the whole thread
-   through it. Rows keep their single-column layout; the hook carries each one
-   into its column with a transform and this window's clip cuts it at the
-   seams, so nothing here fragments. */
-:root[data-thread-wrap] {
-  --thread-wrap-column-width: 42rem;
-  --thread-wrap-gap: 3.5rem;
-}
-
-[data-thread-ribbon] > .legend-list-content-container {
-  --thread-ribbon-stride: calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap));
-  --thread-ribbon-rule: color-mix(in srgb, var(--border) 80%, transparent);
-  position: sticky;
-  top: var(--thread-ribbon-top);
-  margin-top: var(--thread-ribbon-top);
-  margin-inline: auto;
-  max-width: calc(
-    var(--thread-ribbon-columns) * var(--thread-wrap-column-width) +
-      (var(--thread-ribbon-columns) - 1) * var(--thread-wrap-gap)
-  );
-  height: var(--thread-ribbon-page-height);
-  min-height: 0 !important;
-  /* LegendList's anchored end space would only add blank columns here. */
-  padding-bottom: 0 !important;
-  overflow: clip;
-  /* One rule per gap; the tile after the last column falls outside the box. */
-  background-image: linear-gradient(
-    to right,
-    transparent calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap) / 2),
-    var(--thread-ribbon-rule) 0,
-    var(--thread-ribbon-rule)
-      calc(var(--thread-wrap-column-width) + var(--thread-wrap-gap) / 2 + 1px),
-    transparent 0
-  );
-  background-size: var(--thread-ribbon-stride) 100%;
-  background-repeat: repeat-x;
-}
-
-/* Every row is one column wide. LegendList spans rows edge to edge inline. */
-[data-thread-ribbon-layer] > div:not([data-thread-ribbon-mirrors]),
-[data-thread-ribbon-mirrors] > div {
-  width: var(--thread-wrap-column-width) !important;
-  right: auto !important;
-}
-
-[data-thread-ribbon-mirrors] {
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 0;
-}
-
-/* A mirror is a still copy of a live row: no input, no selection, no motion. */
-[data-thread-ribbon-mirror] {
-  pointer-events: none;
-  user-select: none;
-}
-
-[data-thread-ribbon-mirror] * {
-  animation: none !important;
-  transition: none !important;
-}
-
-/* The window already stops above the composer. */
-[data-thread-ribbon] [data-timeline-composer-inset] {
-  height: 0 !important;
-}
-
-/* ChatCanvas sizes its width probe to the widest ribbon the canvas fits, so
-   the workspace card and floating preview steer clear of the columns. This
-   reads the canvas, not the timeline, so it cannot feed back into the
-   ribbon's own column count. Thresholds add the timeline's side padding. */
-:root[data-thread-wrap] [data-chat-canvas] {
-  container: thread-wrap-canvas / inline-size;
-}
-
-@container thread-wrap-canvas (width >= 92.5rem) {
-  :root[data-thread-wrap] [data-chat-canvas]:has([data-thread-ribbon]) > .chat-canvas-width-probe {
-    --thread-wrap-columns: 2;
-    width: calc(
-      var(--thread-wrap-columns) * var(--thread-wrap-column-width) +
-        (var(--thread-wrap-columns) - 1) * var(--thread-wrap-gap)
-    );
-  }
-}
-
-@container thread-wrap-canvas (width >= 138.5rem) {
-  :root:is([data-thread-wrap="3"], [data-thread-wrap="4"])
-    [data-chat-canvas]:has([data-thread-ribbon])
-    > .chat-canvas-width-probe {
-    --thread-wrap-columns: 3;
-  }
-}
-
-@container thread-wrap-canvas (width >= 184.5rem) {
-  :root[data-thread-wrap="4"]
-    [data-chat-canvas]:has([data-thread-ribbon])
-    > .chat-canvas-width-probe {
-    --thread-wrap-columns: 4;
-  }
-}
-
-/* A reply that finishes on screen sweeps in once, left to right. */
-@media (prefers-reduced-motion: no-preference) {
-  [data-thread-ribbon] [data-thread-wrap-reveal] > [data-assistant-citation-source] {
-    animation: thread-wrap-reveal 1100ms cubic-bezier(0.45, 0, 0.25, 1) backwards;
-  }
-}
-
-@keyframes thread-wrap-reveal {
-  from {
-    mask-image: linear-gradient(90deg, #000 40%, rgb(0 0 0 / 12%) 60%);
-    mask-size: 250% 100%;
-    mask-position: 100% 0;
-    opacity: 0.35;
-    transform: translateY(0.375rem);
-  }
-  to {
-    mask-image: linear-gradient(90deg, #000 40%, rgb(0 0 0 / 12%) 60%);
-    mask-size: 250% 100%;
-    mask-position: 0 0;
-    opacity: 1;
-    transform: none;
-  }
-}
-
 :root[data-diff-color-scheme="blue-orange"] {
   --diff-addition: light-dark(var(--color-blue-600), var(--color-blue-400));
   --diff-deletion: light-dark(var(--color-orange-600), var(--color-orange-400));
@@ -2279,6 +2112,14 @@ code {
   overflow: clip;
   background: var(--code-background);
   color: var(--code-foreground);
+}
+
+/* Pierre's find panel and match highlights read these. */
+.diff-render-surface {
+  --diffs-search-panel-bg: var(--popover);
+  --diffs-search-panel-fg: var(--popover-foreground);
+  --diffs-search-panel-accent: var(--primary);
+  --diffs-search-panel-font: var(--font-sans);
 }
 
 /* Pierre's file renderer owns its own surface tokens. Keep the root of a file
@@ -2401,7 +2242,7 @@ code {
   outline: none;
 }
 
-.composer-tiptap code {
+.composer-tiptap :not(pre) > code {
   font-family: var(--font-mono);
   font-size: 0.92em;
   background: color-mix(in oklab, var(--muted-foreground) 12%, transparent);
@@ -2422,7 +2263,7 @@ code {
 /* Selected chips (node selection from arrowing into or clicking a chip). */
 .composer-tiptap .ProseMirror-selectednode {
   outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  outline-offset: -2px;
   border-radius: 6px;
 }
 
@@ -2504,86 +2345,25 @@ code {
       0.75rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
     );
   }
-  .chat-scroll-to-bottom {
+  .chat-scroll-to-bottom,
+  .chat-banner-lane {
     inset-inline-start: var(--chat-lane-inset-start, 0px);
     inset-inline-end: var(--chat-lane-inset-end, 0px);
   }
   @media (min-width: 640px) {
     .chat-composer-lane {
       padding-inline-start: calc(
-        env(safe-area-inset-left) + 1.25rem + var(--chat-lane-inset-start, 0px)
+        env(safe-area-inset-left) + 3rem + var(--chat-lane-inset-start, 0px)
       );
-      padding-inline-end: calc(
-        env(safe-area-inset-right) + 1.25rem + var(--chat-lane-inset-end, 0px)
-      );
+      padding-inline-end: calc(env(safe-area-inset-right) + 3rem + var(--chat-lane-inset-end, 0px));
     }
     [data-chat-canvas] .messages-timeline-scroll {
       padding-inline-start: calc(
-        1.25rem + var(--chat-lane-inset-start, 0px) - var(--chat-timeline-gutter, 0px)
+        3rem + var(--chat-lane-inset-start, 0px) - var(--chat-timeline-gutter, 0px)
       );
       padding-inline-end: calc(
-        1.25rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
+        3rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
       );
     }
-  }
-}
-
-/* Short, transform-only accents settle completely between interactions. */
-.sidebar-thread-choice {
-  isolation: isolate;
-  transition: background-color 120ms ease-out;
-}
-
-/* The angled wash leaves text stationary and preserves active/selected surfaces. */
-.sidebar-thread-choice::before {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  inset: 0;
-  background: var(--primary);
-  clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%);
-  opacity: 0;
-  transform: translateX(-8px);
-  transition:
-    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 100ms ease-out;
-}
-
-.sidebar-thread-choice:is(:hover, :focus-visible)::before {
-  opacity: 0.035;
-  transform: translateX(0);
-}
-
-.sidebar-thread-choice:focus-visible {
-  background-color: var(--sidebar-row-hover);
-  color: var(--sidebar-foreground);
-  outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
-  outline-offset: -1px;
-}
-
-.sidebar-thread-choice::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  inset: 18% auto 18% 1px;
-  width: 3px;
-  background: var(--primary);
-  opacity: 0;
-  transform: translateX(-4px) skewY(-18deg) scaleY(0.55);
-  transition:
-    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 100ms ease-out;
-}
-
-.sidebar-thread-choice:focus-visible::after {
-  opacity: 1;
-  transform: translateX(0) skewY(-18deg) scaleY(1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-thread-choice,
-  .sidebar-thread-choice::before,
-  .sidebar-thread-choice::after {
-    transition: none;
   }
 }

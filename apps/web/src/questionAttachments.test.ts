@@ -1,4 +1,4 @@
-import { RuntimeRequestId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { ApprovalRequestId, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, expect, it, vi } from "vite-plus/test";
 import { useComposerDraftStore } from "./composerDraftStore";
 import {
@@ -14,7 +14,7 @@ const release = vi.hoisted(() => vi.fn());
 vi.mock("./lib/attachmentUploadQueue", () => ({ releaseDraftAttachments: release }));
 const environmentId = EnvironmentId.make("environment-1");
 const threadId = ThreadId.make("thread-1");
-const requestId = RuntimeRequestId.make("request-1");
+const requestId = ApprovalRequestId.make("request-1");
 beforeEach(() => {
   useComposerDraftStore.setState({ draftsByThreadKey: {}, draftThreadsByThreadKey: {} });
   useQuestionAttachmentPreparation.setState({ counts: {} });

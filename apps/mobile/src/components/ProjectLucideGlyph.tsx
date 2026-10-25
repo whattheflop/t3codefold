@@ -47,7 +47,7 @@ import IconWorld from "@tabler/icons-react-native/IconWorld";
 import type { ProjectIconColor } from "@t3tools/contracts";
 import { View } from "react-native";
 
-import type { MobileLucideIconName } from "../lib/projectIcon";
+import type { MobileLucideIconName } from "../lib/projectLucideIcons";
 
 /**
  * Lucide project icons drawn with their closest bundled Tabler glyph. Each icon is a

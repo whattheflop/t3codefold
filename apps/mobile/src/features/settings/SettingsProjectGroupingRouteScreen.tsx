@@ -1,6 +1,4 @@
-import { Platform } from "react-native";
-import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
@@ -14,6 +12,7 @@ import {
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
+import { WorkspaceGestureSettings } from "./FoldSettingsSections";
 
 const GROUPING_OPTIONS: ReadonlyArray<{
   readonly mode: SidebarProjectGroupingMode;
@@ -68,36 +67,7 @@ export function SettingsProjectGroupingRouteScreen() {
             />
           ))}
         </SettingsSection>
-        {Platform.OS === "android" ? (
-          <SettingsSection title="Workspace gestures">
-            <SettingsSwitchRow
-              icon="sidebar.left"
-              label="Thumb navigation"
-              subtitle="Use the bottom handle: swipe sideways through recent threads, up for the sidebar, down for the inspector."
-              disabled={!preferencesReady}
-              value={
-                AsyncResult.isSuccess(preferencesResult) &&
-                preferencesResult.value.workspaceThumbGesturesEnabled === true
-              }
-              onValueChange={(enabled) =>
-                savePreferences({ workspaceThumbGesturesEnabled: enabled })
-              }
-            />
-            <SettingsChoiceRow
-              label="Reset pane sizes"
-              description="Return remembered workspace splits to the fold or default width."
-              selected={false}
-              separated
-              disabled={!preferencesReady}
-              onPress={() =>
-                savePreferences({
-                  workspaceInspectorRatios: {},
-                  workspaceInspectorWidth: undefined,
-                })
-              }
-            />
-          </SettingsSection>
-        ) : null}
+        <WorkspaceGestureSettings />
       </ScrollView>
     </SettingsScreen>
   );

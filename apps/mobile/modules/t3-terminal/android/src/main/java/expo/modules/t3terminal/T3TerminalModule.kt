@@ -2,17 +2,6 @@ package expo.modules.t3terminal
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import expo.modules.kotlin.records.Field
-import expo.modules.kotlin.records.Record
-
-/** One write of remote output; see terminalSurfaceOutput.ts for the contract. */
-class TerminalOutputWrite : Record {
-  @Field val resetId: Int = 0
-
-  @Field val start: Int = 0
-
-  @Field val data: String = ""
-}
 
 class T3TerminalModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -39,6 +28,10 @@ class T3TerminalModule : Module() {
 
       Prop("focusRequest") { view: T3TerminalView, focusRequest: Double ->
         view.focusRequest = focusRequest
+      }
+
+      Prop("readOnly") { view: T3TerminalView, readOnly: Boolean ->
+        view.readOnly = readOnly
       }
 
       Prop("autoFocus") { view: T3TerminalView, autoFocus: Boolean ->

@@ -104,7 +104,7 @@ export function connectFleetLease<E, ExecuteError, RespondError, R>(options: {
 export const startFleetBridge = Effect.gen(function* () {
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
   const crypto = yield* Crypto.Crypto;
-  const clientId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+  const clientId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
   const descriptors = yield* SubscriptionRef.make<ReadonlyArray<FleetEnvironment>>([]);
   const parentScope = yield* Scope.Scope;
   const children = new Map<

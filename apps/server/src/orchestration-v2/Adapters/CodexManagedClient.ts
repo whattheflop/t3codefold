@@ -7,7 +7,7 @@ import type * as CodexClient from "effect-codex-app-server/client";
 import * as CodexErrors from "effect-codex-app-server/errors";
 
 import type { CodexEffectiveRuntime } from "../../provider/CodexManagedRuntime.ts";
-import type { ProviderAdapterOpenSessionError } from "../ProviderAdapter.ts";
+import type { ProviderAdapterOpenSessionError } from "@t3tools/provider-core/server/ProviderAdapter";
 
 type Client = CodexClient.CodexAppServerClient["Service"];
 

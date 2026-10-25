@@ -1,5 +1,5 @@
 import {
-  AuthAdministrativeScopes,
+  AuthStandardClientScopes,
   ORCHESTRATION_PROTOCOL_VERSION,
   FleetEnvironmentList,
   NonNegativeInt,
@@ -154,7 +154,7 @@ const withLiveFleet = Effect.fn("withLiveFleet")(function* (
   yield* Effect.gen(function* () {
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     return yield* Effect.acquireUseRelease(
-      auth.issueSession({ scopes: AuthAdministrativeScopes, label: "t3 fleet cli" }),
+      auth.issueSession({ scopes: AuthStandardClientScopes, label: "t3 fleet cli" }),
       (session) =>
         Effect.gen(function* () {
           const url = new URL("/ws", origin);

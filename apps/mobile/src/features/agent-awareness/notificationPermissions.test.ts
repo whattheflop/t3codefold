@@ -19,32 +19,32 @@ describe("agent notification permission", () => {
     platform.OS = "android";
   });
 
-  it.effect(
-    "creates cloud and local Android channels before prompting for notification permission",
-    () =>
-      Effect.gen(function* () {
-        expect(yield* requestAgentNotificationPermission).toEqual({ type: "granted" });
-        expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith("agent-alerts", {
-          name: "Agent alerts",
-          importance: 4,
-        });
-        expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith("agent-activity", {
-          name: "Agent activity",
-          description: "Task completions and requests that need your attention",
-          importance: 4,
-          vibrationPattern: [0, 200, 120, 200],
-        });
-        expect(
-          vi.mocked(Notifications.setNotificationChannelAsync).mock.invocationCallOrder[1],
-        ).toBeLessThan(
-          vi.mocked(Notifications.requestPermissionsAsync).mock.invocationCallOrder[0]!,
-        );
-        expect(
-          vi.mocked(Notifications.setNotificationChannelAsync).mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          vi.mocked(Notifications.requestPermissionsAsync).mock.invocationCallOrder[0]!,
-        );
-      }),
+  it.effect("creates an Android channel before prompting for notification permission", () =>
+    Effect.gen(function* () {
+      expect(yield* requestAgentNotificationPermission).toEqual({ type: "granted" });
+      expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith("agent-alerts", {
+        name: "Agent alerts",
+        importance: 4,
+      });
+      expect(
+        vi.mocked(Notifications.setNotificationChannelAsync).mock.invocationCallOrder[0],
+      ).toBeLessThan(vi.mocked(Notifications.requestPermissionsAsync).mock.invocationCallOrder[0]!);
+    }),
+  );
+
+  it.effect("creates Fold's local agent activity channel before prompting", () =>
+    Effect.gen(function* () {
+      yield* requestAgentNotificationPermission;
+      expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith("agent-activity", {
+        name: "Agent activity",
+        description: "Task completions and requests that need your attention",
+        importance: 4,
+        vibrationPattern: [0, 200, 120, 200],
+      });
+      expect(
+        vi.mocked(Notifications.setNotificationChannelAsync).mock.invocationCallOrder[1],
+      ).toBeLessThan(vi.mocked(Notifications.requestPermissionsAsync).mock.invocationCallOrder[0]!);
+    }),
   );
 
   it.effect("preserves denied permission when Android cannot ask again", () =>

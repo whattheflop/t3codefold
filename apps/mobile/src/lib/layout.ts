@@ -1,6 +1,6 @@
 import { scaledTypographyLineHeight } from "./appearancePreferences";
 import { MOBILE_TYPOGRAPHY } from "./typography";
-import { constrainFoldablePaneWidth, FOLDABLE_PANE_COMPACT_WIDTH } from "./foldable-pane-layout";
+import type { NativeLayoutMetrics } from "./reserved-regions";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -20,6 +20,7 @@ export const SPLIT_LAYOUT_MIN_HEIGHT = 600;
 export const SPLIT_SIDEBAR_MIN_WIDTH = 280;
 const SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH = 380;
 
+export const AUXILIARY_PANE_MIN_CONTENT_WIDTH = 960;
 export const CHAT_CONTENT_MAX_WIDTH = 960;
 // min-h-8 uses the 14px rem configured in metro.config.js.
 export const THREAD_WORK_ROW_MIN_HEIGHT = 28;
@@ -30,7 +31,6 @@ export function deriveThreadWorkLogSizing(input: {
 }) {
   const lineHeight = scaledTypographyLineHeight(MOBILE_TYPOGRAPHY.footnote, input.baseFontSize);
   return {
-    // Different text metrics can share the same minimum row height.
     textSizeKey: `${input.baseFontSize}:${input.fontScale}`,
     estimatedRowHeight: Math.max(
       THREAD_WORK_ROW_MIN_HEIGHT,
@@ -45,10 +45,11 @@ export function deriveThreadWorkLogSizing(input: {
   };
 }
 
-const INSPECTOR_DEFAULT_MIN_WIDTH = 260;
-const INSPECTOR_DEFAULT_MAX_WIDTH = 320;
-/** Below this, the chat beside an open inspector yields the thread sidebar's space. */
-const CHAT_MIN_WIDTH_BESIDE_SIDEBAR = 560;
+export const AUXILIARY_PANE_MIN_WIDTH = 260;
+export const AUXILIARY_PANE_MAX_WIDTH = 480;
+const AUXILIARY_PANE_DEFAULT_MAX_WIDTH = 320;
+const FILE_INSPECTOR_MIN_VIEWPORT_WIDTH = 820;
+const FILE_INSPECTOR_MIN_MAIN_WIDTH = 560;
 
 export type LayoutVariant = "compact" | "split";
 
@@ -56,22 +57,17 @@ export interface Layout {
   readonly variant: LayoutVariant;
   readonly usesSplitView: boolean;
   readonly listPaneWidth: number | null;
+  readonly listPaneGap?: number;
   readonly shellPadding: number;
 }
 
 export interface WorkspacePaneLayout {
   readonly primarySidebarVisible: boolean;
-  /** The sidebar is preferred but yields to the inspector; showing it closes the inspector. */
   readonly primarySidebarSuppressedByAuxiliary: boolean;
-  /** Width of the chat column, between the sidebar and the inspector. */
   readonly contentPaneWidth: number;
   readonly supportsAuxiliaryPane: boolean;
   readonly auxiliaryPaneVisible: boolean;
-  readonly auxiliaryPaneMaximized: boolean;
-  /** Rendered inspector width: the whole workspace when maximized. */
   readonly auxiliaryPaneWidth: number | null;
-  /** Resting widths the divider may drag the inspector between. */
-  readonly auxiliaryPaneWidthRange: { readonly min: number; readonly max: number } | null;
 }
 
 export interface FileInspectorPaneLayout {
@@ -91,15 +87,32 @@ export function deriveThreadFeedInitialContentInset(input: {
   return { bottom: Math.max(0, input.bottomContentInset) };
 }
 
+export type WorkspaceAuxiliaryPaneRole = "supplementary" | "inspector";
+
 export function deriveLayout(input: {
   readonly width: number;
   readonly height: number;
   readonly platform?: string;
+  readonly nativeMetrics?: NativeLayoutMetrics | null;
 }): Layout {
   const { width, height } = input;
-  const wideEnoughForSplit =
-    width >= SPLIT_LAYOUT_MIN_WIDTH &&
-    height >= (input.platform === "android" ? 320 : SPLIT_LAYOUT_MIN_HEIGHT);
+  const metrics = input.nativeMetrics;
+  const usableWidth = width - (metrics?.safeArea.left ?? 0) - (metrics?.safeArea.right ?? 0);
+  // UIKit's size class supports the shorter Duo inner display. Geometry remains
+  // a floor so a narrow multitasking window cannot squeeze both columns.
+  // Unfolded in portrait, the inner display reports neither a side bar nor a
+  // fold, only its hinge.
+  const hasDuoGeometry =
+    metrics &&
+    (metrics.hasHinge === true ||
+      metrics.verticalBarEdge !== "none" ||
+      metrics.reservedRegions.some((region) => region.kind === "division"));
+  const wideEnoughForSplit = hasDuoGeometry
+    ? metrics.horizontalSizeClass === "regular" &&
+      usableWidth >= SPLIT_SIDEBAR_MIN_WIDTH + 320 &&
+      height >= 400
+    : width >= SPLIT_LAYOUT_MIN_WIDTH &&
+      height >= (input.platform === "android" ? 320 : SPLIT_LAYOUT_MIN_HEIGHT);
 
   if (!wideEnoughForSplit) {
     return {
@@ -110,106 +123,184 @@ export function deriveLayout(input: {
     };
   }
 
+  const division = metrics?.reservedRegions.find(
+    (region) =>
+      region.kind === "division" &&
+      region.height >= height / 2 &&
+      region.x - metrics.safeArea.left >= SPLIT_SIDEBAR_MIN_WIDTH &&
+      width - region.x - region.width - metrics.safeArea.right >= 320,
+  );
   return {
     variant: "split",
     usesSplitView: true,
-    listPaneWidth: clamp(
-      Math.round(width * 0.32),
-      SPLIT_SIDEBAR_MIN_WIDTH,
-      SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH,
-    ),
+    listPaneWidth:
+      division?.x ??
+      clamp(Math.round(width * 0.32), SPLIT_SIDEBAR_MIN_WIDTH, SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH),
+    ...(division ? { listPaneGap: division.width } : {}),
     shellPadding: 0,
   };
 }
 
+export interface VerticalHinge {
+  readonly x: number;
+  readonly width: number;
+}
+
 /**
- * Splits a split-view workspace into thread sidebar, chat, and the trailing
- * inspector (files, git, terminal, review). The inspector only takes space
- * while a route has registered content for it. When it would squeeze the chat
- * below a readable width, the sidebar yields; maximizing gives it everything.
+ * Moves the list/detail split onto a book-posture hinge so neither pane straddles the crease.
+ * `leadingWidth` is chrome left of the list pane, such as the Android navigation rail.
  */
+export function alignListPaneToHinge(input: {
+  readonly layout: Layout;
+  readonly hinge: VerticalHinge | null;
+  readonly viewportWidth: number;
+  readonly leadingWidth: number;
+}): Layout {
+  const { layout, hinge } = input;
+  if (!hinge || !layout.usesSplitView) return layout;
+  const listPaneWidth = hinge.x - input.leadingWidth;
+  if (
+    listPaneWidth < SPLIT_SIDEBAR_MIN_WIDTH ||
+    input.viewportWidth - hinge.x - hinge.width < 320
+  ) {
+    return layout;
+  }
+  return { ...layout, listPaneWidth, listPaneGap: hinge.width };
+}
+
+/**
+ * Whether the workspace root must keep the primary sidebar open. Native split
+ * columns keep a sidebar toggle in the empty detail header, so only they may
+ * collapse it there. Compact layouts stay pinned so a reveal request (such as
+ * focusing search) cannot flip the saved preference for a later split view.
+ */
+export function isPrimarySidebarPinned(input: {
+  readonly pathname: string;
+  readonly nativeWorkspace: boolean;
+  readonly usesSplitView: boolean;
+}): boolean {
+  return input.pathname === "/" && !(input.nativeWorkspace && input.usesSplitView);
+}
+
 export function deriveWorkspacePaneLayout(input: {
   readonly layout: Layout;
   readonly viewportWidth: number;
   readonly primarySidebarPreferredVisible: boolean;
   readonly auxiliaryPanePreferredVisible: boolean;
-  /** Whether the focused route has inspector content to show. */
-  readonly auxiliaryPaneRegistered?: boolean;
-  readonly auxiliaryPaneMaximized?: boolean;
+  readonly auxiliaryPaneRole?: WorkspaceAuxiliaryPaneRole;
   readonly auxiliaryPanePreferredWidth?: number;
 }): WorkspacePaneLayout {
   const viewportWidth = Math.max(0, input.viewportWidth);
-  const supportsAuxiliaryPane = input.layout.usesSplitView;
-  const auxiliaryPaneVisible =
-    supportsAuxiliaryPane &&
-    input.auxiliaryPanePreferredVisible &&
-    (input.auxiliaryPaneRegistered ?? true);
-  const sidebarPreferred = input.layout.usesSplitView && input.primarySidebarPreferredVisible;
-  const listPaneWidth = input.layout.listPaneWidth ?? 0;
-  const restingInspectorWidth = (availableWidth: number) =>
-    constrainFoldablePaneWidth({
-      preferredWidth:
-        input.auxiliaryPanePreferredWidth ??
-        clamp(
-          Math.round(availableWidth * 0.28),
-          INSPECTOR_DEFAULT_MIN_WIDTH,
-          INSPECTOR_DEFAULT_MAX_WIDTH,
-        ),
-      availableWidth,
+  const auxiliaryPaneRole = input.auxiliaryPaneRole ?? "supplementary";
+  const preferredPrimarySidebarVisible =
+    input.layout.usesSplitView && input.primarySidebarPreferredVisible;
+  const preferredPrimarySidebarWidth = preferredPrimarySidebarVisible
+    ? (input.layout.listPaneWidth ?? 0) + (input.layout.listPaneGap ?? 0)
+    : 0;
+
+  if (auxiliaryPaneRole === "inspector") {
+    const fileInspector = deriveFileInspectorPaneLayout({
+      layout: input.layout,
+      viewportWidth,
+      preferredWidth: input.auxiliaryPanePreferredWidth,
+      reservedLeadingWidth: preferredPrimarySidebarWidth,
     });
-  const widthRange = (availableWidth: number) => ({
-    min: FOLDABLE_PANE_COMPACT_WIDTH,
-    max: Math.max(FOLDABLE_PANE_COMPACT_WIDTH, availableWidth - FOLDABLE_PANE_COMPACT_WIDTH),
-  });
+    const auxiliaryPaneVisible = fileInspector.supported && input.auxiliaryPanePreferredVisible;
+    const primarySidebarSuppressedByAuxiliary =
+      preferredPrimarySidebarVisible &&
+      auxiliaryPaneVisible &&
+      fileInspector.width !== null &&
+      input.layout.listPaneWidth !== null &&
+      viewportWidth -
+        input.layout.listPaneWidth -
+        (input.layout.listPaneGap ?? 0) -
+        fileInspector.width <
+        FILE_INSPECTOR_MIN_MAIN_WIDTH;
+    const primarySidebarVisible =
+      preferredPrimarySidebarVisible && !primarySidebarSuppressedByAuxiliary;
+    const primarySidebarWidth = primarySidebarVisible ? preferredPrimarySidebarWidth : 0;
 
-  if (!supportsAuxiliaryPane) {
     return {
-      primarySidebarVisible: false,
-      primarySidebarSuppressedByAuxiliary: false,
-      contentPaneWidth: viewportWidth,
-      supportsAuxiliaryPane: false,
-      auxiliaryPaneVisible: false,
-      auxiliaryPaneMaximized: false,
-      auxiliaryPaneWidth: null,
-      auxiliaryPaneWidthRange: null,
-    };
-  }
-
-  if (auxiliaryPaneVisible && input.auxiliaryPaneMaximized === true) {
-    return {
-      primarySidebarVisible: false,
-      primarySidebarSuppressedByAuxiliary: sidebarPreferred,
-      contentPaneWidth: 0,
-      supportsAuxiliaryPane,
+      primarySidebarVisible,
+      primarySidebarSuppressedByAuxiliary,
+      contentPaneWidth: Math.max(0, viewportWidth - primarySidebarWidth),
+      supportsAuxiliaryPane: fileInspector.supported,
       auxiliaryPaneVisible,
-      auxiliaryPaneMaximized: true,
-      auxiliaryPaneWidth: viewportWidth,
-      auxiliaryPaneWidthRange: widthRange(viewportWidth),
+      auxiliaryPaneWidth: fileInspector.width,
     };
   }
 
-  const sidebarWidth = sidebarPreferred ? listPaneWidth : 0;
-  const besideSidebarWidth = restingInspectorWidth(viewportWidth - sidebarWidth);
-  const primarySidebarSuppressedByAuxiliary =
-    sidebarPreferred &&
-    auxiliaryPaneVisible &&
-    viewportWidth - listPaneWidth - besideSidebarWidth < CHAT_MIN_WIDTH_BESIDE_SIDEBAR;
-  const primarySidebarVisible = sidebarPreferred && !primarySidebarSuppressedByAuxiliary;
-  const availableWidth = viewportWidth - (primarySidebarVisible ? listPaneWidth : 0);
-  const auxiliaryPaneWidth = primarySidebarSuppressedByAuxiliary
-    ? restingInspectorWidth(availableWidth)
-    : besideSidebarWidth;
+  const contentPaneWidth = Math.max(0, viewportWidth - preferredPrimarySidebarWidth);
+  const supportsAuxiliaryPane =
+    input.layout.usesSplitView && contentPaneWidth >= AUXILIARY_PANE_MIN_CONTENT_WIDTH;
+  const auxiliaryPaneVisible = supportsAuxiliaryPane && input.auxiliaryPanePreferredVisible;
+  const defaultAuxiliaryPaneWidth = clamp(
+    Math.round(contentPaneWidth * 0.28),
+    AUXILIARY_PANE_MIN_WIDTH,
+    AUXILIARY_PANE_DEFAULT_MAX_WIDTH,
+  );
 
   return {
-    primarySidebarVisible,
-    primarySidebarSuppressedByAuxiliary,
-    contentPaneWidth: Math.max(0, availableWidth - (auxiliaryPaneVisible ? auxiliaryPaneWidth : 0)),
+    primarySidebarVisible: preferredPrimarySidebarVisible,
+    primarySidebarSuppressedByAuxiliary: false,
+    contentPaneWidth,
     supportsAuxiliaryPane,
     auxiliaryPaneVisible,
-    auxiliaryPaneMaximized: false,
-    auxiliaryPaneWidth,
-    auxiliaryPaneWidthRange: widthRange(availableWidth),
+    auxiliaryPaneWidth: supportsAuxiliaryPane
+      ? constrainAuxiliaryPaneWidth({
+          preferredWidth: input.auxiliaryPanePreferredWidth ?? defaultAuxiliaryPaneWidth,
+          availableWidth: contentPaneWidth,
+        })
+      : null,
   };
+}
+
+export function deriveFileInspectorPaneLayout(input: {
+  readonly layout: Layout;
+  readonly viewportWidth: number;
+  readonly preferredWidth?: number;
+  readonly reservedLeadingWidth?: number;
+}): FileInspectorPaneLayout {
+  const viewportWidth = Math.max(0, input.viewportWidth);
+  const reservedLeadingWidth = Number.isFinite(input.reservedLeadingWidth)
+    ? Math.max(0, input.reservedLeadingWidth ?? 0)
+    : 0;
+  const availableContentWidth = Math.max(0, viewportWidth - reservedLeadingWidth);
+  const supported =
+    input.layout.usesSplitView && viewportWidth >= FILE_INSPECTOR_MIN_VIEWPORT_WIDTH;
+
+  return {
+    supported,
+    width: supported
+      ? constrainAuxiliaryPaneWidth({
+          preferredWidth:
+            input.preferredWidth ??
+            clamp(
+              Math.round(availableContentWidth * 0.28),
+              AUXILIARY_PANE_MIN_WIDTH,
+              AUXILIARY_PANE_DEFAULT_MAX_WIDTH,
+            ),
+          availableWidth: availableContentWidth,
+        })
+      : null,
+  };
+}
+
+export function constrainAuxiliaryPaneWidth(input: {
+  readonly preferredWidth: number;
+  readonly availableWidth: number;
+}): number {
+  const safePreferredWidth = Number.isFinite(input.preferredWidth)
+    ? input.preferredWidth
+    : AUXILIARY_PANE_MIN_WIDTH;
+  const availableWidth = Number.isFinite(input.availableWidth)
+    ? Math.max(0, input.availableWidth)
+    : 0;
+  const maxWidth = Math.max(
+    AUXILIARY_PANE_MIN_WIDTH,
+    Math.min(AUXILIARY_PANE_MAX_WIDTH, availableWidth - FILE_INSPECTOR_MIN_MAIN_WIDTH),
+  );
+  return clamp(Math.round(safePreferredWidth), AUXILIARY_PANE_MIN_WIDTH, maxWidth);
 }
 
 export function deriveCenteredContentHorizontalPadding(input: {

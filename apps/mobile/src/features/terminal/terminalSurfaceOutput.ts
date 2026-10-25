@@ -4,6 +4,8 @@ import {
   type TerminalOutputCursor,
   type TerminalOutputState,
 } from "@t3tools/client-runtime/state/terminal";
+import { useCallback, useLayoutEffect, useMemo, useReducer, useRef } from "react";
+import type { NativeSyntheticEvent } from "react-native";
 
 /**
  * The `output` prop of the native terminal view: `data` continues reset stream
@@ -97,4 +99,49 @@ export function isSameTerminalSurfaceOutput(
   right: TerminalSurfaceOutput,
 ): boolean {
   return left.resetId === right.resetId && left.start === right.start && left.data === right.data;
+}
+
+/**
+ * Streams session output to the native view as resets and appends instead of
+ * the whole buffer, so retained-history trimming never forces a replay.
+ */
+export function useNativeTerminalOutput(output: TerminalOutputState, replayKey: string) {
+  const streamRef = useRef<TerminalSurfaceStream | null>(null);
+  const ackRef = useRef<TerminalSurfaceOutputAck | null>(null);
+  const writeRef = useRef<TerminalSurfaceOutput | null>(null);
+  const [resendRequest, requestResend] = useReducer((count: number) => count + 1, 0);
+  // Refs hold only committed state, so a discarded render recomputes the same write.
+  const next = useMemo(
+    () =>
+      nextTerminalSurfaceOutput({
+        output,
+        replayKey,
+        stream: streamRef.current,
+        ack: ackRef.current,
+      }),
+    // resendRequest re-derives the write from a newer acknowledgement.
+    [output, replayKey, resendRequest],
+  );
+  const previous = writeRef.current;
+  const write =
+    previous !== null && isSameTerminalSurfaceOutput(previous, next.write) ? previous : next.write;
+
+  useLayoutEffect(() => {
+    streamRef.current = next.stream;
+    writeRef.current = write;
+  }, [next, write]);
+
+  const handleOutputApplied = useCallback(
+    (event: NativeSyntheticEvent<TerminalSurfaceOutputAck>) => {
+      const ack = { resetId: event.nativeEvent.resetId, end: event.nativeEvent.end };
+      ackRef.current = ack;
+      const sent = writeRef.current;
+      if (sent !== null && terminalSurfaceNeedsResend(sent, ack)) {
+        requestResend();
+      }
+    },
+    [],
+  );
+
+  return { write, handleOutputApplied };
 }

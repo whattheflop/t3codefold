@@ -17,7 +17,7 @@ import { AppState, useWindowDimensions } from "react-native";
 import { useBakedSvg } from "../../lib/bakedSvg";
 import { CANVAS_GRAIN_PNG_BASE64, CANVAS_GRAIN_TILE } from "../../lib/canvasGrain";
 import { themeSplatterColors } from "../../lib/splatterColors";
-import { useMergedPullRequests } from "../../state/entities";
+import { useMergedPullRequests } from "../../state/merged-pull-requests";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
 /**

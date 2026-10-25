@@ -6,6 +6,7 @@ import {
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import type { ProviderSessionManagerV2Shape } from "./ProviderSessionManager.ts";
 
 /** Starting voice is an explicit user action, so an idle provider may be resumed without starting a coding turn. */
@@ -87,3 +88,46 @@ export const makeRealtimeVoiceSessionResolver = <E>(dependencies: {
         )
         .pipe(Effect.mapError(() => new ProviderRealtimeVoiceError({ threadId, operation })));
   });
+
+type VoiceRuntime = Pick<
+  ProviderAdapter.ProviderAdapterV2SessionRuntime,
+  "startRealtimeVoice" | "stopRealtimeVoice"
+>;
+
+/**
+ * ProviderSessionManager's wrapper around a runtime's voice methods. Voice start counts as
+ * activity so the idle reaper cannot release the session mid-handshake; the adapter keeps a
+ * live call pinned through hasPendingBackgroundWork afterwards. Stopping records activity.
+ */
+export const withRealtimeVoiceActivity = (
+  runtime: VoiceRuntime,
+  activity: {
+    readonly begin: (key: string) => Effect.Effect<void>;
+    readonly end: (key: string) => Effect.Effect<void>;
+    readonly touch: Effect.Effect<void>;
+  },
+): VoiceRuntime => {
+  const { startRealtimeVoice, stopRealtimeVoice } = runtime;
+  let nextVoiceStartId = 0;
+  return {
+    ...(startRealtimeVoice === undefined
+      ? {}
+      : {
+          startRealtimeVoice: (input) =>
+            Effect.suspend(() => {
+              const activityKey = `voice:${nextVoiceStartId++}`;
+              return Effect.acquireUseRelease(
+                activity.begin(activityKey),
+                () => startRealtimeVoice(input),
+                () => activity.end(activityKey),
+              );
+            }),
+        }),
+    ...(stopRealtimeVoice === undefined
+      ? {}
+      : {
+          stopRealtimeVoice: (input) =>
+            activity.touch.pipe(Effect.andThen(stopRealtimeVoice(input))),
+        }),
+  };
+};

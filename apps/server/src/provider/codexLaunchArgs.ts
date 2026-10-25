@@ -14,18 +14,6 @@ export const codexAppServerArgs = (launchArgs?: string) => [
   ...codexLaunchArgv(launchArgs),
 ];
 
-/**
- * App-server args for T3 sessions. Realtime voice is opt-in upstream, so it is enabled here
- * without touching the host config; launch args still come last so an administrator can
- * turn it off again.
- */
-export const codexSessionAppServerArgs = (launchArgs?: string) => [
-  "app-server",
-  "-c",
-  "features.realtime_conversation=true",
-  ...codexLaunchArgv(launchArgs),
-];
-
 export const codexExecLaunchArgs = (launchArgs?: string) => {
   const args = codexLaunchArgv(launchArgs);
   const execArgs: Array<string> = [];

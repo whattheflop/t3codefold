@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { View } from "react-native";
 
-import type { WorkspacePaneLayout } from "../../lib/layout";
+import type { FoldWorkspacePaneLayout } from "../../lib/foldable-pane-layout";
 import { dispatchHardwareKeyboardCommand } from "./hardwareKeyboardCommands";
 import {
   INITIAL_VIM_STATE,
@@ -24,7 +24,7 @@ import {
  */
 export function useWorkspaceVimNavigation(input: {
   readonly usesSplitView: boolean;
-  readonly panes: WorkspacePaneLayout;
+  readonly panes: FoldWorkspacePaneLayout;
   readonly togglePrimarySidebar: () => void;
   readonly toggleAuxiliaryPaneMaximized: () => void;
 }) {
