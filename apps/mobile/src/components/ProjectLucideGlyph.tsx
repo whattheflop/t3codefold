@@ -147,3 +147,12 @@ export function ProjectLucideGlyph(props: {
     </View>
   );
 }
+
+export function ProjectLucideSvg(props: {
+  readonly name: MobileLucideIconName;
+  readonly color: ProjectIconColor;
+  readonly size: number;
+}) {
+  const Glyph = LUCIDE_GLYPHS[props.name];
+  return <Glyph size={props.size} color={GLYPH_COLORS[props.color]} />;
+}

@@ -11,11 +11,13 @@ const { read, action, subscribe, refreshAccess } = vi.hoisted(() => ({
   read: vi.fn<() => Promise<Result>>(),
   action: vi.fn<() => Promise<Result>>(),
   subscribe:
-    vi.fn<(
-      _target: unknown,
-      onChange: (app: { id: string } | null) => void,
-      onUnauthorized?: () => void,
-    ) => () => void>(),
+    vi.fn<
+      (
+        _target: unknown,
+        onChange: (app: { id: string } | null) => void,
+        onUnauthorized?: () => void,
+      ) => () => void
+    >(),
   refreshAccess: vi.fn(),
 }));
 vi.mock(import("~/state/device"), async (original) => ({

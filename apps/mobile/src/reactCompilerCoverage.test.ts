@@ -12,9 +12,7 @@ const babel: {
 const metroConfig: Promise<{ transformer: { babelTransformerPath: string } }> =
   requireFromMobile("./metro.config.js");
 
-// Files the compiler skips today. A skipped file still ships, just unmemoized.
-// This list only shrinks: the test fails when a file here starts compiling, so
-// delete its entry (and its manual useMemo/useCallback/memo) in the same change.
+// Remove bailout entries and manual memoization when compilation starts; this check rejects stale entries.
 const KNOWN_BAILOUTS: Record<string, string> = {
   // Fold pane refs, UI-thread gestures and cleanup paths still need manual memoization.
   "src/features/keyboard/useWorkspaceVimNavigation.tsx": "ref read during render",
@@ -27,7 +25,6 @@ const KNOWN_BAILOUTS: Record<string, string> = {
   "src/features/threads/GladosSettingsScreen.tsx": "unsupported try/finally syntax",
   "src/features/threads/PitbossWork.tsx": "unsupported try/finally syntax",
   "src/features/threads/ThreadDetailScreen.tsx": "Fold tabletop viewport refs",
-  "src/features/threads/ThreadRouteScreen.tsx": "unsupported try/finally syntax",
   "src/features/threads/thread-list-drag.tsx": "ref read during render",
   "src/features/threads/use-ui-thread-drag.ts": "mutates a frozen value",
   "src/features/voice-input/VoiceWorkspaceProvider.tsx": "unsupported try/finally syntax",
@@ -46,8 +43,7 @@ const KNOWN_BAILOUTS: Record<string, string> = {
   "src/native/T3ComposerEditor.native.tsx": "ref read during render",
 };
 
-// Caller flags Metro passes for an iOS release bundle. supportsReactCompiler is
-// what `experiments.reactCompiler` in app.config.ts turns on.
+// Use Metro's iOS release flags; experiments.reactCompiler enables supportsReactCompiler.
 const metroCaller = {
   name: "metro",
   bundler: "metro",

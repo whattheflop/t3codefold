@@ -11,6 +11,7 @@ import { WorkspaceTabSwitcher } from "../workspace/AndroidWorkspaceNavigation";
 import { WorkspaceListToolbarRow } from "../workspace/WorkspaceListToolbarRow";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { usePullRequestFilterMenu } from "./PullRequestFilterMenuContext";
+import { openSettings } from "../settings/settings-navigation";
 
 /** PR search shares the thread list's Android header row. */
 export function PullRequestToolbar(props: {
@@ -76,12 +77,7 @@ export function PullRequestToolbar(props: {
         onOpenSearch={openSearch}
         searchAccessibilityLabel="Search pull requests"
         titleAccessibilityLabel={`${MOBILE_APP_NAME}, Pull requests`}
-        onOpenEnvironments={() =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsEnvironments" },
-          })
-        }
+        onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
         filter={
           filters ? (
             <AndroidAnchoredMenu

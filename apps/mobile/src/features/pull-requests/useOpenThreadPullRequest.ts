@@ -1,3 +1,6 @@
+import { useProjects } from "../../state/entities";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { environmentServerConfigsAtom } from "../../state/server";
 import { useCallback } from "react";
 
 import { nativePullRequestDestination } from "../../lib/pullRequestNavigation";
@@ -10,6 +13,7 @@ import { useThreadSelection } from "../../state/use-thread-selection";
  * `beforeNavigate` runs only when the app is about to navigate in-app.
  */
 export function useOpenThreadPullRequest() {
+  const projects = useProjects();
   const { selectedThread } = useThreadSelection();
   const environmentId = selectedThread ? String(selectedThread.environmentId) : null;
   const projectId = selectedThread ? String(selectedThread.projectId) : null;
@@ -20,11 +24,17 @@ export function useOpenThreadPullRequest() {
     async (url: string, options?: { readonly beforeNavigate?: () => void }) => {
       const inApp =
         environmentId && projectId
-          ? nativePullRequestDestination(url, { environmentId, projectId })
+          ? nativePullRequestDestination(
+              url,
+              { environmentId, projectId },
+              projects,
+              (id) =>
+                appAtomRegistry.get(environmentServerConfigsAtom).get(id)?.environment.capabilities,
+            )
           : null;
       if (inApp) options?.beforeNavigate?.();
       return openPullRequest(url);
     },
-    [environmentId, openPullRequest, projectId],
+    [environmentId, openPullRequest, projectId, projects],
   );
 }

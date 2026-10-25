@@ -1,3 +1,6 @@
+import { WorkspaceNoTabs } from "./WorkspaceNoTabs";
+import { useEnabledNavigationTabs } from "./navigation-tabs";
+import { NAVIGATION_TAB_ORDER } from "./navigation-tab-order";
 import { useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,19 +18,23 @@ export function AndroidWorkspaceSidebar(props: {
   readonly selectedPullRequestKey: string | null;
 }) {
   const workspace = useWorkspaceTabs()!;
+  const enabled = useEnabledNavigationTabs();
   const insets = useSafeAreaInsets();
   const { fabClearance } = useAndroidControlSizing();
   const context = useMemo(
     () => ({ ...workspace, bottomClearance: Math.max(insets.bottom, 12) + fabClearance + 16 }),
     [workspace, insets.bottom, fabClearance],
   );
+  if (enabled.length === 0) return <WorkspaceNoTabs />;
   return (
     <WorkspaceTabPanes
-      tabs={["threads", "pullRequests"]}
+      tabs={NAVIGATION_TAB_ORDER}
       selected={workspace.state.selectedTab}
       renderTab={(tab) =>
         tab === "threads" ? (
           props.children
+        ) : tab !== "pullRequests" ? (
+          <View className="flex-1 bg-screen" />
         ) : (
           <WorkspaceTabsContext value={context}>
             <PullRequestFilterMenuProvider>

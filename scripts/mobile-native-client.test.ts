@@ -102,7 +102,9 @@ it.layer(NodeServices.layer)("android jdk resolution", (it) => {
   it.effect("keeps a JAVA_HOME that can compile", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "jdk-" });
+      const root = yield* fs
+        .makeTempDirectoryScoped({ prefix: "jdk-" })
+        .pipe(Effect.flatMap(fs.realPath));
       const jdk = yield* makeJvm(root, "jdk-17", true);
 
       assert.equal(yield* resolve({ JAVA_HOME: jdk, PATH: "" }), jdk);
@@ -113,7 +115,9 @@ it.layer(NodeServices.layer)("android jdk resolution", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "jdk-" });
+      const root = yield* fs
+        .makeTempDirectoryScoped({ prefix: "jdk-" })
+        .pipe(Effect.flatMap(fs.realPath));
       const jre = yield* makeJvm(root, "jre-25", false);
       const jdk = yield* makeJvm(root, "jdk-17", true);
 
@@ -131,7 +135,9 @@ it.layer(NodeServices.layer)("android jdk resolution", (it) => {
   it.effect("names the offending JAVA_HOME when nothing can compile", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "jdk-" });
+      const root = yield* fs
+        .makeTempDirectoryScoped({ prefix: "jdk-" })
+        .pipe(Effect.flatMap(fs.realPath));
       const jre = yield* makeJvm(root, "jre-25", false);
 
       const error = yield* resolve({ JAVA_HOME: jre, PATH: "" }).pipe(Effect.flip);

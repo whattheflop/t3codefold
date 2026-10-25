@@ -43,7 +43,7 @@ describe("foldServerReleasePublishedAtom", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = new Request(fetchMock.mock.calls[0]?.[0] ?? "", fetchMock.mock.calls[0]?.[1]);
     expect(request.url).toBe(
-      `https://api.github.com/repos/BreakTheBeta/T3codefold/releases/tags/fold-server-v${version}`,
+      `https://api.github.com/repos/whattheflop/T3codefold/releases/tags/fold-server-v${version}`,
     );
     expect(request.headers.get("traceparent")).toBeNull();
     expect(request.headers.get("b3")).toBeNull();

@@ -525,7 +525,10 @@ it.effect("keeps local Android and iOS available without ffmpeg", () =>
         HttpClient.make(() => Effect.die(new Error("Readiness must not make network requests"))),
       ),
       Effect.provideService(ProcessRunner.ProcessRunner, {
-        run: () => Effect.die("Platform availability must not probe emulator video"),
+        run: (input) =>
+          input.command === "xcrun" && input.args.join(" ") === "--find simctl"
+            ? Effect.succeed(processOutput(0, `${baseDir}/bin/simctl\n`))
+            : Effect.die("Platform availability must not probe emulator video"),
       }),
     );
     expect((yield* onTestHost(host.summary)).platforms).toEqual([

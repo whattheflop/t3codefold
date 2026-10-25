@@ -1,3 +1,5 @@
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { openSettings as openSettingsPage } from "../settings/settings-navigation";
 import { GladosBoard } from "./GladosBoard";
 import { managedWorkerStateLabel } from "@t3tools/client-runtime/glados-board";
 import { useAssetUrlState } from "../../state/assets";
@@ -89,6 +91,7 @@ export function PitbossWork(props: {
   }, [props.connected, query.refresh]);
   const mutate = useAtomCommand(serverEnvironment.pitbossCommand, "GLaDOS work");
   const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const projects = useProjects().filter((project) => project.environmentId === props.environmentId);
   const insets = useSafeAreaInsets();
   const dimensions = useWindowDimensions();
@@ -208,11 +211,7 @@ export function PitbossWork(props: {
   };
   const openSettings = () => {
     setVisible(false);
-    // "SettingsGlados" is registered in the settings content stack by the settings navigator.
-    navigation.navigate("SettingsSheet", {
-      screen: "SettingsContent",
-      params: { screen: "SettingsGlados", params: { environmentId: props.environmentId } },
-    });
+    openSettingsPage(navigation, "SettingsGlados", { environmentId: props.environmentId });
   };
   const goBack = () => {
     if (panel !== "inbox") setPanel("inbox");
@@ -289,7 +288,7 @@ export function PitbossWork(props: {
             <View className="border-b border-border px-4 py-3">
               <Text accessibilityRole="alert" className="text-red-500">
                 {query.error || props.connected === false
-                  ? "Disconnected — showing retained work. Actions resume when reconnected."
+                  ? "Disconnected – showing retained work. Actions resume when reconnected."
                   : error}
               </Text>
               {props.connected !== false && query.error && button("Reconnect work", query.refresh)}
@@ -342,9 +341,12 @@ export function PitbossWork(props: {
                   onSelect={setSelectedKey}
                   onOpenWorker={(task, threadId) => {
                     setVisible(false);
-                    navigation.navigate("Thread", {
-                      environmentId: task.homeEnvironmentId ?? props.environmentId,
-                      threadId,
+                    selectDetail({
+                      name: "Thread",
+                      params: {
+                        environmentId: task.homeEnvironmentId ?? props.environmentId,
+                        threadId,
+                      },
                     });
                   }}
                   onTalkToGlados={() => {
@@ -1000,10 +1002,13 @@ export function PitbossWork(props: {
                                             : "Connect task home first",
                                           () => {
                                             setVisible(false);
-                                            navigation.navigate("Thread", {
-                                              environmentId:
-                                                task.homeEnvironmentId ?? props.environmentId,
-                                              threadId: attempt.threadId,
+                                            selectDetail({
+                                              name: "Thread",
+                                              params: {
+                                                environmentId:
+                                                  task.homeEnvironmentId ?? props.environmentId,
+                                                threadId: attempt.threadId,
+                                              },
                                             });
                                           },
                                           !serverConfigs.has(
@@ -1055,9 +1060,12 @@ export function PitbossWork(props: {
                         </Text>
                         {button("Open lead thread", () => {
                           setVisible(false);
-                          navigation.navigate("Thread", {
-                            environmentId: props.environmentId,
-                            threadId: lead.threadId,
+                          selectDetail({
+                            name: "Thread",
+                            params: {
+                              environmentId: props.environmentId,
+                              threadId: lead.threadId,
+                            },
                           });
                         })}
                         {role?.brief.projectIds.includes(lead.projectId) &&
@@ -1175,14 +1183,16 @@ export function PitbossPins({
 }
 function PitbossPin({ environmentId, label }: { environmentId: EnvironmentId; label: string }) {
   const query = useEnvironmentQuery(serverEnvironment.pitbossLive({ environmentId, input: {} }));
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const role = query.data?.role;
   if (!role) return null;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Open GLaDOS in ${label}`}
-      onPress={() => navigation.navigate("Thread", { environmentId, threadId: role.threadId })}
+      onPress={() =>
+        selectDetail({ name: "Thread", params: { environmentId, threadId: role.threadId } })
+      }
       className="mx-3 my-2 flex-row items-center justify-between rounded-2xl border border-primary/30 bg-primary/5 p-4"
     >
       <View>
