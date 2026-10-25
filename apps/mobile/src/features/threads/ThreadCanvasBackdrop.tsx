@@ -37,8 +37,6 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
  * rule in apps/web/src/index.css mirrors; the field fills the rest of the
  * square for wider screens.
  */
-const FEATURED_THEME_IDS: ReadonlySet<string> = new Set(["cyberpunk", "codex"]);
-
 const GRAIN_HREF = `data:image/png;base64,${CANVAS_GRAIN_PNG_BASE64}`;
 
 /** Matches the per-appearance grain alpha the web canvas uses. */
@@ -58,8 +56,8 @@ export const ThreadCanvasBackdrop = memo(function ThreadCanvasBackdrop() {
   const {
     themeId,
     themeAppearance,
+    themeVariables,
     themeBackdropEnabled,
-    themeBackdropScope,
     themeBackdropIntensity,
     themeBackdropAmount,
     themeBackdropGlow,
@@ -69,13 +67,12 @@ export const ThreadCanvasBackdrop = memo(function ThreadCanvasBackdrop() {
   } = useAppearancePreferences();
   const { width, height } = useWindowDimensions();
   const appearance = themeAppearance === "dark" ? "dark" : "light";
-  const shown =
-    themeBackdropEnabled && (themeBackdropScope === "all" || FEATURED_THEME_IDS.has(themeId));
+  const shown = themeBackdropEnabled;
 
   const options = useMemo((): SplatterRenderOptions | null => {
     if (!shown) return null;
     return {
-      colors: themeBackdropColors ?? themeSplatterColors(themeId, appearance),
+      colors: themeBackdropColors ?? themeSplatterColors(themeId, appearance, themeVariables),
       appearance,
       intensity: themeBackdropIntensity / 100,
       amount: themeBackdropAmount / 100,
@@ -85,6 +82,7 @@ export const ThreadCanvasBackdrop = memo(function ThreadCanvasBackdrop() {
   }, [
     shown,
     themeId,
+    themeVariables,
     appearance,
     themeBackdropIntensity,
     themeBackdropAmount,

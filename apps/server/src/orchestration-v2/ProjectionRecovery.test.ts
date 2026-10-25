@@ -444,9 +444,11 @@ it.effect("recovers terminal subagent results until their cross-thread transfer 
 );
 
 it.effect.each([
-  { name: "SQLite", layer: layerTest },
-  { name: "memory", layer: ProjectionStore.layerMemory },
-])("recovers only recorded follow-up results with $name projections", ({ layer }) =>
+  { name: "SQLite", layer: layerTest, legacy: false },
+  { name: "memory", layer: ProjectionStore.layerMemory, legacy: false },
+  { name: "legacy SQLite", layer: layerTest, legacy: true },
+  { name: "legacy memory", layer: ProjectionStore.layerMemory, legacy: true },
+])("recovers follow-up results with $name projections", ({ layer, legacy }) =>
   Effect.gen(function* () {
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const now = yield* DateTime.now;
@@ -483,7 +485,10 @@ it.effect.each([
     yield* createRun(child, "completed", { ordinal: 2 });
     assert.deepEqual(yield* projections.getRecoveryThreadIds("subagent-results"), []);
     const taskId = NodeId.make("node:followup");
-    yield* createRun(child, "completed", { ordinal: 3, delegatedTaskId: taskId });
+    yield* createRun(child, "completed", {
+      ordinal: 3,
+      ...(legacy ? {} : { delegatedTaskId: taskId }),
+    });
     yield* createRun(child, "running", { ordinal: 4 });
     const task = {
       id: taskId,

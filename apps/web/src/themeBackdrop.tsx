@@ -14,7 +14,7 @@ import {
   renderSplatterField,
   type SplatterRenderOptions,
 } from "@t3tools/shared/splatterBackdrop";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useClientSettings } from "./hooks/useSettings";
@@ -28,13 +28,9 @@ import {
   toCanonicalThemeColor,
 } from "./themePalette";
 
-/** Themes that show the backdrop without the "every theme" scope. */
-const FEATURED_THEME_IDS: ReadonlySet<string> = new Set(["cyberpunk", "codex"]);
-
 type BackdropSettings = Pick<
   ClientSettings,
   | "themeBackdropEnabled"
-  | "themeBackdropScope"
   | "themeBackdropColors"
   | "themeBackdropIntensity"
   | "themeBackdropAmount"
@@ -51,16 +47,12 @@ const colorOf = (value: string | undefined) => parseOklch(toCanonicalThemeColor(
  */
 function resolveThemeBackdrop(input: {
   readonly settings: BackdropSettings;
-  readonly themeId: string | null;
   readonly accent: string | undefined;
   readonly action: string | undefined;
   readonly appearance: ThemeAppearance;
 }): SplatterRenderOptions | null {
-  const { settings, themeId, accent, action, appearance } = input;
+  const { settings, accent, action, appearance } = input;
   if (!settings.themeBackdropEnabled) return null;
-  if (settings.themeBackdropScope !== "all" && !FEATURED_THEME_IDS.has(themeId ?? "")) {
-    return null;
-  }
   return {
     colors:
       settings.themeBackdropColors ??
@@ -78,7 +70,7 @@ const BACKDROP_LAYERS = ["a", "b", "field"] as const;
 const selectBackdropSettings = (settings: ClientSettings): BackdropSettings => settings;
 const selectBackdropDynamic = (settings: ClientSettings) => settings.themeBackdropDynamic;
 
-/** The active theme's id and the two roles the paint colours derive from. */
+/** The active theme's two roles the paint colours derive from. */
 function useActiveBackdropSource() {
   const { theme, themeHalves, resolvedTheme } = useTheme();
   const definition = getThemeDefinition(resolveThemeHalf(theme, themeHalves, resolvedTheme));
@@ -86,7 +78,6 @@ function useActiveBackdropSource() {
     ? (getThemeColorsForMode(definition, resolvedTheme) ?? definition.colors)
     : getStandardThemeColors(resolvedTheme);
   return {
-    themeId: definition?.id ?? null,
     accent: colors.accent,
     action: colors.messageAction,
     appearance: resolvedTheme,
@@ -96,10 +87,7 @@ function useActiveBackdropSource() {
 /** Paint colours the active theme would get, for seeding the custom pickers. */
 export function useThemeDerivedBackdropColors(): readonly [string, string, string] {
   const { accent, action, appearance } = useActiveBackdropSource();
-  return useMemo(
-    () => deriveSplatterColors(colorOf(accent), colorOf(action), appearance),
-    [accent, action, appearance],
-  );
+  return deriveSplatterColors(colorOf(accent), colorOf(action), appearance);
 }
 
 /**
@@ -109,11 +97,10 @@ export function useThemeDerivedBackdropColors(): readonly [string, string, strin
  */
 export function ThemeBackdropSync() {
   const settings = useClientSettings(selectBackdropSettings);
-  const { themeId, accent, action, appearance: resolvedTheme } = useActiveBackdropSource();
+  const { accent, action, appearance: resolvedTheme } = useActiveBackdropSource();
 
   const {
     themeBackdropEnabled,
-    themeBackdropScope,
     themeBackdropColors,
     themeBackdropIntensity,
     themeBackdropAmount,
@@ -125,39 +112,19 @@ export function ThemeBackdropSync() {
   // definitions can be rebuilt per render, and every new result here means a
   // fresh blob URL and a re-rasterized backdrop.
   const [lead, second, third] = themeBackdropColors ?? [];
-  const options = useMemo(
-    () =>
-      resolveThemeBackdrop({
-        settings: {
-          themeBackdropEnabled,
-          themeBackdropScope,
-          themeBackdropColors: lead && second && third ? [lead, second, third] : null,
-          themeBackdropIntensity,
-          themeBackdropAmount,
-          themeBackdropGlow,
-          themeBackdropSeed,
-        },
-        themeId,
-        accent,
-        action,
-        appearance: resolvedTheme,
-      }),
-    [
+  const options = resolveThemeBackdrop({
+    settings: {
       themeBackdropEnabled,
-      themeBackdropScope,
-      lead,
-      second,
-      third,
+      themeBackdropColors: lead && second && third ? [lead, second, third] : null,
       themeBackdropIntensity,
       themeBackdropAmount,
       themeBackdropGlow,
       themeBackdropSeed,
-      themeId,
-      accent,
-      action,
-      resolvedTheme,
-    ],
-  );
+    },
+    accent,
+    action,
+    appearance: resolvedTheme,
+  });
 
   // Layout effect: the canvas mounts in the same commit, so the art is on it
   // before the first paint rather than popping in a frame later.
@@ -220,7 +187,7 @@ function MergeSplatterSync({ options }: { readonly options: SplatterRenderOption
   const allMerges = useMergedPullRequests();
   const since = useMergeDayStart();
   const compact = useMediaQuery("(max-width: 640px)");
-  const merges = useMemo(() => mergesSince(allMerges, since), [allMerges, since]);
+  const merges = mergesSince(allMerges, since);
 
   useLayoutEffect(() => {
     const root = document.documentElement;

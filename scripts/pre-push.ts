@@ -217,10 +217,19 @@ function pushBase(repoRoot: string, remote: string, localSha: string, remoteSha:
   return undefined;
 }
 
-function run(repoRoot: string, label: string, args: ReadonlyArray<string>) {
+function run(
+  repoRoot: string,
+  label: string,
+  args: ReadonlyArray<string>,
+  environment = process.env,
+) {
   const command = NodePath.join(repoRoot, "node_modules", ".bin", "vp");
   console.log(`\npre-push: ${label}`);
-  const result = NodeChildProcess.spawnSync(command, args, { cwd: repoRoot, stdio: "inherit" });
+  const result = NodeChildProcess.spawnSync(command, args, {
+    cwd: repoRoot,
+    stdio: "inherit",
+    env: environment,
+  });
   if (result.error) console.error(result.error.message);
   if (result.status !== 0) {
     console.error(`\npre-push: ${label} failed. Fix it, or bypass once with git push --no-verify.`);
@@ -348,29 +357,34 @@ function main() {
   if (plan.typecheck.length > 0) {
     run(repoRoot, "typecheck", ["run", "--cache", ...filters(plan.typecheck), "typecheck"]);
   }
-  // Cache instrumentation substitutes osh for /bin/sh and virtualizes filesystem
-  // paths. SSH and packaging tests verify the native shell and real path identity.
+  // Cache instrumentation breaks browser mock imports, native shell behavior, and real path identity.
   const needsNativeProcess = (name: string) =>
-    name === "@t3tools/ssh" || name === "@t3tools/scripts";
-  const nativeShellTests = plan.tests.filter(needsNativeProcess);
-  const cachedTests = plan.tests.filter((name) => !needsNativeProcess(name));
-  for (const [cache, tests] of [
-    ["--cache", cachedTests],
-    ["--no-cache", nativeShellTests],
-  ] as const) {
-    if (tests.length === 0) continue;
+    name === "@t3tools/web" || name === "@t3tools/ssh" || name === "@t3tools/scripts";
+  const testGroups = [
+    { names: plan.tests.filter((name) => !needsNativeProcess(name)), cache: "--cache" },
+    { names: plan.tests.filter(needsNativeProcess), cache: "--no-cache" },
+  ];
+  // React's browser build is chosen before Vitest applies test.env.
+  const testEnvironment = { ...process.env, NODE_ENV: "test" };
+  for (const { names, cache } of testGroups) {
+    if (names.length === 0) continue;
     // One package at a time, so suites do not compete for cores.
-    run(repoRoot, "tests", [
-      "run",
-      cache,
-      "--concurrency-limit",
-      "1",
-      ...filters(tests),
-      "test",
-      // Workers share one Vite transform server; past half the cores, cold imports queue up
-      // behind each other and trip hook timeouts in large suites such as web's.
-      "--maxWorkers=50%",
-    ]);
+    run(
+      repoRoot,
+      "tests",
+      [
+        "run",
+        cache,
+        "--concurrency-limit",
+        "1",
+        ...filters(names),
+        "test",
+        // Workers share one Vite transform server; past half the cores, cold imports queue up
+        // behind each other and trip hook timeouts in large suites such as web's.
+        "--maxWorkers=50%",
+      ],
+      testEnvironment,
+    );
   }
   console.log("\npre-push: all checks passed.");
 }

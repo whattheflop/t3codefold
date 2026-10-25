@@ -181,6 +181,17 @@ describe("deriveFoldWorkspacePaneLayout", () => {
     auxiliaryPaneRegistered: true,
   } as const;
 
+  it.each([true, false])("remembers sidebar expansion while compact: %s", (visible) => {
+    expect(
+      deriveFoldWorkspacePaneLayout({
+        ...base,
+        layout: deriveLayout({ width: 384, height: 832 }),
+        viewportWidth: 384,
+        primarySidebarPreferredVisible: visible,
+      }),
+    ).toMatchObject({ primarySidebarVisible: false, primarySidebarWhenExpanded: visible });
+  });
+
   it("shows sidebar, chat and inspector together when the chat stays readable", () => {
     expect(
       deriveFoldWorkspacePaneLayout({ ...base, layout: tabletLayout, viewportWidth: 1_366 }),

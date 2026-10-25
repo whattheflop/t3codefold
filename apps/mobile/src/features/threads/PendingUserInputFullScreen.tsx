@@ -16,7 +16,7 @@ import {
   PendingUserInputQuestions,
   type PendingUserInputQuestionsProps,
 } from "./PendingUserInputQuestions";
-import { RequestActionButton } from "./RequestActionButton";
+import { Button } from "../../components/ui/Button";
 
 export interface PendingUserInputFullScreenProps extends Omit<
   PendingUserInputQuestionsProps,
@@ -117,9 +117,9 @@ export function PendingUserInputFullScreen(props: PendingUserInputFullScreenProp
               paddingHorizontal: layout.horizontalPadding,
             }}
           >
-            <RequestActionButton
+            <Button
               label="Submit answers"
-              size="large"
+              fullWidth
               tone={props.answers ? "primary" : "secondary"}
               disabled={!props.canRespond || props.answers === null || responding}
               onPress={() => {

@@ -43,12 +43,12 @@ jobs:
       - name: Install executable build runtime
         uses: actions/setup-node@v6
         with:
-          node-version: 26.8.2
+          node-version-file: package.json
       - name: Build executable
-        env:
-          # Keep vp pack's child runtime on the SEA-capable Node version too.
-          VP_NODE_VERSION: 26.8.2
-        run: node apps/server/scripts/cli.ts build-exe --verbose
+        run: |
+          # vp pack can launch its own runtime; keep it on the repository's SEA version.
+          export VP_NODE_VERSION="$(node -p 'require("./package.json").engines.node')"
+          node apps/server/scripts/cli.ts build-exe --verbose
       - name: Build and stage resource monitor
         run: |
           cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml

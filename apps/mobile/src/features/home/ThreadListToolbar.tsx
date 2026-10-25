@@ -1,8 +1,8 @@
+import { MOBILE_APP_NAME } from "../../lib/mobileBranding";
 import { androidKeyboardFirst, dismissAndroidKeyboard } from "../../lib/android-back";
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react";
 import { useNavigation, useNavigationState } from "@react-navigation/native";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
-import { WorkspaceTabSwitcher } from "../workspace/AndroidWorkspaceNavigation";
 import {
   BackHandler,
   Keyboard,
@@ -12,14 +12,13 @@ import {
 } from "react-native";
 import type { MenuAction } from "@react-native-menu/menu";
 
-import { AndroidHeaderIconButton } from "../../components/ui/AndroidScreenHeader";
-import { CompactBrandTitle } from "../../components/CompactBrandTitle";
+import { WorkspaceTabSwitcher } from "../workspace/AndroidWorkspaceNavigation";
 import { ThreadListOptionsMenu } from "./ThreadListOptionsMenu";
 import { Menu } from "../../components/ui/Menu";
 import { SearchField } from "../../components/ui/SearchField";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
-import { WorkspaceConnectionTitle } from "./WorkspaceConnectionTitle";
-import { useWorkspaceState } from "../../state/workspace";
+import { WorkspaceListToolbarRow } from "../workspace/WorkspaceListToolbarRow";
+import { useWorkspaceConnectionState } from "../../state/workspace";
 import { useToolbarLayout } from "../../components/ui/useToolbarLayout";
 
 /** One toolbar height for the compact list and expanded sidebar, including search. */
@@ -29,7 +28,6 @@ export function ThreadListToolbar(props: {
   readonly filterActions: MenuAction[];
   readonly filterCustomized: boolean;
   readonly onFilterAction: NonNullable<ComponentProps<typeof Menu>["onPressAction"]>;
-  readonly onOpenSettings: () => void;
   readonly onOpenEnvironments: () => void;
   readonly sidebar?: boolean;
   readonly onLayout?: (event: LayoutChangeEvent) => void;
@@ -41,8 +39,8 @@ export function ThreadListToolbar(props: {
   const homeFocused = useNavigationState((state) => state.routes[state.index]?.name === "Home");
   const listFocused =
     homeFocused && (workspace === null || workspace.state.selectedTab === "threads");
-  const { height: toolbarHeight, ...headerPadding } = useToolbarLayout();
-  const { state } = useWorkspaceState();
+  const { paddingTop, paddingBottom } = useToolbarLayout();
+  const connectionState = useWorkspaceConnectionState();
   const { onRequestVisibility, onSearchQueryChange } = props;
   const searchRef = useRef<TextInputInstance>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -88,58 +86,38 @@ export function ThreadListToolbar(props: {
       onChangeText={onSearchQueryChange}
     />
   );
+  const filterButton = (
+    <ThreadListOptionsMenu
+      hasConnections={connectionState.hasConnections}
+      filterActions={props.filterActions}
+      filterCustomized={props.filterCustomized}
+      onFilterAction={props.onFilterAction}
+      onOpenSettings={() =>
+        navigation.navigate("SettingsSheet", {
+          screen: "SettingsContent",
+          params: { screen: "Settings" },
+        })
+      }
+    />
+  );
 
   return (
-    <>
-      <View
-        onLayout={props.onLayout}
-        className={
-          props.sidebar ? "absolute inset-x-0 top-0 z-[4] bg-header px-2" : "bg-header px-2"
-        }
-        // The sidebar's tab switcher sits below the header padding, matching the PR header.
-        style={props.sidebar ? { paddingTop: headerPadding.paddingTop } : headerPadding}
-      >
-        <View className="flex-row items-center gap-1" style={{ minHeight: toolbarHeight }}>
-          {searching ? (
-            <>
-              <AndroidHeaderIconButton
-                accessibilityLabel="Close search"
-                icon="arrow.left"
-                onPress={androidKeyboardFirst(closeSearch)}
-              />
-              {searchField}
-            </>
-          ) : (
-            <>
-              {/* Match the visible inset of the trailing 48dp icon button. */}
-              <View className="min-w-0 flex-1 overflow-hidden pl-4">
-                <WorkspaceConnectionTitle
-                  grow
-                  onPress={props.onOpenEnvironments}
-                  brand={<CompactBrandTitle allowFontScaling={false} />}
-                />
-              </View>
-              <AndroidHeaderIconButton
-                accessibilityLabel="Search threads"
-                icon="magnifyingglass"
-                onPress={openSearch}
-              />
-              <ThreadListOptionsMenu
-                hasConnections={state.hasConnections}
-                filterActions={props.filterActions}
-                filterCustomized={props.filterCustomized}
-                onFilterAction={props.onFilterAction}
-                onOpenSettings={props.onOpenSettings}
-              />
-            </>
-          )}
-        </View>
-        {props.sidebar ? (
-          <View style={{ paddingTop: headerPadding.paddingBottom }}>
-            <WorkspaceTabSwitcher className="px-2 pb-2" />
-          </View>
-        ) : null}
-      </View>
-    </>
+    <View
+      onLayout={props.onLayout}
+      className={props.sidebar ? "absolute inset-x-0 top-0 z-[4] bg-header px-2" : "bg-header px-2"}
+      style={{ paddingTop, paddingBottom }}
+    >
+      <WorkspaceListToolbarRow
+        searching={searching}
+        searchField={searchField}
+        onCloseSearch={androidKeyboardFirst(closeSearch)}
+        onOpenSearch={openSearch}
+        searchAccessibilityLabel="Search threads"
+        titleAccessibilityLabel={`${MOBILE_APP_NAME}, Threads`}
+        onOpenEnvironments={props.onOpenEnvironments}
+        filter={filterButton}
+      />
+      {props.sidebar ? <WorkspaceTabSwitcher className="px-2 pb-2" /> : null}
+    </View>
   );
 }

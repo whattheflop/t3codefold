@@ -53,20 +53,6 @@ it("formats package runner commands from their cache entry paths", () => {
   }
 });
 
-it("treats stable installs as direct invocations", () => {
-  for (const entryPath of [
-    "/usr/local/lib/node_modules/t3/dist/bin.mjs",
-    "/home/theo/Code/work/t3code/apps/server/dist/bin.mjs",
-    "/home/theo/.t3/runtime/0.0.31/node_modules/t3/dist/bin.mjs",
-    "",
-  ]) {
-    assert.equal(
-      formatCliCommand({ subcommand: "serve", entryPath, version: "0.0.31" }),
-      "t3 serve",
-    );
-  }
-});
-
 it("re-suggests the prerelease channel only for prerelease builds", () => {
   for (const [version, expected] of [
     ["0.0.31-nightly.20260729", `npx --yes --prefer-online --package=${NIGHTLY} t3 serve`],

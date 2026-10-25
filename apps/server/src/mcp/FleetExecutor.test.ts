@@ -10,6 +10,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 
 import * as ServerConfig from "../config.ts";
@@ -88,7 +89,7 @@ function fixture() {
           } as unknown as ThreadLaunch.ThreadLaunchResult;
         }),
     }),
-    Layer.mock(Project.ProjectService)({}),
+    Layer.mock(Project.ProjectService)({ getById: () => Effect.succeed(Option.none()) }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/projects" }),
     Layer.mock(GitVcsDriver.GitVcsDriver)({}),
     ServerSettings.layerTest(),

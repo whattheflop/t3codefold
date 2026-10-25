@@ -11,7 +11,7 @@ describe("ClientSettings Fold fields", () => {
   it("decodes defaults for settings saved before the Fold fields existed", () => {
     expect(decodeClientSettings({})).toMatchObject({
       themeBackdropEnabled: true,
-      themeBackdropScope: "featured",
+      themeBackdropScope: "all",
       themeBackdropColors: null,
       themeBackdropIntensity: 100,
       themeBackdropSeed: 0,
@@ -29,6 +29,12 @@ describe("ClientSettings Fold fields", () => {
     expect(decodeClientSettingsPatch(preference)).toEqual(preference);
     expect(encodeClientSettings(decodeClientSettings(preference))).toMatchObject(preference);
     expect(() => decodeClientSettingsPatch({ themeBackdropIntensity: 1 })).toThrow();
+  });
+
+  it("preserves older backdrop preferences and an explicit off switch", () => {
+    const preference = { themeBackdropScope: "featured", themeBackdropEnabled: false };
+    expect(encodeClientSettings(decodeClientSettings(preference))).toMatchObject(preference);
+    expect(decodeClientSettingsPatch(preference)).toEqual(preference);
   });
 });
 

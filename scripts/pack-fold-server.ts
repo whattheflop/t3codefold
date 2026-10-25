@@ -5,7 +5,10 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeChildProcess from "node:child_process";
+import * as Schema from "effect/Schema";
+import { fromYaml } from "@t3tools/shared/schemaYaml";
 import { selectCliRuntimeExternalDependencies } from "./lib/cli-external-packages.ts";
+import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import pkg from "../apps/server/package.json" with { type: "json" };
 import { foldServerPackageSpec } from "../packages/shared/src/foldRelease.ts";
 
@@ -21,7 +24,14 @@ for (const file of ["bin.mjs", "claude-history-worker.mjs", "client/index.html"]
 }
 const staging = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "fold-server-package-"));
 try {
-  const dependencies = selectCliRuntimeExternalDependencies(pkg.dependencies);
+  const workspace = Schema.decodeSync(
+    fromYaml(Schema.Struct({ catalog: Schema.Record(Schema.String, Schema.String) })),
+  )(await NodeFSP.readFile(NodePath.join(root, "pnpm-workspace.yaml"), "utf8"));
+  const dependencies = resolveCatalogDependencies(
+    selectCliRuntimeExternalDependencies(pkg.dependencies),
+    workspace.catalog,
+    "apps/server",
+  );
   for (const spec of Object.values(dependencies)) {
     if (spec.startsWith("catalog:") || spec.startsWith("workspace:")) {
       throw new Error("Resolve native dependency versions before packaging Fold.");

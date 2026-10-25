@@ -6,7 +6,7 @@ on:
       version:
         description: Linux desktop and server version
         required: true
-        default: 0.4.4
+        default: 0.4.8
       release_tag:
         description: Optional release tag (defaults to fold-preview-vVERSION)
         required: false

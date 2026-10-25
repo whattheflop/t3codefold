@@ -68,6 +68,20 @@ Install dependencies once before parallel verification; give each agent a distin
 
   Consult current configs if project names change.
 
+- Audit the [Android Fold layout contract](../../../docs/operations/upstream-sync.md#android-fold-layout-contract)
+  on every sync, including auto-merged navigation changes. Compare the recorded Fold baseline
+  with both rendered sidebar tabs: top Chats/PRs switcher, sidebar New thread, search, filters,
+  Settings access, and pane width between safe-area insets. Run the geometry regression even
+  when the merge reports no mobile conflicts:
+
+  ```bash
+  cd apps/mobile
+  NODE_ENV=test ../../node_modules/.bin/vp test run --project react src/features/layout/fold-workspace-geometry.test.tsx
+  ```
+
+  Record the source comparison and test result in the merge message. This audit is complete
+  only when every layout guarantee is preserved; upstream's rail is not an equivalent replacement.
+
 - Run formatting and lint on changed files. Distinguish inherited lint findings from added-line
   errors; retain evidence of the baseline. Fix regressions and rerun the affected checks, without
   repeating successful unrelated suites. Keep test logs outside the repository.

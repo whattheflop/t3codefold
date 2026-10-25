@@ -7,7 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts/settings";
 import { ShuffleIcon } from "lucide-react";
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties } from "react";
 
 import { useTheme } from "../../hooks/useTheme";
 import { useThemeDerivedBackdropColors } from "../../themeBackdrop";
@@ -34,7 +34,6 @@ const THEME_BACKDROP_COLOR_ROLES = ["Lead", "Second", "Accent"] as const;
 
 const THEME_BACKDROP_DEFAULTS = {
   themeBackdropEnabled: DEFAULT_UNIFIED_SETTINGS.themeBackdropEnabled,
-  themeBackdropScope: DEFAULT_UNIFIED_SETTINGS.themeBackdropScope,
   themeBackdropColors: DEFAULT_UNIFIED_SETTINGS.themeBackdropColors,
   themeBackdropIntensity: DEFAULT_UNIFIED_SETTINGS.themeBackdropIntensity,
   themeBackdropAmount: DEFAULT_UNIFIED_SETTINGS.themeBackdropAmount,
@@ -61,36 +60,25 @@ export const FOLD_SETTINGS_DEFAULTS = {
 };
 
 /** Labels for the Fold settings that differ from their defaults, for the restore dialog. */
-export function useFoldChangedSettingLabels(settings: UnifiedSettings): ReadonlyArray<string> {
+export function getFoldChangedSettingLabels(settings: UnifiedSettings): ReadonlyArray<string> {
   const backdropCustomized = isThemeBackdropCustomized(settings);
-  return useMemo(
-    () => [
-      ...(backdropCustomized ? ["Splatter backdrop"] : []),
-      ...(settings.threadWrapEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapEnabled ||
-      settings.threadWrapPortalsEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapPortalsEnabled ||
-      settings.threadWrapMaxColumns !== DEFAULT_UNIFIED_SETTINGS.threadWrapMaxColumns
-        ? ["Thread wrapping"]
-        : []),
-      ...(settings.citeSelectionEnabled !== DEFAULT_UNIFIED_SETTINGS.citeSelectionEnabled
-        ? ["Show Cite on text selection"]
-        : []),
-      ...(settings.vimModeEnabled !== DEFAULT_UNIFIED_SETTINGS.vimModeEnabled
-        ? ["Vim keyboard mode"]
-        : []),
-      ...(settings.vimThreadPreviewEnabled !== DEFAULT_UNIFIED_SETTINGS.vimThreadPreviewEnabled
-        ? ["Preview threads while navigating"]
-        : []),
-    ],
-    [
-      backdropCustomized,
-      settings.threadWrapEnabled,
-      settings.threadWrapPortalsEnabled,
-      settings.threadWrapMaxColumns,
-      settings.citeSelectionEnabled,
-      settings.vimModeEnabled,
-      settings.vimThreadPreviewEnabled,
-    ],
-  );
+  return [
+    ...(backdropCustomized ? ["Splatter backdrop"] : []),
+    ...(settings.threadWrapEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapEnabled ||
+    settings.threadWrapPortalsEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapPortalsEnabled ||
+    settings.threadWrapMaxColumns !== DEFAULT_UNIFIED_SETTINGS.threadWrapMaxColumns
+      ? ["Thread wrapping"]
+      : []),
+    ...(settings.citeSelectionEnabled !== DEFAULT_UNIFIED_SETTINGS.citeSelectionEnabled
+      ? ["Show Cite on text selection"]
+      : []),
+    ...(settings.vimModeEnabled !== DEFAULT_UNIFIED_SETTINGS.vimModeEnabled
+      ? ["Vim keyboard mode"]
+      : []),
+    ...(settings.vimThreadPreviewEnabled !== DEFAULT_UNIFIED_SETTINGS.vimThreadPreviewEnabled
+      ? ["Preview threads while navigating"]
+      : []),
+  ];
 }
 
 /** Appearance: splatter backdrop and its options. */
@@ -118,7 +106,7 @@ export function ThemeBackdropSettingsRows() {
     <>
       <SettingsRow
         {...searchableSetting("theme-backdrop")}
-        description="Paint splatter and grain behind the conversation, in your theme's colors."
+        description="Paint splatter and grain behind the conversation on every theme, in its own colors."
         resetAction={
           isThemeBackdropCustomized(settings) ? (
             <SettingResetButton
@@ -140,32 +128,6 @@ export function ThemeBackdropSettingsRows() {
 
       {settings.themeBackdropEnabled ? (
         <>
-          <SettingsRow
-            {...searchableSetting("theme-backdrop-scope")}
-            description="Cyberpunk and Codex ship with it; turn it on for every theme, custom ones included."
-            control={
-              <div className="w-full sm:w-44">
-                <Select
-                  value={settings.themeBackdropScope}
-                  onValueChange={(value) => {
-                    if (value === "featured" || value === "all")
-                      updateSettings({ themeBackdropScope: value });
-                  }}
-                >
-                  <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Show splatter on">
-                    <SelectValue>
-                      {settings.themeBackdropScope === "all" ? "Every theme" : "Cyberpunk & Codex"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup align="end" alignItemWithTrigger={false}>
-                    <SelectItem value="featured">Cyberpunk & Codex (default)</SelectItem>
-                    <SelectItem value="all">Every theme</SelectItem>
-                  </SelectPopup>
-                </Select>
-              </div>
-            }
-          />
-
           <SettingsRow
             {...searchableSetting("theme-backdrop-colors")}
             description="Match the active theme's accent colors, or pick your own paint."

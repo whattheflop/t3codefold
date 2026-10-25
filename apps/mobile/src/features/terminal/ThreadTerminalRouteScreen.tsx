@@ -66,7 +66,7 @@ import { getMobileTerminalTheme } from "./terminalTheme";
 import { terminalDebugLog } from "./terminalDebugLog";
 import { getTerminalBufferReplayKey } from "./terminalBufferReplay";
 import {
-  resolveTerminalOpenLocation,
+  useInitialTerminalLaunchLocation,
   takePendingTerminalLaunch,
   type PendingTerminalLaunch,
 } from "./terminalLaunchContext";
@@ -299,8 +299,16 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   const isEnvironmentReady = environment.presentation?.connection.phase === "connected";
   const requestedTerminalId = firstRouteParam(params.terminalId);
   const terminalId = requestedTerminalId ?? DEFAULT_TERMINAL_ID;
+  // The native view treats any new positive value as a capture, including the first value a
+  // freshly created view receives after a reconnect or remount. Only pass a value while a
+  // capture is pending, and keep the sequence increasing so the next request always differs.
+  const captureSequenceRef = useRef(0);
   const [captureRequest, setCaptureRequest] = useState(0);
   const [capturedOutput, setCapturedOutput] = useState<string | null>(null);
+  const requestCapture = () => {
+    captureSequenceRef.current += 1;
+    setCaptureRequest(captureSequenceRef.current);
+  };
   const {
     isReady: hasResolvedFontPreference,
     appearance,
@@ -380,7 +388,6 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   const [isAccessoryDismissed, setIsAccessoryDismissed] = useState(false);
   const firstNonEmptyBufferLoggedRef = useRef(false);
   const sentInitialInputKeyRef = useRef<string | null>(null);
-  /** Default grid is always valid for attach; onResize refines cols/rows. Requiring a cached size blocked bootstrap for new terminal routes. */
   const [hasMeasuredSurface, setHasMeasuredSurface] = useState(true);
   // Android reports DECCKM so the toolbar arrows match what the hardware keys send.
   const [applicationCursorKeys, setApplicationCursorKeys] = useState(false);
@@ -395,36 +402,25 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     requestedTerminalId === null &&
     runningSession !== null &&
     runningSession.target.terminalId !== terminalId;
-  const launchLocationCandidate = useMemo(() => {
-    if (!selectedThread || !selectedThreadProject?.workspaceRoot) {
-      return null;
-    }
-    if (pendingLaunch) {
-      return {
-        cwd: pendingLaunch.cwd,
-        worktreePath: pendingLaunch.worktreePath,
-      };
-    }
-    return resolveTerminalOpenLocation({
-      terminalLocation: activeKnownSession?.state.summary ?? null,
-      activeSessionLocation: activeKnownSession?.state.summary ?? null,
-      workspaceRoot: selectedThreadProject.workspaceRoot,
-      threadShellWorktreePath: selectedThread.worktreePath ?? null,
-      threadDetailWorktreePath: selectedThreadDetailWorktreePath,
-    });
-  }, [
-    activeKnownSession?.state.summary,
+  const launchLocation = useInitialTerminalLaunchLocation({
+    targetKey: launchTargetKey,
     pendingLaunch,
-    selectedThread,
-    selectedThreadDetailWorktreePath,
-    selectedThreadProject?.workspaceRoot,
-  ]);
-  const [initialLaunchLocationEntry, setInitialLaunchLocationEntry] = useState(() => ({
-    key: launchTargetKey,
-    location: launchLocationCandidate,
-  }));
-  const launchLocation =
-    initialLaunchLocationEntry.key === launchTargetKey ? initialLaunchLocationEntry.location : null;
+    hasResolvedPendingLaunch,
+    isAuthenticated,
+    canRead: canReadTerminal,
+    canOperate: canOperateTerminal,
+    hasLoadedSessions: knownSessions !== null,
+    location:
+      selectedThread && selectedThreadProject?.workspaceRoot
+        ? {
+            terminalLocation: activeKnownSession?.state.summary ?? null,
+            activeSessionLocation: activeKnownSession?.state.summary ?? null,
+            workspaceRoot: selectedThreadProject.workspaceRoot,
+            threadShellWorktreePath: selectedThread.worktreePath ?? null,
+            threadDetailWorktreePath: selectedThreadDetailWorktreePath,
+          }
+        : null,
+  });
   const terminalAttachInput = useMemo(
     () =>
       selectedThread !== null &&
@@ -659,27 +655,6 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       },
     });
   }, [cachedRouteGridSize, initialAttachGridEntry.key, launchTargetKey]);
-
-  useEffect(() => {
-    if (
-      initialLaunchLocationEntry.key === launchTargetKey &&
-      initialLaunchLocationEntry.location !== null
-    ) {
-      return;
-    }
-    if (initialLaunchLocationEntry.key === launchTargetKey && launchLocationCandidate === null) {
-      return;
-    }
-    setInitialLaunchLocationEntry({
-      key: launchTargetKey,
-      location: launchLocationCandidate,
-    });
-  }, [
-    initialLaunchLocationEntry.key,
-    initialLaunchLocationEntry.location,
-    launchLocationCandidate,
-    launchTargetKey,
-  ]);
 
   useEffect(() => {
     if (!shouldRedirectToRunningTerminal || !selectedThread || !runningSession) {
@@ -1200,6 +1175,12 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                 "This connection does not have permission to view terminals."
               }
             />
+          ) : canOperateTerminal && launchLocation === null ? (
+            sessionsError !== null ? (
+              <EmptyState title="Could not load terminals" detail={sessionsError} />
+            ) : (
+              <EmptyState title="Loading terminals" detail="Reading existing terminal sessions." />
+            )
           ) : !canOperateTerminal && !hasTerminalTarget && sessionsPending ? (
             <EmptyState title="Loading terminals" detail="Reading existing terminal sessions." />
           ) : !canOperateTerminal && !hasTerminalTarget && sessionsError !== null ? (
@@ -1237,6 +1218,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                   keyboardFocusRequest={keyboardFocusRequest}
                   captureRequest={captureRequest}
                   onCapture={(text) => {
+                    setCaptureRequest(0);
                     if (text.trim()) setCapturedOutput(text);
                     else
                       Dialog.alert("No terminal output", "There is no visible output to attach.");
@@ -1253,11 +1235,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
               {Platform.OS === "android" && !keyboardState.isVisible ? (
                 <View className="min-h-14 flex-row items-center gap-2 bg-card-alt px-2">
                   {selectedThread && hasNativeTerminalSurface() ? (
-                    <Button
-                      label="Attach output"
-                      tone="text"
-                      onPress={() => setCaptureRequest((value) => value + 1)}
-                    />
+                    <Button label="Attach output" tone="text" onPress={requestCapture} />
                   ) : null}
                   <View className="flex-1" />
                   <IconButton
@@ -1272,7 +1250,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                   accessibilityRole="button"
                   onPress={() => {
                     KeyboardController.dismiss();
-                    setCaptureRequest((value) => value + 1);
+                    requestCapture();
                   }}
                   className="px-4 py-2"
                 >

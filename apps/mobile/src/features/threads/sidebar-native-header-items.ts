@@ -3,6 +3,7 @@ import type {
   NativeStackHeaderItemMenu,
 } from "@react-navigation/native-stack";
 
+import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import type { HomeListFilterMenu } from "../home/home-list-filter-menu";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 
@@ -54,7 +55,7 @@ export function createSidebarHeaderItems(input: {
       axisBehavior: "horizontalOnly",
       label: "Pull requests",
       accessibilityLabel: "Pull requests",
-      icon: sfSymbolIcon("arrow.triangle.pull"),
+      icon: sfSymbolIcon(PullRequestGlyph.pullRequest),
       onPress: input.onOpenPullRequests,
     }),
     withNativeGlassHeaderItem({

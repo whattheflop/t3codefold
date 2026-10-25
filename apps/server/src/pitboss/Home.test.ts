@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { afterEach } from "vite-plus/test";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { WorkspacePaths, make as makeWorkspacePaths } from "../workspace/WorkspacePaths.ts";
+import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { expect, it } from "@effect/vitest";
 import {
   CommandId,
@@ -57,7 +57,7 @@ const harness = (initial: PitbossSnapshot = emptyWork) => {
   const roots: string[] = [];
   const layers = Layer.mergeAll(
     NodeServices.layer,
-    Layer.effect(WorkspacePaths, makeWorkspacePaths).pipe(Layer.provide(NodeServices.layer)),
+    WorkspacePaths.layer.pipe(Layer.provide(NodeServices.layer)),
     Layer.mock(WorkStore)({
       read: () => Effect.succeed(state),
       command: (command, actor) => {

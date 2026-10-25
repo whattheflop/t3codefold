@@ -1,10 +1,10 @@
 import { View } from "react-native";
 
-import { AppText as Text } from "./ui/AppText";
+import { FoldBrandLogo } from "./FoldBrandLogo";
 import { MOBILE_APP_NAME } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
 
-/** Fold's Android header title: the app name as plain header text, without the wordmark. */
+/** The wordmark scales inside its slot so header actions always keep their space. */
 export function FoldAndroidBrandTitle(props: {
   readonly allowFontScaling?: boolean | undefined;
   readonly accessibilityLabel?: string | undefined;
@@ -14,17 +14,16 @@ export function FoldAndroidBrandTitle(props: {
     <View
       accessible
       accessibilityRole="header"
-      accessibilityLabel={props.accessibilityLabel ?? "T3 Code Fold, Threads"}
-      style={{ minWidth: 0, flexShrink: 1 }}
+      accessibilityLabel={props.accessibilityLabel ?? `${MOBILE_APP_NAME}, Threads`}
+      style={{
+        width: 180 * scale,
+        maxWidth: "100%",
+        aspectRatio: 300 / 56,
+        flexShrink: 1,
+        overflow: "hidden",
+      }}
     >
-      <Text
-        allowFontScaling={props.allowFontScaling}
-        numberOfLines={1}
-        className="font-t3-medium text-header-foreground"
-        style={{ fontSize: 18 * scale, lineHeight: 24 * scale, letterSpacing: -0.3 * scale }}
-      >
-        {MOBILE_APP_NAME}
-      </Text>
+      <FoldBrandLogo />
     </View>
   );
 }

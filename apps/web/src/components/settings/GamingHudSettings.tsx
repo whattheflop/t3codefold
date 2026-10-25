@@ -1,4 +1,4 @@
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
 import { searchableSetting } from "./settingsSearch";
 import { SettingsRow } from "./settingsLayout";
 import { Switch } from "../ui/switch";
@@ -13,7 +13,6 @@ const positions = {
 export function GamingHudSettings() {
   const enabled = useClientSettings((settings) => settings.gamingHudEnabled);
   const position = useClientSettings((settings) => settings.gamingHudPosition);
-  const update = useUpdateClientSettings();
   if (!window.desktopBridge?.setGamingHud) return null;
   return (
     <>
@@ -23,7 +22,7 @@ export function GamingHudSettings() {
         control={
           <Switch
             checked={enabled}
-            onCheckedChange={(checked) => update({ gamingHudEnabled: checked })}
+            onCheckedChange={(checked) => updateClientSettings({ gamingHudEnabled: checked })}
             aria-label="Gaming HUD"
           />
         }
@@ -42,7 +41,7 @@ export function GamingHudSettings() {
                   value === "bottom-right" ||
                   value === "bottom-left"
                 )
-                  update({ gamingHudPosition: value });
+                  updateClientSettings({ gamingHudPosition: value });
               }}
             >
               <SelectTrigger size="sm" aria-label="HUD corner">

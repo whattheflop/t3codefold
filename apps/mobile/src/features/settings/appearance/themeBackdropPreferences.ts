@@ -5,7 +5,7 @@ import type { Preferences } from "../../../persistence/mobile-preferences";
 
 /** Fold's splatter backdrop settings, exposed through the appearance preferences context. */
 export interface ThemeBackdropPreferences {
-  /** Splatter backdrop on themes that ship one; on unless turned off. */
+  /** Splatter backdrop on every theme; on unless turned off. */
   readonly themeBackdropEnabled: boolean;
   readonly setThemeBackdropEnabled: (value: boolean) => void;
   readonly themeBackdropScope: ThemeBackdropScope;
@@ -40,7 +40,7 @@ export function useThemeBackdropPreferences(
     },
     [updatePreferences],
   );
-  const themeBackdropScope = storedPreferences?.themeBackdropScope ?? "featured";
+  const themeBackdropScope = storedPreferences?.themeBackdropScope ?? "all";
   const setThemeBackdropScope = useCallback(
     (value: ThemeBackdropScope) => {
       updatePreferences({ themeBackdropScope: value });

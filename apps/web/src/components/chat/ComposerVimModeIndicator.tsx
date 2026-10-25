@@ -1,4 +1,5 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
+import { useStableCallback } from "../../hooks/useStableCallback";
 
 import type { ComposerVimModeDisplay } from "../ComposerPromptEditorTiptapVim";
 
@@ -13,24 +14,26 @@ function formatComposerVimDisplay(display: ComposerVimModeDisplay): string {
 export function useComposerVimModeIndicator() {
   const displayRef = useRef<ComposerVimModeDisplay>({ mode: "NORMAL", pending: "" });
   const indicatorElementRef = useRef<HTMLSpanElement | null>(null);
-  const onDisplayChange = useCallback((display: ComposerVimModeDisplay) => {
+  const onDisplayChange = useStableCallback((display: ComposerVimModeDisplay) => {
     displayRef.current = display;
     const indicator = indicatorElementRef.current;
     if (indicator) indicator.textContent = formatComposerVimDisplay(display);
-  }, []);
-  const attachIndicator = useCallback((indicator: HTMLSpanElement | null) => {
+  });
+  const attachIndicator = useStableCallback((indicator: HTMLSpanElement | null) => {
     indicatorElementRef.current = indicator;
     if (indicator) indicator.textContent = formatComposerVimDisplay(displayRef.current);
-  }, []);
+  });
   return { onDisplayChange, attachIndicator };
 }
 
-export function ComposerVimModeIndicator(props: {
-  readonly attachIndicator: (indicator: HTMLSpanElement | null) => void;
+export function ComposerVimModeIndicator({
+  indicatorRef,
+}: {
+  readonly indicatorRef: (indicator: HTMLSpanElement | null) => void;
 }) {
   return (
     <span
-      ref={props.attachIndicator}
+      ref={indicatorRef}
       aria-live="polite"
       className="pointer-events-none rounded bg-primary/15 px-1.5 py-0.5 font-mono text-3xs font-semibold text-primary"
       data-testid="composer-vim-mode"

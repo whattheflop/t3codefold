@@ -1,4 +1,4 @@
-export const MOBILE_APP_NAME = "T3 Code Fold";
+export const MOBILE_APP_NAME = "t3codeFold";
 export type MobileStageLabel = "Dev" | "Nightly";
 
 export function resolveMobileStageLabel(appVariant: unknown): MobileStageLabel | null {

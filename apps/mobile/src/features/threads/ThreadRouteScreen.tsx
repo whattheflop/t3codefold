@@ -25,6 +25,7 @@ import {
 import {
   projectScriptCwd,
   projectScriptRuntimeEnv,
+  projectScriptTerminalInput,
   resolveProjectScripts,
 } from "@t3tools/shared/projectScripts";
 import { Platform, ScrollView, View } from "react-native";
@@ -93,7 +94,7 @@ import { useThreadPromptLink } from "../prompt-links/useThreadPromptLink";
 import { ThreadHeader } from "./ThreadHeader";
 import {
   useAndroidWorkspaceBack,
-  useWorkspaceListNavigation,
+  useWorkspaceBackNavigation,
 } from "../workspace/useAndroidWorkspaceNavigation";
 
 interface ThreadInspectorSelection {
@@ -122,7 +123,7 @@ function ThreadPane(props: { readonly children: ReactNode }) {
 
 /** Keep the thread's header and canvas in place while its shell loads or recovers. */
 function ThreadRouteFallbackLayout(props: { readonly children: ReactNode }) {
-  const returnToList = useWorkspaceListNavigation("threads");
+  const goBack = useWorkspaceBackNavigation("threads");
   const { layout } = useAdaptiveWorkspaceLayout();
   const { themeVariables } = useAppearancePreferences();
   if (Platform.OS !== "android") return props.children;
@@ -132,7 +133,7 @@ function ThreadRouteFallbackLayout(props: { readonly children: ReactNode }) {
       <AppBar
         title="Thread"
         options={{ contentStyle: { backgroundColor: themeVariables["--color-header"] } }}
-        onBack={layout.usesSplitView ? undefined : returnToList}
+        onBack={layout.usesSplitView ? undefined : goBack}
         hideBottomBorder
       />
       <ThreadPane>{props.children}</ThreadPane>
@@ -295,6 +296,7 @@ function ThreadRouteContent(
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, "thread interrupt");
+  const resumeThreadQueue = useAtomCommand(threadEnvironment.resumeThreadQueue, "resume queue");
   const loadEarlierHistory = useAtomCommand(threadEnvironment.loadEarlierHistory, {
     label: "load earlier thread history",
     reportFailure: false,
@@ -656,6 +658,14 @@ function ThreadRouteContent(
     });
   }, [composer.interruptibleRunId, interruptThreadTurn, selectedThread]);
 
+  const handleResumeQueue = async () => {
+    if (!selectedThread) return;
+    await resumeThreadQueue({
+      environmentId: selectedThread.environmentId,
+      input: { threadId: selectedThread.id },
+    });
+  };
+
   const handleOpenTerminal = useCallback(
     (nextTerminalId?: string | null) => {
       terminalDebugLog("terminal-menu:open-existing", {
@@ -785,7 +795,7 @@ function ThreadRouteContent(
           cwd,
           worktreePath: preferredWorktreePath,
           env,
-          initialInput: `${script.command}\r`,
+          initialInput: projectScriptTerminalInput(script.command),
         },
       });
       terminalDebugLog("project-script:staged", {
@@ -927,6 +937,7 @@ function ThreadRouteContent(
           projectId: selectedThread.projectId,
           projectCwd: selectedThreadProject.workspaceRoot,
           text: setupMessage.text,
+          titleText: selectedThread.title,
           ...(setupMessage.context ? { context: setupMessage.context } : {}),
           uploadedAttachments: setupMessage.attachments,
           modelSelection: selectedThread.modelSelection,
@@ -1051,13 +1062,12 @@ function ThreadRouteContent(
               : null
           }
           activePendingApproval={requests.activePendingApproval}
+          activePendingApprovals={requests.activePendingApprovals}
           respondingApprovalId={requests.respondingApprovalId}
           activePendingUserInput={requests.activePendingUserInput}
           activePendingUserInputDrafts={requests.activePendingUserInputDrafts}
           activePendingUserInputAnswers={requests.activePendingUserInputAnswers}
           respondingUserInputId={requests.respondingUserInputId}
-          draftMessage={composer.draftMessage}
-          draftAttachments={composer.draftAttachments}
           connectionStateLabel={routeConnectionState}
           threadSyncStatus={selectedThreadDetailState.status}
           historyControls={historyControls}
@@ -1087,6 +1097,7 @@ function ThreadRouteContent(
           onRemoveDraftImage={composer.onRemoveDraftImage}
           serverConfig={serverConfig}
           onStopThread={awaitingBootstrapTurn ? handleCancelWorktreeSetup : handleStopThread}
+          onResumeQueue={composer.queueHeld ? handleResumeQueue : null}
           onSendMessage={composer.onSendMessage}
           onReconnectEnvironment={handleReconnectEnvironment}
           canSwitchThreadProvider={composer.canSwitchThreadProvider}

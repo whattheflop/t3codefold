@@ -71,12 +71,12 @@ export function useFoldWorkspaceGeometry() {
     return hinge ? { x: hinge.left, width: hinge.right - hinge.left } : null;
   }, [posture.hinges]);
   return {
-    windowHinge,
     layout,
     width,
     leadingInset,
     trailingInset,
     foldRegions,
+    windowHinge,
     tabletopTopHeight,
     hingeSnapWidths,
     workspaceView,

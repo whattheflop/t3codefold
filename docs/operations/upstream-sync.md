@@ -26,6 +26,26 @@ is wrong, however hard the conflict was.
 Record each "took upstream's" decision in the merge commit message with what Fold behavior, if
 any, was given up, so a maintainer can object before the PR merges.
 
+## Android Fold layout contract
+
+Fold's Android split workspace puts **Chats / PRs at the top of the sidebar** and keeps
+**New thread reachable in that sidebar**. All horizontal space between the system safe-area
+insets belongs to the workspace panes; navigation must not reserve a separate left rail.
+This saves reading and editing width on unfolded phones. Preserve the compact phone layout,
+fold/hinge alignment, pane resizing, and remembered sidebar state as the window changes.
+
+Upstream navigation rails are not equivalent to this layout. When upstream changes navigation,
+port its behavior improvements into Fold's top navigation and existing controls. Review both the
+Chats and PRs branches, including search, filters, Settings access, and New thread; clean merges
+can replace these integrations without producing conflicts. Changing this contract requires an
+explicit maintainer request.
+
+The width guarantee is covered by
+[`fold-workspace-geometry.test.tsx`](../../apps/mobile/src/features/layout/fold-workspace-geometry.test.tsx).
+Retain that guarantee when adapting the test to changed APIs; restoring a rail is a regression,
+not a reason to change the expected pane width. The test covers geometry; confirming the top
+switcher and reachable actions also requires tracing their rendered branches.
+
 ## The procedure
 
 Use the repository's [upstream skill](../../.agents/skills/upstream/SKILL.md) for preparation,

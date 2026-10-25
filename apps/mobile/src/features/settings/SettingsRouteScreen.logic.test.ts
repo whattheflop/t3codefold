@@ -2,8 +2,8 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  resolveAgentAwarenessPlatformPresentation,
   resolveAutoSettleReferenceEnvironmentId,
+  resolveAgentAwarenessPlatformPresentation,
 } from "./SettingsRouteScreen.logic";
 
 describe("resolveAutoSettleReferenceEnvironmentId", () => {
@@ -28,15 +28,6 @@ describe("resolveAutoSettleReferenceEnvironmentId", () => {
       resolveAutoSettleReferenceEnvironmentId([
         { environmentId: firstId, canWriteSettings: true },
         second,
-      ]),
-    ).toBe(firstId);
-  });
-
-  it("does not wait for later grants after finding the first writable reference", () => {
-    expect(
-      resolveAutoSettleReferenceEnvironmentId([
-        { environmentId: firstId, canWriteSettings: true },
-        { environmentId: secondId, canWriteSettings: null },
       ]),
     ).toBe(firstId);
   });

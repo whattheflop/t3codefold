@@ -1,11 +1,5 @@
 import * as Schema from "effect/Schema";
-import {
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type PointerEvent as ReactPointerEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { getLocalStorageItem, setLocalStorageItem } from "./useLocalStorage";
 import { useResizeDrag } from "./useResizeDrag";
@@ -44,13 +38,10 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
 } {
   const { storageKey, defaultWidth, minWidth, maxWidth, edge } = options;
 
-  const clamp = useCallback(
-    (value: number): number => {
-      if (!Number.isFinite(value)) return defaultWidth;
-      return Math.max(minWidth, Math.min(maxWidth, value));
-    },
-    [defaultWidth, maxWidth, minWidth],
-  );
+  const clamp = (value: number): number => {
+    if (!Number.isFinite(value)) return defaultWidth;
+    return Math.max(minWidth, Math.min(maxWidth, value));
+  };
 
   const readWidth = () => {
     if (typeof window === "undefined") return defaultWidth;
@@ -108,7 +99,7 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   // rewrites the committed width, so re-apply the live pointer position.
   useLayoutEffect(refresh, [clamp, clampedWidth, refresh]);
 
-  const resizeTo = useCallback((value: number) => {
+  const resizeTo = (value: number) => {
     const nextWidth = latestOptions.current.clamp(value);
     setWidthState({ storageKey: latestOptions.current.storageKey, width: nextWidth });
     try {
@@ -116,6 +107,6 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
     } catch (error) {
       console.error("Could not persist panel width.", error);
     }
-  }, []);
+  };
   return { width: clampedWidth, handlers, resizeTo };
 }

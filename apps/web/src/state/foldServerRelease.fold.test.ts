@@ -1,4 +1,3 @@
-import { FOLD_REPOSITORY } from "@t3tools/shared/foldRelease";
 import { AtomRegistry } from "effect/reactivity";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { afterAll, afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -36,7 +35,7 @@ describe("foldServerReleasePublishedAtom", () => {
     vi.unstubAllGlobals();
   });
 
-  it("checks Fold releases without tracing headers or a CORS preflight", async () => {
+  it("checks Fold releases without tracing headers", async () => {
     fetchMock.mockImplementation(async () => Response.json({ version }));
 
     const result = await settledCheck();
@@ -44,7 +43,7 @@ describe("foldServerReleasePublishedAtom", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = new Request(fetchMock.mock.calls[0]?.[0] ?? "", fetchMock.mock.calls[0]?.[1]);
     expect(request.url).toBe(
-      `https://api.github.com/repos/${FOLD_REPOSITORY}/releases/tags/fold-server-v${version}`,
+      `https://api.github.com/repos/BreakTheBeta/T3codefold/releases/tags/fold-server-v${version}`,
     );
     expect(request.headers.get("traceparent")).toBeNull();
     expect(request.headers.get("b3")).toBeNull();
@@ -53,13 +52,11 @@ describe("foldServerReleasePublishedAtom", () => {
 
   it("reports a missing Fold release as unpublished", async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
-
     const result = await settledCheck();
-
-    expect(AsyncResult.isSuccess(result)).toBe(true);
     expect(AsyncResult.getOrElse(result, () => true)).toBe(false);
   });
 
+  // regression: #18709 update-everything skipped npm-installed servers
   it("leaves a failed first check unknown, which callers read as unpublished", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 

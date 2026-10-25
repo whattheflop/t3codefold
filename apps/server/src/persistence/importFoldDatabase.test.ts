@@ -316,8 +316,20 @@ describe("importFoldDatabase", () => {
             foldMigrationEntries.map(([migration_id, name]) => ({ migration_id, name })),
           );
           const counts = tableCounts(database);
+          const retiredV1Tables = new Set([
+            "projection_thread_activities",
+            "projection_turns",
+            "projection_thread_proposed_plans",
+            "projection_pending_approvals",
+            "projection_state",
+            "checkpoint_diff_blobs",
+          ]);
           for (const [table, count] of Object.entries(backup.counts)) {
-            assert.equal(counts[table], count, table);
+            if (retiredV1Tables.has(table)) {
+              assert.isUndefined(counts[table], table);
+            } else {
+              assert.equal(counts[table], count, table);
+            }
           }
           const sequences = Object.fromEntries(
             database

@@ -5,13 +5,11 @@ import {
   type MobileThemeVariables,
 } from "../../lib/mobileTheme";
 
-/** The bottom navigation bar keeps a visible tonal selection against its actual surface. */
-export function androidWorkspaceNavigationColors(colors: MobileThemeVariables) {
+export function androidWorkspaceNavigationColors(colors: MobileThemeVariables, rail: boolean) {
   const header = flattenThemeColor(colors["--color-header"], colors["--color-screen"]);
-  const containerColor = flattenThemeColor(
-    themeColorWithAlpha(colors["--color-header-foreground"], 0.05),
-    header,
-  );
+  const containerColor = rail
+    ? header
+    : flattenThemeColor(themeColorWithAlpha(colors["--color-header-foreground"], 0.05), header);
   const indicatorColor = themeColorWithContrast(
     flattenThemeColor(colors["--color-secondary"], containerColor),
     containerColor,

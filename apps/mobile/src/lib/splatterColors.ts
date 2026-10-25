@@ -6,14 +6,28 @@ import {
   parseOklch,
 } from "@t3tools/shared/splatterBackdrop";
 
-import { DEFAULT_MOBILE_THEME_ID, getMobileThemeColors, type MobileThemeId } from "./mobileTheme";
+import {
+  DEFAULT_MOBILE_THEME_ID,
+  getMobileThemeColors,
+  type MobileThemeId,
+  type MobileThemeVariables,
+} from "./mobileTheme";
 
 /** The three paint colours a theme gets when the user has not picked their own. */
 export function themeSplatterColors(
   themeId: MobileThemeId,
   appearance: "light" | "dark",
+  variables?: Pick<MobileThemeVariables, "--color-primary" | "--color-md-link">,
 ): readonly [string, string, string] {
-  // Material You has no fixed palette of its own to derive from.
+  // Android resolves Material You at runtime; its native colors include an alpha byte.
+  if (themeId === "material-you" && variables) {
+    return deriveSplatterColors(
+      hexToOklch(variables["--color-primary"].slice(0, 7)),
+      hexToOklch(variables["--color-md-link"].slice(0, 7)),
+      appearance,
+    );
+  }
+  // Before Android supplies system colors, use the same fallback as the theme provider.
   const colors = getMobileThemeColors(
     themeId === "material-you" ? DEFAULT_MOBILE_THEME_ID : themeId,
     appearance,

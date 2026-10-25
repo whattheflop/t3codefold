@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronRightIcon,
@@ -27,6 +27,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { useEnvironmentProviders } from "../../state/environments";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { randomUUID } from "../../lib/utils";
 import { getAppModelOptionsForInstance } from "../../modelSelection";
@@ -91,38 +92,32 @@ export function GladosSettingsPanel() {
 /** Worker model choices on one environment, keeping saved models that are no longer offered. */
 function useWorkerModelCatalog(environmentId: EnvironmentId, saved: ReadonlyArray<ModelSelection>) {
   const config = useServerConfigs().get(environmentId);
+  const providers = useEnvironmentProviders().get(environmentId);
   const settings = useEnvironmentSettings(environmentId);
-  const entries = useMemo(
-    () =>
-      config
-        ? sortProviderInstanceEntries(
-            applyProviderInstanceSettings(
-              deriveProviderInstanceEntries(config.providers),
-              config.settings,
-              null,
-            ),
-          )
-        : [],
-    [config],
-  );
-  const modelOptions = useMemo(
-    () =>
-      new Map(
-        entries.map((entry) => {
-          const options = getAppModelOptionsForInstance(settings, entry, null);
-          for (const model of saved.filter((model) => model.instanceId === entry.instanceId)) {
-            if (!options.some((option) => option.slug === model.model))
-              options.push({
-                slug: model.model,
-                name: model.model,
-                isCustom: false,
-                isUnavailable: true,
-              });
-          }
-          return [entry.instanceId, options];
-        }),
-      ),
-    [entries, settings, saved],
+  const entries =
+    config && providers
+      ? sortProviderInstanceEntries(
+          applyProviderInstanceSettings(
+            deriveProviderInstanceEntries(providers),
+            config.settings,
+            null,
+          ),
+        )
+      : [];
+  const modelOptions = new Map(
+    entries.map((entry) => {
+      const options = getAppModelOptionsForInstance(settings, entry, null);
+      for (const model of saved.filter((model) => model.instanceId === entry.instanceId)) {
+        if (!options.some((option) => option.slug === model.model))
+          options.push({
+            slug: model.model,
+            name: model.model,
+            isCustom: false,
+            isUnavailable: true,
+          });
+      }
+      return [entry.instanceId, options];
+    }),
   );
   const available = entries.flatMap((entry) =>
     isProviderInstancePickerReady(entry)
@@ -177,8 +172,6 @@ function WorkerModelPicker({
           instanceId={value.instanceId}
           models={entry.models}
           model={value.model}
-          prompt=""
-          onPromptChange={() => {}}
           modelOptions={value.options}
           allowPromptInjectedEffort={false}
           planModeEnabled={catalog.planModeEnabled}
@@ -309,13 +302,9 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
   const state = query.data;
   const role = state?.role;
   const brief = draft ?? role?.brief;
-  const saved = useMemo(
-    () =>
-      brief
-        ? [brief.workerModel, ...(brief.alternateWorkerModel ? [brief.alternateWorkerModel] : [])]
-        : [],
-    [brief],
-  );
+  const saved = brief
+    ? [brief.workerModel, ...(brief.alternateWorkerModel ? [brief.alternateWorkerModel] : [])]
+    : [];
   const catalog = useWorkerModelCatalog(environmentId, saved);
 
   const command = async (action: PitbossAction) => {
@@ -489,8 +478,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                 render={
                   <Button
                     size="sm"
-                    variant="ghost-muted"
-                    className="border border-dashed border-border"
+                    variant="outline"
                     disabled={busy || addableProjects.length === 0}
                   />
                 }

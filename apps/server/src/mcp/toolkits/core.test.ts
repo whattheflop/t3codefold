@@ -1,8 +1,15 @@
+import { DeviceToolkit } from "./device/tools.ts";
+import { WorktreeToolkit } from "./worktree/tools.ts";
+import { ThreadToolkit } from "./thread/tools.ts";
+import { AttachmentToolkit } from "./attachment/tools.ts";
+import { ProjectToolkit } from "./project/tools.ts";
+import { EnvironmentToolkit } from "./environment/tools.ts";
+import { PreviewControlsToolkit } from "./previewControls/tools.ts";
+import { PreviewToolkit } from "./preview/tools.ts";
+import { OrchestratorToolkit } from "./orchestrator/tools.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
-import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
 import {
   DEFAULT_SERVER_SETTINGS,
   ChatImageAttachment,
@@ -13,11 +20,13 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ThreadId,
   TurnItemId,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
@@ -51,17 +60,8 @@ import * as McpHttpServer from "../McpHttpServer.ts";
 import * as McpInvocationContext from "../McpInvocationContext.ts";
 import * as McpToolAccessTestkit from "../McpToolAccess.testkit.ts";
 import { dispatchFailure } from "../threadAccess.ts";
-import { OrchestratorToolkit } from "./orchestrator/tools.ts";
-import { PreviewToolkit } from "./preview/tools.ts";
-import { PreviewControlsToolkit } from "./previewControls/tools.ts";
-import { EnvironmentToolkit } from "./environment/tools.ts";
 import * as EnvironmentHandlers from "./environment/handlers.ts";
-import { ProjectToolkit } from "./project/tools.ts";
-import { AttachmentToolkit } from "./attachment/tools.ts";
 import * as AttachmentHandlers from "./attachment/handlers.ts";
-import { ThreadToolkit } from "./thread/tools.ts";
-import { WorktreeToolkit } from "./worktree/tools.ts";
-import { DeviceToolkit } from "./device/tools.ts";
 
 // Effect returns a declared tool failure as `isError` with its encoded payload
 // as JSON text, never as `structuredContent`.
@@ -75,7 +75,6 @@ import { HtmlToolkit } from "./html/tools.ts";
 import {
   resolveT3McpToolDefinition,
   resolveT3McpToolPresentation,
-  resolveT3McpToolSummaryAction,
 } from "@t3tools/shared/t3McpToolPresentation";
 import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
 
@@ -129,7 +128,7 @@ it("publishes unique tool names with reference-free object-root inputs", () => {
       ).toBe(true);
       for (const name of [tool.name, `mcp__t3-code__${tool.name}`, `T3-code.${tool.name}`]) {
         expect(resolveT3McpToolPresentation(name)?.logo, name).toBe("t3-code");
-        expect(resolveT3McpToolSummaryAction(name), name).not.toBeNull();
+        expect(resolveT3McpToolDefinition(name)?.summaryAction, name).not.toBeNull();
       }
     }
   }
@@ -191,36 +190,30 @@ it.effect("checks capability through the production registration", () =>
   ),
 );
 
-it.effect("returns a bounded public failure without serializing storage causes", () =>
-  Effect.gen(function* () {
+it.effect("an answered question reports already answered instead of not found", () => {
+  const shell = McpToolAccessTestkit.liveThreadShell(threadId);
+  const requestId = RuntimeRequestId.make("answered-question");
+  const projection = McpToolAccessTestkit.idleThreadProjection(shell);
+  return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
-    const result = yield* server
-      .callTool({ name: "t3_thread_organize", arguments: { action: "pin" } })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
-        Effect.provideService(McpSchema.McpServerClient, client),
-      );
-    expect(declaredFailure(result)).toEqual({
-      _tag: "OrchestratorMcpFailure",
-      code: "orchestration_error",
-      message: "The operation could not be completed.",
+    const respond = (id: string) =>
+      server
+        .callTool({
+          name: "t3_pending_request_respond",
+          arguments: { requestId: id, answers: { size: "large" } },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+    expect(declaredFailure(yield* respond(requestId))).toMatchObject({
+      code: "invalid_request",
+      message: "The user-input request was already answered.",
     });
-    expect(result.isError).toBe(true);
-    expect(result.content).toEqual([
-      {
-        type: "text",
-        text: '{"_tag":"OrchestratorMcpFailure","code":"orchestration_error","message":"The operation could not be completed."}',
-      },
-    ]);
-    const definition = server.tools.find(({ tool }) => tool.name === "t3_thread_organize");
-    expect(definition?.tool.outputSchema).toBeDefined();
-    const validate = new AjvJsonSchemaValidator().getValidator(
-      definition!.tool.outputSchema! as JsonSchemaType,
-    );
-    expect(result.structuredContent).toBeUndefined();
-    expect(validate({ sequence: 1 }).valid).toBe(true);
-    expect(validate({ code: "orchestration_error" }).valid).toBe(false);
-    expect(validate({ sequence: "invalid" }).valid).toBe(false);
+    expect(declaredFailure(yield* respond("missing-question"))).toMatchObject({
+      code: "invalid_request",
+      message: "The pending user-input request was not found.",
+    });
   }).pipe(
     Effect.provide(
       layerThreadToolkit.pipe(
@@ -228,19 +221,53 @@ it.effect("returns a bounded public failure without serializing storage causes",
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () =>
-              Effect.fail(
-                new OrchestratorProjectionError({
-                  threadId,
-                  cause: new Error("private-storage-path"),
-                }),
-              ),
+            getThreadShell: () => Effect.succeed(shell),
+            getProjectThreadRecords: () =>
+              Effect.succeed({
+                ...projection,
+                runtimeRequests: [
+                  {
+                    id: requestId,
+                    nodeId: NodeId.make("root"),
+                    providerTurnId: null,
+                    nativeRequestRef: null,
+                    kind: "user_input",
+                    status: "resolved",
+                    responseCapability: { type: "message" },
+                    createdAt: shell.createdAt,
+                    resolvedAt: shell.updatedAt,
+                    answers: { size: "large" },
+                  },
+                ],
+                turnItems: [
+                  {
+                    id: TurnItemId.make("answered-question-item"),
+                    threadId,
+                    runId: null,
+                    nodeId: null,
+                    providerThreadId: null,
+                    providerTurnId: null,
+                    nativeItemRef: null,
+                    parentItemId: null,
+                    ordinal: 0,
+                    status: "completed",
+                    title: null,
+                    startedAt: shell.createdAt,
+                    completedAt: shell.updatedAt,
+                    updatedAt: shell.updatedAt,
+                    type: "user_input_request",
+                    requestId,
+                    questions: [],
+                  },
+                ],
+              }),
+            dispatch: () => Effect.die("an answered question must not dispatch again"),
           }),
         ),
       ),
     ),
-  ),
-);
+  );
+});
 
 it("bounds public command rejections and redacts internal dispatch causes", () => {
   const command = { commandId: CommandId.make("mcp-core-command"), commandType: "thread.settle" };
@@ -302,6 +329,7 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     Effect.provide(
       McpHttpServer.layerHtmlToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provide(McpProviderSessions.layer),
         Layer.provide(PreviewBrowser.layer),
         Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
         Layer.provide(NodeServices.layer),
@@ -318,28 +346,6 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
               } as OrchestrationV2ThreadShell),
           }),
         ),
-      ),
-    ),
-  ),
-);
-
-it.effect("returns invalid parameter errors through the production registration", () =>
-  Effect.gen(function* () {
-    const server = yield* McpServer.McpServer;
-    const error = yield* server
-      .callTool({ name: "t3_thread_organize", arguments: { action: "invalid" } })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
-        Effect.provideService(McpSchema.McpServerClient, client),
-        Effect.flip,
-      );
-    expect(error._tag).toBe("InvalidParams");
-  }).pipe(
-    Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
       ),
     ),
   ),

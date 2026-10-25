@@ -23,7 +23,7 @@ const handlers = {
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
-      return yield* service.capabilities(scope);
+      return yield* service.capabilities(scope, input);
     }).pipe(routeIfRemote("orchestrator_capabilities", input, OrchestratorMcpCapabilitiesResult)),
   ),
   delegate_task: McpToolAccess.actsAsCaller((input) =>

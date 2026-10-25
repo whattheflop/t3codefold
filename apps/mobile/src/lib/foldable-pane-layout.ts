@@ -181,6 +181,7 @@ export function deriveFoldWorkspacePaneLayout(input: {
 
   if (!supportsAuxiliaryPane) {
     return {
+      primarySidebarWhenExpanded: input.primarySidebarPreferredVisible,
       primarySidebarVisible: false,
       primarySidebarSuppressedByAuxiliary: false,
       contentPaneWidth: viewportWidth,
@@ -194,6 +195,7 @@ export function deriveFoldWorkspacePaneLayout(input: {
 
   if (auxiliaryPaneVisible && input.auxiliaryPaneMaximized === true) {
     return {
+      primarySidebarWhenExpanded: input.primarySidebarPreferredVisible,
       primarySidebarVisible: false,
       primarySidebarSuppressedByAuxiliary: sidebarPreferred,
       contentPaneWidth: 0,
@@ -218,6 +220,7 @@ export function deriveFoldWorkspacePaneLayout(input: {
     : besideSidebarWidth;
 
   return {
+    primarySidebarWhenExpanded: input.primarySidebarPreferredVisible,
     primarySidebarVisible,
     primarySidebarSuppressedByAuxiliary,
     contentPaneWidth: Math.max(0, availableWidth - (auxiliaryPaneVisible ? auxiliaryPaneWidth : 0)),

@@ -1,3 +1,4 @@
+import { useEnvironmentProviders } from "../../state/environments";
 import { withDefaultVoiceKeybindings } from "@t3tools/shared/keybindings";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { resolveShortcutCommand } from "../../keybindings";
@@ -6,7 +7,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -74,7 +74,7 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
   const context = useAtomCommand(realtimeVoiceEnvironment.appendRealtimeVoiceContext, {
     reportFailure: false,
   });
-  const workspace = useMemo(
+  const [workspace] = useState(
     () =>
       new VoiceWorkspace(
         {
@@ -120,13 +120,9 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
         },
         readPreferences(),
       ),
-    [start, stop, list, context],
   );
   const serverKeybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const keybindings = useMemo(
-    () => withDefaultVoiceKeybindings(serverKeybindings),
-    [serverKeybindings],
-  );
+  const keybindings = withDefaultVoiceKeybindings(serverKeybindings);
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
@@ -144,30 +140,26 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
   const state = useSyncExternalStore(workspace.subscribe, workspace.getSnapshot);
   const shells = useThreadShells();
   const configs = useServerConfigs();
-  const targets = useMemo(
-    () =>
-      shells
-        .filter(
-          (shell) =>
-            !shell.archivedAt &&
-            !shell.deletedAt &&
-            configs
-              .get(shell.environmentId)
-              ?.providers.some(
-                (provider) =>
-                  provider.instanceId === shell.providerInstanceId && provider.driver === "codex",
-              ),
-        )
-        .map((shell) => ({
-          environmentId: shell.environmentId,
-          threadId: shell.id,
-          title: shell.title,
-          enhancedVoice:
-            configs.get(shell.environmentId)?.environment.capabilities.realtimeVoiceControls ===
-            true,
-        })),
-    [shells, configs],
-  );
+  const providersByEnvironment = useEnvironmentProviders();
+  const targets = shells
+    .filter(
+      (shell) =>
+        !shell.archivedAt &&
+        !shell.deletedAt &&
+        providersByEnvironment
+          .get(shell.environmentId)
+          ?.some(
+            (provider) =>
+              provider.instanceId === shell.providerInstanceId && provider.driver === "codex",
+          ),
+    )
+    .map((shell) => ({
+      environmentId: shell.environmentId,
+      threadId: shell.id,
+      title: shell.title,
+      enhancedVoice:
+        configs.get(shell.environmentId)?.environment.capabilities.realtimeVoiceControls === true,
+    }));
   useEffect(() => workspace.setTargets(targets), [workspace, targets]);
   const subscription = useAtomValue(
     state.target &&

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createThreadRibbonMirror } from "./threadRibbonMirrors";
 import { observeResize } from "../../lib/observeResize";
 
@@ -91,12 +91,12 @@ interface MirroredRow {
  * or changes shape.
  */
 export function useThreadRibbon({
-  scroller,
+  getScroller,
   threadKey,
   maxColumns,
   composerInset,
 }: {
-  scroller: HTMLElement | null;
+  getScroller: () => HTMLElement | null;
   /** A new thread starts a fresh ribbon. */
   threadKey: string | null;
   maxColumns: number | null;
@@ -104,8 +104,11 @@ export function useThreadRibbon({
 }) {
   const [ribbon, setRibbon] = useState<ThreadRibbon | null>(null);
   const endRef = useRef<number | null>(null);
+  // A thread switch must tear down the ribbon even when it reuses the same scroller.
+  const target = { getScroller, threadKey };
 
   useLayoutEffect(() => {
+    const scroller = target.getScroller();
     const content = scroller?.firstElementChild;
     // A previous run's cleanup already cleared the ribbon.
     if (!scroller || maxColumns === null || !(content instanceof HTMLElement)) return;
@@ -416,14 +419,15 @@ export function useThreadRibbon({
         scroller.style.removeProperty(name);
       }
     };
-  }, [composerInset, maxColumns, scroller, threadKey]);
+  }, [composerInset, maxColumns, target]);
 
   /** At the ribbon's end, or undefined when the ribbon is off. */
-  const ribbonIsAtEnd = useCallback(() => {
+  const ribbonIsAtEnd = () => {
+    const scroller = getScroller();
     const end = endRef.current;
     if (end === null || !scroller) return undefined;
     return scroller.scrollTop >= end - 2;
-  }, [scroller]);
+  };
 
   return { ribbon, ribbonIsAtEnd };
 }

@@ -1,4 +1,5 @@
 import { View } from "react-native";
+import { PullRequestGlyph } from "../../../pull-requests/pullRequestGlyphs";
 
 import {
   MAX_THEME_BACKDROP_AMOUNT,
@@ -6,10 +7,8 @@ import {
   MAX_THEME_BACKDROP_SEED,
   MIN_THEME_BACKDROP_AMOUNT,
   MIN_THEME_BACKDROP_INTENSITY,
-  type ThemeBackdropScope,
 } from "@t3tools/contracts";
 import { SettingsActionRow } from "../../components/SettingsActionRow";
-import { SettingsChoiceRow } from "../../components/SettingsChoiceRow";
 import { SettingsSection } from "../../components/SettingsSection";
 import { SettingsSwitchRow } from "../../components/SettingsSwitchRow";
 import { FontSizeSliderRow } from "../components/FontSizeSliderRow";
@@ -21,19 +20,6 @@ import {
 } from "../../../../lib/splatterColors";
 import { useAppearancePreferences } from "../AppearancePreferencesProvider";
 
-const BACKDROP_SCOPE_CHOICES: ReadonlyArray<{
-  readonly scope: ThemeBackdropScope;
-  readonly label: string;
-  readonly description: string;
-}> = [
-  {
-    scope: "featured",
-    label: "Cyberpunk & Codex",
-    description: "The themes that ship with it.",
-  },
-  { scope: "all", label: "Every theme", description: "In each theme's own colors." },
-];
-
 const SPLATTER_COLOR_ROLES = ["Lead", "Second", "Accent"] as const;
 
 /** Fold's splatter backdrop settings, shown under the theme picker. */
@@ -42,8 +28,6 @@ export function SplatterBackdropSection() {
     isReady,
     themeBackdropEnabled,
     setThemeBackdropEnabled,
-    themeBackdropScope,
-    setThemeBackdropScope,
     themeBackdropIntensity,
     setThemeBackdropIntensity,
     themeBackdropAmount,
@@ -58,6 +42,7 @@ export function SplatterBackdropSection() {
     setThemeBackdropColors,
     themeId,
     themeAppearance,
+    themeVariables,
   } = useAppearancePreferences();
 
   return (
@@ -66,22 +51,12 @@ export function SplatterBackdropSection() {
         disabled={!isReady}
         icon="paintbrush"
         label="Show splatter"
+        subtitle="Use the active theme's colors on every theme."
         onValueChange={setThemeBackdropEnabled}
         value={themeBackdropEnabled}
       />
       {themeBackdropEnabled ? (
         <>
-          {BACKDROP_SCOPE_CHOICES.map((choice) => (
-            <SettingsChoiceRow
-              key={choice.scope}
-              label={choice.label}
-              description={choice.description}
-              selected={themeBackdropScope === choice.scope}
-              separated
-              disabled={!isReady}
-              onPress={() => setThemeBackdropScope(choice.scope)}
-            />
-          ))}
           <FontSizeSliderRow
             disabled={!isReady}
             icon="slider.horizontal.3"
@@ -113,7 +88,7 @@ export function SplatterBackdropSection() {
           />
           <SettingsSwitchRow
             disabled={!isReady}
-            icon="arrow.triangle.merge"
+            icon={PullRequestGlyph.merged}
             label="Dynamic splatter"
             subtitle="A splat per merged PR, in its project's color. Wipes clean at 6am."
             onValueChange={setThemeBackdropDynamic}
@@ -125,7 +100,9 @@ export function SplatterBackdropSection() {
             label="Custom colors"
             // Start from what is on screen, not an arbitrary palette.
             onValueChange={(custom) =>
-              setThemeBackdropColors(custom ? themeSplatterColors(themeId, themeAppearance) : null)
+              setThemeBackdropColors(
+                custom ? themeSplatterColors(themeId, themeAppearance, themeVariables) : null,
+              )
             }
             value={themeBackdropColors !== null}
           />
@@ -167,7 +144,9 @@ export function SplatterBackdropSection() {
           <SplatterPatternStrip
             disabled={!isReady}
             options={{
-              colors: themeBackdropColors ?? themeSplatterColors(themeId, themeAppearance),
+              colors:
+                themeBackdropColors ??
+                themeSplatterColors(themeId, themeAppearance, themeVariables),
               appearance: themeAppearance,
               intensity: themeBackdropIntensity / 100,
               amount: themeBackdropAmount / 100,

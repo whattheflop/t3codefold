@@ -57,10 +57,11 @@ export const FoldClientSettingsFields = {
   threadWrapMaxColumns: ThreadWrapMaxColumns.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_WRAP_MAX_COLUMNS)),
   ),
-  /** Paint-splatter backdrop behind the conversation, on themes that ship one. */
+  /** Paint-splatter backdrop behind the conversation on every theme. */
   themeBackdropEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /** Retained so settings from older Fold clients still round-trip. */
   themeBackdropScope: ThemeBackdropScope.pipe(
-    Schema.withDecodingDefault(Effect.succeed("featured" as const)),
+    Schema.withDecodingDefault(Effect.succeed("all" as const)),
   ),
   /** Null follows the active theme's accent colours. */
   themeBackdropColors: Schema.NullOr(ThemeBackdropColors).pipe(

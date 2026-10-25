@@ -23,12 +23,6 @@ export const FOLD_SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["splat paint neon background texture grain cyberpunk codex theme artwork"],
   },
   {
-    id: "theme-backdrop-scope",
-    title: "Show splatter on",
-    to: "/settings/appearance",
-    searchTerms: ["splat splatter every all themes cyberpunk codex"],
-  },
-  {
     id: "theme-backdrop-colors",
     title: "Splatter colors",
     to: "/settings/appearance",

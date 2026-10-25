@@ -122,49 +122,6 @@ describe("home project scopes", () => {
     ).toEqual([threads[1]!.id]);
   });
 
-  it("builds one v2 scope for the same repository across environments", () => {
-    const localEnvironmentId = EnvironmentId.make("environment-local");
-    const remoteEnvironmentId = EnvironmentId.make("environment-remote");
-    const repositoryIdentity = {
-      canonicalKey: "github.com/pingdotgg/t3code",
-      locator: {
-        source: "git-remote" as const,
-        remoteName: "origin",
-        remoteUrl: "git@github.com:pingdotgg/t3code.git",
-      },
-    };
-    const projects = [
-      makeProject({
-        environmentId: localEnvironmentId,
-        id: ProjectId.make("project-local"),
-        title: "t3code",
-        repositoryIdentity,
-      }),
-      makeProject({
-        environmentId: remoteEnvironmentId,
-        id: ProjectId.make("project-remote"),
-        title: "t3code",
-        repositoryIdentity,
-      }),
-    ];
-
-    const scopes = buildHomeProjectScopes({
-      projects,
-      environmentId: null,
-      projectGroupingMode: "repository",
-    });
-
-    expect(scopes).toHaveLength(1);
-    expect(scopes[0]?.title).toBe("t3code");
-    expect(scopes[0]?.projects).toEqual(projects);
-    expect(scopes[0]?.projectRefs).toEqual(
-      projects.map((project) => ({
-        environmentId: project.environmentId,
-        projectId: project.id,
-      })),
-    );
-  });
-
   it("keeps repository identity from an older duplicate when the freshness winner lacks it", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");

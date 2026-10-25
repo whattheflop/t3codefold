@@ -73,6 +73,8 @@ interface AppearancePreferencesContextValue extends ThemeBackdropPreferences {
   readonly setTerminalFontSize: (value: number | null) => void;
   readonly setCodeFontSize: (value: number | null) => void;
   readonly setCodeWordBreak: (value: boolean) => void;
+  readonly mathRenderingEnabled: boolean;
+  readonly setMathRenderingEnabled: (value: boolean) => void;
 }
 
 const AppearancePreferencesContext = createContext<AppearancePreferencesContextValue | null>(null);
@@ -270,6 +272,11 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   );
 
   const themeBackdrop = useThemeBackdropPreferences(storedPreferences, updatePreferences);
+  const mathRenderingEnabled = storedPreferences?.mathRenderingEnabled === true;
+  const setMathRenderingEnabled = useCallback(
+    (value: boolean) => updatePreferences({ mathRenderingEnabled: value }),
+    [updatePreferences],
+  );
 
   const value = useMemo(
     (): AppearancePreferencesContextValue => ({
@@ -292,6 +299,8 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       setCodeFontSize,
       setCodeWordBreak,
       ...themeBackdrop,
+      mathRenderingEnabled,
+      setMathRenderingEnabled,
     }),
     [
       appearance,
@@ -312,6 +321,8 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
       setCodeFontSize,
       setCodeWordBreak,
       themeBackdrop,
+      mathRenderingEnabled,
+      setMathRenderingEnabled,
     ],
   );
 

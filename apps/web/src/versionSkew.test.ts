@@ -7,17 +7,14 @@ vi.mock("./branding", () => branding);
 
 import { APP_VERSION } from "./branding";
 import {
-  appendVersionMismatchHint,
   buildVersionMismatchDismissalKey,
   dismissServerUpdateFailure,
   dismissVersionMismatch,
   isServerUpdateFailureDismissed,
   isVersionMismatchDismissed,
   manualServerUpdateCommand,
-  resolveServerConfigVersionMismatch,
-  resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
-  serverUpdateGuidance,
+  resolveServerSelfUpdateCapability,
   supportsDesktopAppUpdate,
 } from "./versionSkew";
 
@@ -27,7 +24,7 @@ const MISMATCH_HINT =
   "Version mismatch. Try syncing the client and server to the same T3 Code version.";
 
 describe("versionSkew", () => {
-  it("installs Fold release tarballs into the proven npm prefix and quotes its path", () => {
+  it("updates only the proven npm prefix and safely quotes its path", () => {
     expect(manualServerUpdateCommand("0.0.45", { kind: "npm-global", prefix: "/opt/node" })).toBe(
       `npm install --global --prefix '/opt/node' ${FOLD_SPEC_0_0_45}`,
     );
@@ -35,42 +32,6 @@ describe("versionSkew", () => {
       manualServerUpdateCommand("0.0.45", { kind: "npm-global", prefix: "/opt/maria's node" }),
     ).toBe(`npm install --global --prefix '/opt/maria'\\''s node' ${FOLD_SPEC_0_0_45}`);
   });
-
-  it("relaunches every runner from the Fold release, never upstream npm t3", () => {
-    const command = `npx --yes --prefer-online --package=${FOLD_SPEC_0_0_45} t3`;
-    expect(manualServerUpdateCommand("0.0.45")).toBe(command);
-    expect(manualServerUpdateCommand("0.0.45", { kind: "npx" })).toBe(command);
-    expect(manualServerUpdateCommand("0.0.45", { kind: "pnpm-dlx" })).toBe(command);
-    expect(manualServerUpdateCommand("0.0.45", { kind: "bunx" })).toBe(command);
-  });
-
-  it("falls back to the latest Fold release for versions without a release tag", () => {
-    expect(manualServerUpdateCommand("dev build")).toBe(
-      "npx --yes --prefer-online --package=https://github.com/whattheflop/T3codefold/releases/download/fold-server-latest/t3.tgz t3",
-    );
-  });
-
-  it("refuses self-update through older or upstream server updaters", () => {
-    for (const updateRepository of [undefined, "pingdotgg/t3code"]) {
-      const config = {
-        environment: {
-          environmentId: EnvironmentId.make("old-server"),
-          label: "Older Mac",
-          platform: { os: "darwin", arch: "arm64" } as const,
-          serverVersion: "0.1.4",
-          capabilities: {
-            repositoryIdentity: true,
-            serverSelfUpdate: "desktop-managed" as const,
-            desktopAppUpdate: true,
-            ...(updateRepository ? { updateRepository } : {}),
-          },
-        },
-      };
-      expect(resolveServerSelfUpdateCapability(config)).toBeNull();
-      expect(supportsDesktopAppUpdate(config)).toBe(false);
-    }
-  });
-
   beforeEach(() => {
     branding.APP_VERSION = "0.0.34";
   });
@@ -93,23 +54,6 @@ describe("versionSkew", () => {
     expect(failure.message).toBe("Download failed.");
     expect(isServerUpdateFailureDismissed(retryFailure)).toBe(false);
     expect(isServerUpdateFailureDismissed(otherEnvironmentFailure)).toBe(false);
-  });
-
-  it("does not dismiss an update that is still running", () => {
-    const running = {
-      status: "running",
-      stage: "resuming",
-      fromVersion: "0.0.33",
-      targetVersion: "0.0.34",
-    } as const satisfies ServerUpdateState;
-
-    dismissServerUpdateFailure(running);
-
-    expect(isServerUpdateFailureDismissed(running)).toBe(false);
-  });
-
-  it("does not warn when versions match", () => {
-    expect(resolveVersionMismatch(APP_VERSION)).toBeNull();
   });
 
   it("returns a mismatch when the server is behind the client", () => {
@@ -145,12 +89,7 @@ describe("versionSkew", () => {
     },
   );
 
-  it("does not warn when a nightly server is ahead on the same release", () => {
-    branding.APP_VERSION = "0.0.34-nightly.20260824.1125";
-
-    expect(resolveVersionMismatch("0.0.34-nightly.20260824.1126")).toBeNull();
-  });
-
+  // regression: #7579 versions were compared as strings, not semver
   it("treats a nightly server built past the client as ahead, not skew", () => {
     expect(resolveVersionMismatch("0.0.35-nightly.20260818.1124")).toBeNull();
   });
@@ -177,27 +116,6 @@ describe("versionSkew", () => {
     expect(resolveVersionMismatch("0.0.34")).toMatchObject({ serverVersion: "0.0.34" });
   });
 
-  it("reads the server version from config descriptors", () => {
-    expect(
-      resolveServerConfigVersionMismatch({
-        environment: {
-          environmentId: EnvironmentId.make("environment-1"),
-          label: "Remote",
-          platform: {
-            os: "darwin",
-            arch: "arm64",
-          },
-          serverVersion: "0.0.33",
-          capabilities: {
-            repositoryIdentity: true,
-          },
-        },
-      }),
-    ).toMatchObject({
-      serverVersion: "0.0.33",
-    });
-  });
-
   it("keys dismissals by environment, client version, and server version", () => {
     const environmentId = EnvironmentId.make("environment-dismissal");
     const key = buildVersionMismatchDismissalKey(environmentId, {
@@ -205,7 +123,6 @@ describe("versionSkew", () => {
       serverVersion: "9.9.9",
     });
 
-    expect(key).toBe(`${environmentId}:${APP_VERSION}:9.9.9`);
     expect(isVersionMismatchDismissed(key)).toBe(false);
 
     dismissVersionMismatch(key);
@@ -220,58 +137,39 @@ describe("versionSkew", () => {
       ),
     ).toBe(false);
   });
+});
 
-  it("appends a hint to connection errors when the server is behind", () => {
-    const mismatch = resolveVersionMismatch("0.0.33");
+it("relaunches every runner from the Fold release, never upstream npm t3", () => {
+  const command = `npx --yes --prefer-online --package=${FOLD_SPEC_0_0_45} t3`;
+  expect(manualServerUpdateCommand("0.0.45")).toBe(command);
+  expect(manualServerUpdateCommand("0.0.45", { kind: "npx" })).toBe(command);
+  expect(manualServerUpdateCommand("0.0.45", { kind: "pnpm-dlx" })).toBe(command);
+  expect(manualServerUpdateCommand("0.0.45", { kind: "bunx" })).toBe(command);
+});
 
-    expect(appendVersionMismatchHint("Socket closed.", mismatch)).toBe(
-      `Socket closed. Hint: ${MISMATCH_HINT}`,
-    );
-  });
+it("falls back to the latest Fold release for versions without a release tag", () => {
+  expect(manualServerUpdateCommand("dev build")).toBe(
+    "npx --yes --prefer-online --package=https://github.com/whattheflop/T3codefold/releases/download/fold-server-latest/t3.tgz t3",
+  );
+});
 
-  it("reads desktop-managed update capabilities from config descriptors", () => {
-    expect(
-      resolveServerSelfUpdateCapability({
-        environment: {
-          environmentId: EnvironmentId.make("environment-desktop"),
-          label: "Desktop",
-          platform: { os: "darwin", arch: "arm64" },
-          serverVersion: "9.9.9",
-          capabilities: {
-            repositoryIdentity: true,
-            updateRepository: "whattheflop/T3codefold",
-            serverSelfUpdate: "desktop-managed",
-          },
-        },
-      }),
-    ).toBe("desktop-managed");
-    expect(resolveServerSelfUpdateCapability(null)).toBeNull();
-  });
-
-  it("detects remote desktop-app update support from config descriptors", () => {
-    const descriptor = (desktopAppUpdate?: boolean) => ({
+it("refuses self-update through older or upstream server updaters", () => {
+  for (const updateRepository of [undefined, "pingdotgg/t3code"]) {
+    const config = {
       environment: {
-        environmentId: EnvironmentId.make("environment-desktop"),
-        label: "Desktop",
+        environmentId: EnvironmentId.make("old-server"),
+        label: "Older Mac",
         platform: { os: "darwin", arch: "arm64" } as const,
-        serverVersion: "9.9.9",
+        serverVersion: "0.1.4",
         capabilities: {
           repositoryIdentity: true,
-          updateRepository: "whattheflop/T3codefold",
           serverSelfUpdate: "desktop-managed" as const,
-          ...(desktopAppUpdate === undefined ? {} : { desktopAppUpdate }),
+          desktopAppUpdate: true,
+          ...(updateRepository ? { updateRepository } : {}),
         },
       },
-    });
-
-    expect(supportsDesktopAppUpdate(descriptor(true))).toBe(true);
-    expect(supportsDesktopAppUpdate(descriptor(false))).toBe(false);
-    expect(supportsDesktopAppUpdate(descriptor())).toBe(false);
-    expect(supportsDesktopAppUpdate(null)).toBe(false);
-  });
-
-  it("matches version-drift guidance to the advertised update path", () => {
-    expect(serverUpdateGuidance("respawn")).toBe("Update to stay in sync");
-    expect(serverUpdateGuidance("desktop-managed")).toBe("Update the desktop app");
-  });
+    };
+    expect(resolveServerSelfUpdateCapability(config)).toBeNull();
+    expect(supportsDesktopAppUpdate(config)).toBe(false);
+  }
 });

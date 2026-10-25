@@ -220,10 +220,10 @@ export function PitbossPanel(props: {
   );
   const needsYou = (task: PitbossTask) => workNeedsYou(task, state.awaitingApproval);
   const attention = state.tasks.filter(needsYou);
-  const openThread = (threadId: ThreadId, environmentId = props.environmentId) =>
+  const openThread = (threadId: ThreadId, environmentId?: EnvironmentId) =>
     void navigate({
       to: "/$environmentId/$threadId",
-      params: { environmentId, threadId },
+      params: { environmentId: environmentId ?? props.environmentId, threadId },
     });
   const workList = (
     <>

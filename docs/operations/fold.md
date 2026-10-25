@@ -9,8 +9,9 @@ upstream's procedures; this page overrides them for this repository. Syncing wit
 The fork runs no CI; its test workflows are disabled in GitHub. Instead
 [pre-push.ts](../../scripts/pre-push.ts) runs on every `git push` for the workspaces the pushed
 commits change and the workspaces that depend on them: format on the changed files, lint on the
-changed lines, typecheck, and tests. Unchanged packages replay their last passing result from the
-`vp run --cache` task cache in `node_modules/.vite/task-cache`, so it stays fast after the first
+changed lines, typecheck, and tests. Web, SSH, and packaging-script tests run uncached because the task runner's instrumentation
+interferes with browser mock loading, native shell behavior, and filesystem identity. Other unchanged packages replay their last passing
+result from the `vp run --cache` task cache in `node_modules/.vite/task-cache`, so it stays fast after the first
 run in a checkout. The cache is per checkout; a new worktree warms its own.
 
 - Server tests are not gated yet: the suite takes over half an hour and still has failures
