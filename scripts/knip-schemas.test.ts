@@ -14,7 +14,7 @@ const preprocessor = NodePath.join(import.meta.dirname, "knip-schemas.ts");
 it("allows types and schemas through the real Knip CLI without hiding runtime or file findings", () => {
   // Outside the package, so the test leaves no files behind for task caching to trip on; the
   // linked node_modules gives it the same Effect installation as the scripts.
-  const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "knip-test-"));
+  const cwd = NodeFS.realpathSync(NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "knip-test-")));
   NodeFS.symlinkSync(
     NodePath.join(import.meta.dirname, "node_modules"),
     NodePath.join(cwd, "node_modules"),
