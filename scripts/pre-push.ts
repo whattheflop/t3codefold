@@ -360,6 +360,7 @@ function main() {
   // Cache instrumentation breaks browser mock imports, native shell behavior, and real path identity.
   const needsNativeProcess = (name: string) =>
     name === "@t3tools/web" ||
+    name === "@t3tools/desktop" ||
     name === "@t3tools/ssh" ||
     name === "@t3tools/scripts" ||
     name === "@t3tools/task-cache";
