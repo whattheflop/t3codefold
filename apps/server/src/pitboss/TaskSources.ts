@@ -69,8 +69,16 @@ export async function readSourcePage(
   if (!["http:", "https:"].includes(base.protocol) || base.username || base.password)
     throw new Error("Use an HTTP(S) tracker URL without embedded credentials.");
   const observedAt = DateTime.formatIso(DateTime.nowUnsafe());
+  const credential = token.trim();
+  // Linear personal API keys use the raw key; only OAuth tokens use Bearer.
+  const linearKey = credential.replace(/^Bearer\s+/i, "");
   const headers = {
-    Authorization: /^(Bearer|Basic) /.test(token) ? token : `Bearer ${token}`,
+    Authorization:
+      config.kind === "linear" && linearKey.startsWith("lin_api_")
+        ? linearKey
+        : /^(Bearer|Basic) /i.test(credential)
+          ? credential
+          : `Bearer ${credential}`,
     "Content-Type": "application/json",
   };
   let url: URL;

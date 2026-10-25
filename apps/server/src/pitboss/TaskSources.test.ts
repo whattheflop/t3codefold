@@ -13,8 +13,9 @@ const config: PitbossSourceConfig = {
 };
 
 it("limits Vikunja observations to the selected project and preserves source completion", async () => {
-  const fetcher: NonNullable<Parameters<typeof readSourcePage>[3]> = async (url) => {
+  const fetcher: NonNullable<Parameters<typeof readSourcePage>[3]> = async (url, init) => {
     expect(String(url)).toContain("project_id+%3D+2");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-token");
     return Response.json([
       { id: 1, project_id: 2, title: "Selected", description: "Outcome", done: true, priority: 3 },
       { id: 2, project_id: 3, title: "Outside scope", done: false, priority: 0 },
@@ -30,6 +31,7 @@ it("limits Vikunja observations to the selected project and preserves source com
 it("uses Jira's pagination token without interpreting its workflow as T3 acceptance", async () => {
   const fetcher: NonNullable<Parameters<typeof readSourcePage>[3]> = async (_url, init) => {
     expect(JSON.parse(String(init?.body)).nextPageToken).toBe("page-two");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Basic test");
     return Response.json({
       issues: [
         {
@@ -88,4 +90,28 @@ it("fails explicitly on expired credentials without echoing them", async () => {
   await expect(readSourcePage(config, "secret-not-for-errors", null, fetcher)).rejects.toThrow(
     "HTTP 401",
   );
+});
+
+it.each([
+  ["lin_api_test", "lin_api_test"],
+  ["  lin_api_test\n", "lin_api_test"],
+  ["Bearer lin_api_test", "lin_api_test"],
+  ["oauth-test-token", "Bearer oauth-test-token"],
+  ["Bearer oauth-test-token", "Bearer oauth-test-token"],
+])("authenticates Linear with %j", async (token, authorization) => {
+  const fetcher: NonNullable<Parameters<typeof readSourcePage>[3]> = async (_url, init) => {
+    if (new Headers(init?.headers).get("Authorization") !== authorization)
+      return new Response(null, { status: 400 });
+    return Response.json({
+      data: {
+        issues: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+  };
+  await expect(
+    readSourcePage({ ...config, kind: "linear" }, token, null, fetcher),
+  ).resolves.toEqual({ observations: [], nextCursor: null });
 });
