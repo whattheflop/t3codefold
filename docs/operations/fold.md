@@ -9,7 +9,7 @@ upstream's procedures; this page overrides them for this repository. Syncing wit
 The fork runs no CI; its test workflows are disabled in GitHub. Instead
 [pre-push.ts](../../scripts/pre-push.ts) runs on every `git push` for the workspaces the pushed
 commits change and the workspaces that depend on them: format on the changed files, lint on the
-changed lines, typecheck, and tests. Web, SSH, and packaging-script tests run uncached because the task runner's instrumentation
+changed lines, typecheck, and tests. Web, SSH, task-cache, and packaging-script tests run uncached because the task runner's instrumentation
 interferes with browser mock loading, native shell behavior, and filesystem identity. Other unchanged packages replay their last passing
 result from the `vp run --cache` task cache in `node_modules/.vite/task-cache`, so it stays fast after the first
 run in a checkout. The cache is per checkout; a new worktree warms its own.
@@ -21,7 +21,7 @@ run in a checkout. The cache is per checkout; a new worktree warms its own.
 - Typecheck covers the workspaces listed in `TYPECHECK_GATED`; add a workspace there once it
   typechecks cleanly.
 - Checks run against the working tree, so push the checked-out branch.
-- SSH and packaging-script tests run without task caching because its instrumentation
+- SSH, task-cache, and packaging-script tests run without task caching because its instrumentation
   replaces `/bin/sh` and virtualizes filesystem paths. These suites verify native
   process ownership and real path identity.
 - A test that writes files inside its own package can't be cached; keep test scratch files in
