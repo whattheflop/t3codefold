@@ -10,20 +10,7 @@ import { NativeClientError, type NativePlatform } from "./mobile-native-client.t
 // Fold's incremental Android native client build: one ABI, Gradle and adb
 // directly, shared ccache across worktrees. mobile-native-client.ts calls in.
 
-/**
- * The JDK Gradle should compile with.
- *
- * A module that declares no toolchain of its own compiles with whichever JVM
- * launched Gradle, and `java` is not required to be a JDK: Debian-style
- * alternatives will happily point it at a headless JRE while `javac` comes
- * from a different package. Gradle then fails deep inside a third-party
- * module with "does not provide the required capabilities: [JAVA_COMPILER]",
- * naming a JVM nobody chose and no file in this repo mentions.
- *
- * Pinning a toolchain version in Gradle instead would reject machines whose
- * only JDK is newer than the one we picked, so resolve whatever JDK is
- * actually installed and hand Gradle that.
- */
+// Resolve a JDK with javac: PATH may otherwise select a headless JRE that Gradle cannot compile with.
 export const resolveJavaHome = Effect.fn("nativeClient.resolveJavaHome")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -103,12 +90,12 @@ type RunCommand<E, R> = (
 ) => Effect.Effect<string, E, R>;
 
 /** Builds the connected emulator's ABI with Gradle and installs it by adb serial. */
-export const buildAndInstallAndroidClient = <E, R>(
-  device: string,
-  { mobile, repo }: { readonly mobile: string; readonly repo: string },
-  command: RunCommand<E, R>,
-) =>
-  Effect.gen(function* () {
+export const buildAndInstallAndroidClient = Effect.fn("nativeClient.buildAndInstallAndroid")(
+  function* <E, R>(
+    device: string,
+    { mobile, repo }: { readonly mobile: string; readonly repo: string },
+    command: RunCommand<E, R>,
+  ) {
     const path = yield* Path.Path;
     const abi = parseAndroidAbi(
       yield* command("adb", ["-s", device, "shell", "getprop", "ro.product.cpu.abi"]),
@@ -138,4 +125,5 @@ export const buildAndInstallAndroidClient = <E, R>(
       ],
       true,
     );
-  }).pipe(Effect.withSpan("nativeClient.buildAndInstallAndroid"));
+  },
+);

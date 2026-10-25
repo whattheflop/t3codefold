@@ -137,14 +137,7 @@ export interface FoldWorkspacePaneLayout extends WorkspacePaneLayout {
   readonly auxiliaryPaneWidthRange: { readonly min: number; readonly max: number } | null;
 }
 
-/**
- * Fold's replacement for upstream's `deriveWorkspacePaneLayout`. Splits a split-view workspace
- * into thread sidebar, chat, and the trailing inspector (files, git, terminal, review). The
- * inspector only takes space while a route has registered content for it. When it would squeeze
- * the chat below a readable width, the sidebar yields (`primarySidebarSuppressedByAuxiliary`:
- * showing it closes the inspector); maximizing gives the inspector the whole workspace.
- * `contentPaneWidth` is the chat column between the sidebar and the inspector.
- */
+// The sidebar yields when the inspector would squeeze chat below its minimum readable width.
 export function deriveFoldWorkspacePaneLayout(input: {
   readonly layout: Layout;
   readonly viewportWidth: number;

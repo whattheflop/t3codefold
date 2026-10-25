@@ -1,4 +1,4 @@
-import { useNavigation } from "@react-navigation/native";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 import { ComposerContextId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useCallback } from "react";
 import { Alert } from "react-native";
@@ -17,7 +17,7 @@ export function useAttachSourceSelection(input: {
   readonly contents: string | null;
   readonly path: string;
 }) {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const { environmentId, threadId, contents, path } = input;
   const attachSelectedLines = useCallback(
     (selection: { readonly startIndex: number; readonly endIndex: number }) => {
@@ -30,15 +30,18 @@ export function useAttachSourceSelection(input: {
       });
       if (!context) return;
       if (insertComposerDraftContext(`${environmentId}:${threadId}`, context)) {
-        navigation.navigate("Thread", {
-          environmentId: String(environmentId),
-          threadId: String(threadId),
+        selectDetail({
+          name: "Thread",
+          params: {
+            environmentId: String(environmentId),
+            threadId: String(threadId),
+          },
         });
       } else {
         Alert.alert("Too many context items", "Remove some context from the draft and try again.");
       }
     },
-    [navigation, environmentId, threadId, contents, path],
+    [selectDetail, environmentId, threadId, contents, path],
   );
   return threadId === null ? undefined : attachSelectedLines;
 }

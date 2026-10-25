@@ -17,11 +17,8 @@ export function withFoldAppConfig(
   config: ExpoConfig,
   options: { readonly appVariant: string; readonly runtimeVersionPolicy: string },
 ): ExpoConfig {
-  // EAS resolves the fingerprint policy to a real runtime version at build time. A local
-  // prebuild cannot, so it emits the literal "file:fingerprint" and the binary can never match
-  // a published manifest. Leaving updates on there costs a launch-time check against a runtime
-  // version that will never resolve, which hangs the splash before JavaScript starts. Sideload
-  // builds ship self-contained instead.
+  // Local prebuild emits "file:fingerprint", which cannot match an OTA manifest and stalls launch.
+  // Only enable fingerprint-based updates when EAS resolves the native runtime.
   const resolvesFingerprintRuntimeVersion =
     options.runtimeVersionPolicy !== "fingerprint" || process.env.EAS_BUILD === "true";
   const isProduction = options.appVariant === "production";

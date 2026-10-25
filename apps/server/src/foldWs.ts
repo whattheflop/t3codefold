@@ -70,28 +70,27 @@ export const makeFoldWsHandlers = Effect.fn("ws.makeFoldWsHandlers")(function* (
     [WS_METHODS.pitbossSourceCommand]: (command) => workSources.execute(command),
     [WS_METHODS.pitbossRead]: () => work.read(),
     [WS_METHODS.pitbossSubscribe]: () => work.subscribe(),
-    [WS_METHODS.pitbossCommand]: (command) =>
-      Effect.gen(function* () {
-        if (command.action.type === "activate-home" || command.action.type === "reset")
-          return yield* input.openGladosHome(command);
-        if (command.action.type === "elect") {
-          yield* threadManagement
-            .getProjectThreadRecords(
-              { projectId: command.action.projectId, threadId: command.action.threadId },
-              [],
-            )
-            .pipe(
-              Effect.mapError(
-                () =>
-                  new PitbossError({
-                    code: "invalid",
-                    message: "Choose an existing thread in this project.",
-                  }),
-              ),
-            );
-        }
-        return yield* work.command(command, { type: "user" });
-      }),
+    [WS_METHODS.pitbossCommand]: Effect.fn("ws.pitbossCommand")(function* (command) {
+      if (command.action.type === "activate-home" || command.action.type === "reset")
+        return yield* input.openGladosHome(command);
+      if (command.action.type === "elect") {
+        yield* threadManagement
+          .getProjectThreadRecords(
+            { projectId: command.action.projectId, threadId: command.action.threadId },
+            [],
+          )
+          .pipe(
+            Effect.mapError(
+              () =>
+                new PitbossError({
+                  code: "invalid",
+                  message: "Choose an existing thread in this project.",
+                }),
+            ),
+          );
+      }
+      return yield* work.command(command, { type: "user" });
+    }),
     [WS_METHODS.fleetConnect]: (connect) =>
       Stream.unwrap(fleetBroker.connect(input.sessionId, connect)),
     [WS_METHODS.fleetRespond]: (response) => fleetBroker.respond(input.sessionId, response),

@@ -1,10 +1,7 @@
 const { withMainActivity, withAndroidManifest, AndroidConfig } = require("expo/config-plugins");
 
-// Fold's Android window policy, layered over upstream's withAndroidTabletOrientation.
-// Expo runs a later plugin's mod first, so app.config.ts lists this plugin *before*
-// withAndroidTabletOrientation for its MainActivity mod to see upstream's output.
-// Android workspaces support cover-display landscape and resized windows, so
-// FULL_USER applies on phones too and respects the system rotation lock.
+// Expo runs later mods first: list this before withAndroidTabletOrientation to override its output.
+// FULL_USER allows cover-display landscape while respecting the system rotation lock.
 const TABLET_ONLY_ORIENTATION =
   /requestedOrientation = if \(resources.configuration.smallestScreenWidthDp >= 600\) \{\s*ActivityInfo.SCREEN_ORIENTATION_FULL_USER\s*\} else \{\s*ActivityInfo.SCREEN_ORIENTATION_PORTRAIT\s*\}/;
 

@@ -18,38 +18,15 @@ import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderE
 import { FoldWorkspacePaneDivider } from "./fold-workspace-pane-divider";
 import { VimPaneFocusMarker } from "../keyboard/useWorkspaceVimNavigation";
 
-/**
- * Reveal for a workspace pane (thread sidebar or inspector) as it appears.
- *
- * Pane widths change in one layout pass rather than animating: animating a
- * width re-lays out the chat feed (and resizes any terminal) every frame, and
- * freezing the chat at one width while its container animates clips it. Only
- * the pane being shown fades and slides in over its final position.
- */
+// Animate opacity and translation only; animated widths reflow chat and resize terminals every frame.
 export const WORKSPACE_PANE_REVEAL_TIMING = {
   duration: 180,
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
 
-/**
- * Fold's trailing inspector column (replacing upstream's WorkspaceInspectorPane): resize
- * divider + reveal.
- *
- * Rendered by AdaptiveWorkspaceLayout as a SIBLING of the navigator so the
- * native stack header (and its trailing toolbar items) spans only the content
- * pane — the inspector owns its own full-height column, mirroring how each
- * column of a UISplitViewController has its own chrome.
- *
- * Widths change in a single layout pass; only the newly shown pane fades in.
- * A hidden pane keeps its content mounted at its last width in an untouchable
- * absolute overlay, fading to zero opacity while layout space closes at once.
- * Files keep their scroll position and terminals never receive a sliver width.
- * Unregistered route content is released after its exit finishes.
- *
- * Receives the pane layout via props (not the workspace context hook) so this
- * module stays import-cycle-free with AdaptiveWorkspaceLayout.
- */
+// Keep hidden content mounted at its last width to preserve scroll and terminal state.
+// Accept layout via props to avoid an import cycle with AdaptiveWorkspaceLayout.
 export function FoldWorkspaceInspectorPane(props: {
   readonly topRegionHeight?: number | null;
   readonly fixedDivider?: boolean;

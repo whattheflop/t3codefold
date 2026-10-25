@@ -1,4 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -108,6 +109,7 @@ export function useWorkspaceThumbActions(input: {
   readonly hideAuxiliaryPane: () => void;
 }) {
   const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const { activeThread, togglePrimarySidebar, toggleAuxiliaryPane, hideAuxiliaryPane } = input;
   const recentThreads = useRef<{
     threads: Array<{ environmentId: string; threadId: string }>;
@@ -143,7 +145,7 @@ export function useWorkspaceThumbActions(input: {
       if (next) {
         history.index = index;
         hideAuxiliaryPane();
-        navigation.navigate("Thread", next);
+        selectDetail({ name: "Thread", params: next });
       }
     },
     [
@@ -151,6 +153,7 @@ export function useWorkspaceThumbActions(input: {
       hideAuxiliaryPane,
       input.usesSplitView,
       navigation,
+      selectDetail,
       input.supportsAuxiliaryPane,
       toggleAuxiliaryPane,
       togglePrimarySidebar,

@@ -1,11 +1,9 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { createThreadRibbonMirror } from "./threadRibbonMirrors";
-
-afterEach(() => document.body.replaceChildren());
 
 describe("interactive content in ribbon mirrors", () => {
   it("preserves the live radio selection when the other column gets a mirror", () => {
+    using cleanup = new DisposableStack();
     const row = document.createElement("div");
     const selected = document.createElement("input");
     selected.type = "radio";
@@ -13,17 +11,22 @@ describe("interactive content in ribbon mirrors", () => {
     selected.defaultChecked = true;
     row.append(selected);
     document.body.append(row);
+    cleanup.defer(() => row.remove());
 
     const mirror = createThreadRibbonMirror(row);
     document.body.append(mirror);
+    cleanup.defer(() => mirror.remove());
 
     expect(selected.checked).toBe(true);
     mirror.remove();
-    document.body.append(createThreadRibbonMirror(row));
+    const secondMirror = createThreadRibbonMirror(row);
+    document.body.append(secondMirror);
+    cleanup.defer(() => secondMirror.remove());
     expect(selected.checked).toBe(true);
   });
 
   it("submits only live values when a row inside a form crosses the seam", () => {
+    using cleanup = new DisposableStack();
     const form = document.createElement("form");
     const row = document.createElement("div");
     const note = document.createElement("input");
@@ -32,6 +35,7 @@ describe("interactive content in ribbon mirrors", () => {
     row.append(note);
     form.append(row);
     document.body.append(form);
+    cleanup.defer(() => form.remove());
 
     form.append(createThreadRibbonMirror(row));
 

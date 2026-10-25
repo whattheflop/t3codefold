@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentId, GamingHudState } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useEnvironments } from "../../state/environments";
 import { environmentShell } from "../../state/shell";
@@ -18,9 +18,9 @@ export function GamingHudCoordinator() {
   const { environments } = useEnvironments();
   const [summaries, setSummaries] = useState(new Map<EnvironmentId, HudEnvironment>());
   const reportedFailure = useRef(false);
-  const report = useCallback((id: EnvironmentId, summary: HudEnvironment) => {
+  const report = (id: EnvironmentId, summary: HudEnvironment) => {
     setSummaries((previous) => new Map(previous).set(id, summary));
-  }, []);
+  };
   useEffect(() => {
     if (!enabled) reportedFailure.current = false;
     void window.desktopBridge

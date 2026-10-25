@@ -41,13 +41,7 @@ export function workCliEnvironment(
     : {};
 }
 
-/**
- * Provider env with the thread's `t3 work` credential applied over `base`, or
- * `base` untouched. Adapters call it where they spawn a per-thread process,
- * passing the session `McpProviderSessions.read` returns for that thread.
- * The device shim is separate (`withAgentDeviceEnvironment`) and not applied
- * here; devices reach agents through the MCP device tools.
- */
+// Apply the thread credential only to its provider process; device access stays on MCP.
 export function providerSessionEnvironment(
   base: NodeJS.ProcessEnv,
   session: Pick<McpProviderSessionConfig, "endpoint" | "authorizationHeader"> | undefined,

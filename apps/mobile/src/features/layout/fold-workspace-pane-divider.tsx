@@ -26,16 +26,7 @@ interface WorkspacePaneDividerProps {
   readonly onToggleMaximized: () => void;
 }
 
-/**
- * Fold's drag handle between the chat and the trailing pane (replacing upstream's
- * WorkspacePaneDivider).
- *
- * While dragging only the handle moves, on the UI thread; the panes lay out
- * once on release. Resizing the chat feed or a terminal on every frame both
- * drops frames and makes full-screen terminal programs repaint for widths the
- * user never stops at. Dragging past either end maximizes or closes the pane,
- * and tapping the grip toggles maximize.
- */
+// Move only the handle while dragging; resizing chat and terminals every frame causes repaint spikes.
 export function FoldWorkspacePaneDivider(props: WorkspacePaneDividerProps) {
   const latestProps = useRef(props);
   latestProps.current = props;

@@ -1,4 +1,5 @@
-import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { type StaticScreenProps } from "@react-navigation/native";
 import {
   CommandId,
   PITBOSS_DEFAULT_QUALITY,
@@ -67,7 +68,7 @@ type BriefDraft = Partial<
 
 /** The GLaDOS settings body, without its own scroll container, for routes and split panes. */
 export function GladosSettingsContent(props: GladosSettingsParams) {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const { environments } = useEnvironments();
   const connectedEnvironments = environments.filter(
     (environment) => environment.connection.phase === "connected",
@@ -196,7 +197,7 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
               disabled={!environmentId}
               onPress={() =>
                 environmentId &&
-                navigation.navigate("Thread", { environmentId, threadId: role.threadId })
+                selectDetail({ name: "Thread", params: { environmentId, threadId: role.threadId } })
               }
             />
           </>
@@ -561,7 +562,7 @@ function GladosConnections(props: {
           detail={
             sources.data
               ? `${sourceList.filter((source) => source.config.enabled).length} connected`
-              : "—"
+              : "Loading"
           }
         />
         <View className="border-t border-border-subtle">
@@ -569,7 +570,7 @@ function GladosConnections(props: {
             icon="point.3.connected.trianglepath.dotted"
             label="Peers"
             description={error ?? peers.error ?? undefined}
-            detail={peers.data ? `${peerList.length} paired` : "—"}
+            detail={peers.data ? `${peerList.length} paired` : "Loading"}
           />
         </View>
         {peerList.map((peer) => (

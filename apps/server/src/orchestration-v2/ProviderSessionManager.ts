@@ -1415,27 +1415,29 @@ export const layerWithOptions = (
         );
 
       /** Clears one busy key and records activity; a key that is not busy only records activity. */
-      const clearBusyKey = (providerSessionId: ProviderSessionId, busyKey: string) =>
-        Effect.gen(function* () {
-          const key = sessionKey(providerSessionId);
-          const now = yield* Clock.currentTimeMillis;
-          yield* Ref.update(sessions, (current) => {
-            const entry = current.get(key);
-            if (entry === undefined) {
-              return current;
-            }
-            const busyTurns = new Set(entry.busyTurns);
-            busyTurns.delete(busyKey);
-            const updated = new Map(current);
-            updated.set(key, {
-              ...entry,
-              busyTurns,
-              lastActivityAtMs: now,
-            });
-            return updated;
+      const clearBusyKey = Effect.fn("ProviderSessionManagerV2.clearBusyKey")(function* (
+        providerSessionId: ProviderSessionId,
+        busyKey: string,
+      ) {
+        const key = sessionKey(providerSessionId);
+        const now = yield* Clock.currentTimeMillis;
+        yield* Ref.update(sessions, (current) => {
+          const entry = current.get(key);
+          if (entry === undefined) {
+            return current;
+          }
+          const busyTurns = new Set(entry.busyTurns);
+          busyTurns.delete(busyKey);
+          const updated = new Map(current);
+          updated.set(key, {
+            ...entry,
+            busyTurns,
+            lastActivityAtMs: now,
           });
-          yield* scheduleIdleReleaseInternal(providerSessionId);
+          return updated;
         });
+        yield* scheduleIdleReleaseInternal(providerSessionId);
+      });
 
       // Clearing a turn that is not marked busy (one whose failed start already
       // cleared it, or a subagent turn the manager never started) only
