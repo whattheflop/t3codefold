@@ -67,8 +67,11 @@ Omit `--delete-old-releases` only when recoverable drafts are explicitly wanted.
 The script saves release metadata in an OS temporary directory, not a backup of
 binaries. Never delete Git tags or the retained update-feed assets.
 
-The upstream npm release workflow is disabled on forks. Fold is distributed from
-`whattheflop/T3codefold`, not the npm `t3` package. The server workflow builds
+The upstream npm release workflow is disabled on forks. Builds resolve their GitHub
+release repository from `origin`, or `GITHUB_REPOSITORY` in CI. Set
+`T3CODE_RELEASE_REPOSITORY=owner/repository` to override it, including when building
+from a source archive without Git metadata. Desktop feeds, mobile update links, and
+server installers all use that repository. The server workflow builds
 self-contained CLI archives and an npm-compatible tarball; its rolling feeds retain
 `t3.tgz` for older launchers. Never reuse a version for a different commit.
 

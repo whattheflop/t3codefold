@@ -1,4 +1,3 @@
-import { PitbossPins } from "../threads/PitbossWork";
 import { useActiveNewTask } from "../../state/active-new-task";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
@@ -718,7 +717,6 @@ export function HomeScreen(props: HomeScreenProps) {
   const v2ListHeader = (
     <>
       {listHeader}
-      <PitbossPins environments={props.environments} />
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           environments={props.environments}

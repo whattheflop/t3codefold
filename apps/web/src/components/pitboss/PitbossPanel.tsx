@@ -9,7 +9,6 @@ import {
   type WorkFilter,
 } from "./workView";
 import { managedWorkerStateLabel } from "@t3tools/client-runtime/glados-board";
-import { CreateHome } from "./CreateHome";
 import { TaskDecisionCard } from "./TaskDecisionCard";
 import { VerificationCard, VerificationArtifact } from "./VerificationCard";
 import { useProjects, useServerConfigs } from "../../state/entities";
@@ -69,78 +68,6 @@ const statusClass: Record<PitbossTask["status"], string> = {
   blocked: "text-orange-600 dark:text-orange-400",
   cancelled: "text-muted-foreground",
 };
-
-export function PitbossPin({
-  environmentId,
-  label,
-}: {
-  environmentId: EnvironmentId;
-  label: string;
-}) {
-  const query = useEnvironmentQuery(serverEnvironment.pitbossLive({ environmentId, input: {} }));
-  const navigate = useNavigate();
-  const reopen = useAtomCommand(serverEnvironment.pitbossCommand, { label: "Open GLaDOS" });
-  const [openError, setOpenError] = useState<string | null>(null);
-  const role = query.data?.role;
-  const questions =
-    query.data?.tasks.filter((task) => workNeedsYou(task, query.data?.awaitingApproval)).length ??
-    0;
-  return (
-    <>
-      <CreateHome environmentId={environmentId} label={label} />
-      {role && (
-        <button
-          type="button"
-          onClick={() => {
-            if (!query.data) return;
-            void reopen({
-              environmentId,
-              input: {
-                commandId: CommandId.make(randomUUID()),
-                expectedRevision: query.data.revision,
-                action: { type: "activate-home", brief: role.brief },
-              },
-            }).then((result) => {
-              if (result._tag === "Failure") {
-                setOpenError(String(squashAtomCommandFailure(result)));
-                return;
-              }
-              setOpenError(null);
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: { environmentId, threadId: role.threadId },
-              });
-            });
-          }}
-          className="mx-1 my-1 flex w-[calc(100%-0.5rem)] items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-3 text-left hover:bg-amber-500/10 focus-visible:outline-2 focus-visible:outline-amber-500"
-        >
-          <span className="rounded-lg bg-amber-500/15 p-2 text-amber-600 dark:text-amber-400">
-            <CrownIcon className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">GLaDOS</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {openError ?? label}
-            </span>
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {query.error
-              ? "Offline"
-              : role.paused
-                ? "Paused"
-                : questions
-                  ? `${questions} need you`
-                  : query.data?.tasks.some(
-                        (task) => task.status === "active" || task.status === "verifying",
-                      )
-                    ? "Work active"
-                    : "Ready"}
-          </span>
-        </button>
-      )}
-    </>
-  );
-}
 
 export function PitbossPanel(props: {
   environmentId: EnvironmentId;

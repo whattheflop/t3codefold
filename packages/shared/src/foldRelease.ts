@@ -1,5 +1,10 @@
-/** Fold distributions are GitHub release assets; the npm `t3` package is upstream. */
-export const FOLD_REPOSITORY = "whattheflop/T3codefold";
+declare const process: {
+  readonly env: { readonly EXPO_PUBLIC_T3CODE_RELEASE_REPOSITORY?: string };
+};
+
+/** Bundlers embed the checkout's release repository; source-only consumers use Fold's default. */
+export const FOLD_REPOSITORY =
+  process.env.EXPO_PUBLIC_T3CODE_RELEASE_REPOSITORY || "whattheflop/T3codefold";
 const FOLD_RELEASES_URL = `https://github.com/${FOLD_REPOSITORY}/releases`;
 
 const EXACT_VERSION =
@@ -32,13 +37,13 @@ export function manualFoldServerCommand(version: string): string {
 
 /** Older update RPCs can install upstream npm packages; they require a manual Fold install. */
 export function supportsFoldUpdates(capabilities: { readonly updateRepository?: string }): boolean {
-  return capabilities.updateRepository === FOLD_REPOSITORY;
+  return capabilities.updateRepository?.toLowerCase() === FOLD_REPOSITORY.toLowerCase();
 }
 
-export function foldDesktopFeed(channel: "latest" | "nightly") {
+export function foldDesktopFeed(channel: "latest" | "nightly", repository = FOLD_REPOSITORY) {
   return {
     provider: "generic" as const,
-    url: `${FOLD_RELEASES_URL}/download/fold-desktop-${channel}`,
+    url: `https://github.com/${repository}/releases/download/fold-desktop-${channel}`,
     channel,
   };
 }

@@ -1,3 +1,5 @@
+const { resolveReleaseRepository } = require("../../scripts/lib/release-repository.ts");
+process.env.EXPO_PUBLIC_T3CODE_RELEASE_REPOSITORY = resolveReleaseRepository();
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");

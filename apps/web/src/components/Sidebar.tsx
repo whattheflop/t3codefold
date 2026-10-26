@@ -122,7 +122,6 @@ import {
   useEnvironmentMachines,
   usePrimaryEnvironmentId,
 } from "../state/environments";
-import { PitbossPin } from "./pitboss/PitbossPanel";
 import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
@@ -2665,9 +2664,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     <>
       <ThreadContextDragGhost />
       <SidebarChromeHeader isElectron={isElectron} />
-      {Array.from(environmentLabelById, ([environmentId, label]) => (
-        <PitbossPin key={environmentId} environmentId={environmentId} label={label} />
-      ))}
       <SidebarContent
         className="min-h-full"
         fixedHeader={

@@ -43,6 +43,7 @@ import {
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { resolveReleaseRepository } from "./lib/release-repository.ts";
 import { foldDesktopFeed } from "@t3tools/shared/foldRelease";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -2681,8 +2682,20 @@ export function resolveDesktopRuntimeDependencies(
 }
 
 // Fold publishes desktop builds to fixed generic feeds on its own releases.
-export const resolveGitHubPublishConfig = (updateChannel: "latest" | "nightly") =>
-  Effect.succeed(foldDesktopFeed(updateChannel));
+export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
+  updateChannel: "latest" | "nightly",
+) {
+  const env = yield* Config.all({
+    T3CODE_RELEASE_REPOSITORY: Config.String("T3CODE_RELEASE_REPOSITORY").pipe(
+      Config.withDefault(""),
+    ),
+    T3CODE_DESKTOP_UPDATE_REPOSITORY: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(
+      Config.withDefault(""),
+    ),
+    GITHUB_REPOSITORY: Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault("")),
+  });
+  return foldDesktopFeed(updateChannel, resolveReleaseRepository({ env }));
+});
 
 export function resolveDesktopUpdateChannel(version: string): "latest" | "nightly" {
   return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
