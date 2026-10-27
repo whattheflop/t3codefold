@@ -1,0 +1,6 @@
+#!/bin/sh
+# Keep GLaDOS app credentials separate from the normal Linear login.
+unset LINEAR_API_KEY LINEAR_WORKSPACE
+export XDG_CONFIG_HOME="$HOME/.config/glados"
+export LINEAR_IGNORE_ENV_FILE=1
+exec linear "$@"
