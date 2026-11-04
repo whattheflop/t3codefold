@@ -122,12 +122,24 @@ export function managerView(state: PitbossSnapshot): PitbossSnapshot {
 export function attemptsExhausted(state: PitbossSnapshot, task: PitbossTask) {
   return task.attempts.length >= (state.role?.brief.maxAttempts ?? 1);
 }
+/** Unknown legacy Linear ownership fails closed until a successful source refresh. */
+export function sourceEligible(task: Pick<PitbossTask, "source">) {
+  if (task.source?.kind !== "linear") return true;
+  const ownership = task.source.ownership;
+  return (
+    !!ownership &&
+    [ownership.assigneeId, ownership.delegateId].every(
+      (id) => id === null || id === ownership.viewerId,
+    )
+  );
+}
 export function readyTasks(state: PitbossSnapshot, peerScope?: string): ReadonlyArray<PitbossTask> {
   if (!state.role || state.role.paused) return [];
   return state.tasks
     .filter(
       (task) =>
         task.status === "queued" &&
+        sourceEligible(task) &&
         !task.decisions?.some((decision) => decision.answer === undefined) &&
         !task.pendingOperationId &&
         state.role!.brief.projectIds.includes(task.projectId) &&

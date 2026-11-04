@@ -29,6 +29,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import {
+  sourceEligible,
   decide,
   finishBoardClear,
   remoteTaskAuthority,
@@ -643,6 +644,7 @@ export const layer = Layer.effect(
                     code: "conflict",
                     message: "This source item already belongs to another T3 project.",
                   });
+                if (!old && !sourceEligible(observation)) continue;
                 if (!old && tasks.length >= 500)
                   return yield* new PitbossError({
                     code: "invalid",
@@ -657,7 +659,9 @@ export const layer = Layer.effect(
                   old.source.status === observation.source.status &&
                   old.source.priority === observation.source.priority &&
                   old.source.url === observation.source.url &&
-                  old.source.key === observation.source.key
+                  old.source.key === observation.source.key &&
+                  encodeJson(old.source.ownership ?? null) ===
+                    encodeJson(observation.source.ownership ?? null)
                 )
                   continue;
                 const changed =
@@ -668,6 +672,11 @@ export const layer = Layer.effect(
                       title: changed ? observation.title : old.title,
                       source: observation.source,
                       revision: old.revision + 1,
+                      ownershipRevision:
+                        encodeJson(old.source?.ownership ?? null) !==
+                        encodeJson(observation.source.ownership ?? null)
+                          ? (old.ownershipRevision ?? 0) + 1
+                          : old.ownershipRevision,
                       note: changed
                         ? "Source requirements changed. Review criteria before continuing."
                         : old.note,

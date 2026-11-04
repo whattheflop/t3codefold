@@ -683,3 +683,59 @@ it.effect("archives a paused board idempotently and ignores late attempt observa
     expect(yield* store.rebuild()).toEqual(yield* store.read());
   }).pipe(Effect.provide(services)),
 );
+
+it.effect(
+  "tracks ownership-only transfers without duplicating tasks or deleting audit history",
+  () =>
+    Effect.gen(function* () {
+      const store = yield* WorkStore;
+      const config = {
+        id: "linear",
+        kind: "linear" as const,
+        baseUrl: "https://linear.test",
+        tenantId: "tenant",
+        remoteProjectId: "team",
+        projectId: ProjectId.make("tools"),
+        enabled: true,
+      };
+      const observation = {
+        title: "Same",
+        outcome: "Same",
+        source: {
+          kind: "linear" as const,
+          tenantId: "tenant",
+          itemId: "issue",
+          key: "DEV-1",
+          url: "",
+          status: "Open",
+          priority: "1",
+          observedAt: "2026-11-04T00:00:00Z",
+          ownership: { viewerId: "glados", assigneeId: null, delegateId: null },
+        },
+      };
+      const foreign = {
+        ...observation,
+        source: {
+          ...observation.source,
+          ownership: { ...observation.source.ownership, delegateId: "simulator" },
+        },
+      };
+      yield* store.importSources(config, [foreign]);
+      expect((yield* store.read()).tasks).toHaveLength(0);
+      yield* store.importSources(config, [observation]);
+      const initial = yield* store.read();
+      yield* store.importSources(config, [foreign]);
+      const away = yield* store.read();
+      expect(away.revision).toBe(initial.revision + 1);
+      expect(away.tasks[0]?.source?.ownership?.delegateId).toBe("simulator");
+      expect(away.tasks[0]?.criteriaVersion).toBe(1);
+      expect(away.messages).toHaveLength(2);
+      yield* store.importSources(config, [observation]);
+      const back = yield* store.read();
+      expect(back.tasks).toHaveLength(1);
+      expect(back.tasks[0]?.id).toBe(initial.tasks[0]?.id);
+      yield* store.importSources(config, [observation]);
+      expect((yield* store.read()).revision).toBe(back.revision);
+      expect(yield* store.rebuild()).toEqual(back);
+    }).pipe(Effect.provide(services)),
+);

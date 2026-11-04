@@ -560,6 +560,7 @@ it.effect("archives a remote projection without interrupting its home writer", (
           outcome: "Keep remote ownership",
           source: {
             kind: "linear",
+            ownership: { viewerId: "glados", assigneeId: null, delegateId: null },
             tenantId: "team",
             itemId: "remote-writer",
             scope: "remote-scope",
@@ -1946,6 +1947,7 @@ it.effect("redelivers a mirrored task obligation when ownership returns to a pri
           outcome: "Remain ready across ownership changes",
           source: {
             kind: "linear",
+            ownership: { viewerId: "glados", assigneeId: null, delegateId: null },
             tenantId: "team",
             itemId: "remote-one",
             scope: "remote-scope",
@@ -2925,5 +2927,129 @@ it.effect("quotes a worker's report to the user without crediting the owner for 
     const decision = (yield* h.store.read()).tasks[0]!.decisions?.at(-1);
     expect(decision?.question).toContain("deploy token is missing");
     expect(decision?.question).not.toContain("It reported nothing");
+  }).pipe(Effect.provide(services)),
+);
+
+it.effect(
+  "discards a stale queued source wake after reassignment and restores eligibility once",
+  () =>
+    Effect.gen(function* () {
+      const h = yield* harness;
+      const config = {
+        id: "linear",
+        kind: "linear" as const,
+        baseUrl: "https://linear.test",
+        tenantId: "tenant",
+        remoteProjectId: "team",
+        projectId: a,
+        enabled: true,
+      };
+      const observation = {
+        title: "Same",
+        outcome: "Same",
+        source: {
+          kind: "linear" as const,
+          tenantId: "tenant",
+          itemId: "issue",
+          key: "DEV-1",
+          url: "",
+          status: "Open",
+          priority: "1",
+          observedAt: DateTime.formatIso(time),
+          ownership: { viewerId: "glados", assigneeId: null, delegateId: null },
+        },
+      };
+      yield* h.store.importSources(config, [observation]);
+      h.failNextSend();
+      yield* h.drain();
+      expect((yield* h.store.effects()).filter((effect) => effect.kind === "wake")).toHaveLength(1);
+      yield* h.store.importSources(config, [
+        {
+          ...observation,
+          source: {
+            ...observation.source,
+            ownership: { ...observation.source.ownership, delegateId: "simulator" },
+          },
+        },
+      ]);
+      yield* h.drain();
+      expect(h.sent).toEqual([]);
+      expect((yield* h.store.effects()).filter((effect) => effect.kind === "wake")).toHaveLength(0);
+      yield* h.store.importSources(config, [observation]);
+      yield* h.drain();
+      expect(h.sent).toEqual([boss]);
+      yield* h.store.importSources(config, [observation]);
+      yield* h.drain();
+      expect(h.sent).toEqual([boss]);
+    }).pipe(Effect.provide(services)),
+);
+
+it.effect("preserves tracked worker recovery after foreign reassignment", () =>
+  Effect.gen(function* () {
+    const h = yield* harness;
+    const config = {
+      id: "linear",
+      kind: "linear" as const,
+      baseUrl: "https://linear.test",
+      tenantId: "tenant",
+      remoteProjectId: "team",
+      projectId: a,
+      enabled: true,
+    };
+    const observation = {
+      title: "Same",
+      outcome: "Same",
+      source: {
+        kind: "linear" as const,
+        tenantId: "tenant",
+        itemId: "issue",
+        key: "DEV-1",
+        url: "",
+        status: "Open",
+        priority: "1",
+        observedAt: DateTime.formatIso(time),
+        ownership: { viewerId: "glados", assigneeId: null, delegateId: null },
+      },
+    };
+    yield* h.store.importSources(config, [observation]);
+
+    const taskId = (yield* h.store.read()).tasks[0]!.id;
+    yield* h.command({
+      type: "edit",
+      taskId,
+      projectId: a,
+      title: "Same",
+      outcome: "Same",
+      criteria: "Worker recovery is preserved",
+      verifyCommand: "vp test",
+      priority: 1,
+      dependencies: [],
+      workspaceStrategy: { type: "root" },
+    });
+    yield* h.command({ type: "reopen", taskId });
+    yield* h.command({ type: "assign", taskId });
+    yield* h.drain();
+    const worker = (yield* h.store.read()).tasks[0]!.attempts[0]!.threadId;
+    yield* h.store.importSources(config, [
+      {
+        ...observation,
+        source: {
+          ...observation.source,
+          ownership: { ...observation.source.ownership, delegateId: "simulator" },
+        },
+      },
+    ]);
+    yield* h.drain();
+    expect(h.interrupted).not.toContain(worker);
+    expect((yield* h.store.read()).tasks[0]!.attempts[0]!.state).toBe("running");
+    const p = h.projections.get(worker)!;
+    h.projections.set(worker, {
+      ...p,
+      runs: [{ ...running(worker), status: "completed", completedAt: time }],
+      checkpoints: [captured(worker, 1, ["src/fix.ts"])],
+    });
+    yield* h.drain();
+    expect((yield* h.store.read()).tasks[0]!.attempts[0]!.state).toBe("stopped");
+    expect(h.sent).toContain(boss);
   }).pipe(Effect.provide(services)),
 );

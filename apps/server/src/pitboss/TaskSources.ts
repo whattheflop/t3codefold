@@ -36,11 +36,14 @@ const JiraPage = Schema.Struct({
 });
 const LinearPage = Schema.Struct({
   data: Schema.Struct({
+    viewer: Schema.Struct({ id: Schema.String }),
     issues: Schema.Struct({
       nodes: Schema.Array(
         Schema.Struct({
           id: Schema.String,
           identifier: Schema.String,
+          assignee: Schema.NullOr(Schema.Struct({ id: Schema.String })),
+          delegate: Schema.NullOr(Schema.Struct({ id: Schema.String })),
           title: Schema.String,
           description: Text,
           url: Schema.String,
@@ -100,7 +103,7 @@ export async function readSourcePage(
     url = new URL("graphql", `${base.href.replace(/\/$/, "")}/`);
     body = encode({
       query:
-        "query PitbossTasks($team: ID!, $after: String) { issues(first: 50, after: $after, filter: {team: {id: {eq: $team}}}) { nodes { id identifier title description url priority state { name } team { id } } pageInfo { hasNextPage endCursor } } }",
+        "query PitbossTasks($team: ID!, $after: String) { viewer { id } issues(first: 50, after: $after, filter: {team: {id: {eq: $team}}}) { nodes { id identifier assignee { id } delegate { id } title description url priority state { name } team { id } } pageInfo { hasNextPage endCursor } } }",
       variables: { team: config.remoteProjectId, after: cursor },
     });
   }
@@ -171,18 +174,28 @@ export async function readSourcePage(
       nextCursor: page.isLast ? null : (page.nextPageToken ?? null),
     };
   }
-  const page = decodeLinear(raw).data.issues;
+  if (typeof raw === "object" && raw !== null && "errors" in raw)
+    throw new Error("Linear returned GraphQL errors; ownership could not be verified.");
+  const data = decodeLinear(raw).data;
+  const page = data.issues;
   return {
     observations: page.nodes
       .filter((issue) => issue.team.id === config.remoteProjectId)
       .map((issue) => ({
-        source: source(
-          issue.id,
-          issue.identifier,
-          issue.url,
-          issue.state.name,
-          String(issue.priority),
-        ),
+        source: {
+          ...source(
+            issue.id,
+            issue.identifier,
+            issue.url,
+            issue.state.name,
+            String(issue.priority),
+          ),
+          ownership: {
+            viewerId: data.viewer.id,
+            assigneeId: issue.assignee?.id ?? null,
+            delegateId: issue.delegate?.id ?? null,
+          },
+        },
         title: issue.title,
         outcome: issue.description ?? issue.title,
       })),

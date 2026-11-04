@@ -29,7 +29,13 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import { WorkStore, type WorkEffect } from "./WorkStore.ts";
-import { attemptsExhausted, readyTasks, workContext, type WorkActor } from "./Work.ts";
+import {
+  sourceEligible,
+  attemptsExhausted,
+  readyTasks,
+  workContext,
+  type WorkActor,
+} from "./Work.ts";
 import { ThreadLaunchService } from "../orchestration-v2/ThreadLaunchService.ts";
 import {
   ThreadManagementProjectionLoadError,
@@ -394,6 +400,13 @@ function wakeEvents(
   for (const message of messages.toReversed()) {
     const task = state.tasks.find((entry) => entry.id === message.taskId);
     if (task && ["done", "cancelled"].includes(task.status)) continue;
+    // Source observations never confer authority. Keep actual worker obligations intact.
+    if (
+      task &&
+      !sourceEligible(task) &&
+      (message.id.startsWith("source:") || task.attempts.length === 0)
+    )
+      continue;
     const attempt = task?.attempts.find((entry) => entry.threadId === message.threadId);
     const action = task ? pitbossTaskNextAction(state, task) : null;
     const eventKind = task?.decisions?.some(
@@ -444,6 +457,7 @@ function wakeEvents(
     });
   }
   for (const task of owned) {
+    if (!sourceEligible(task) && task.attempts.length === 0) continue;
     const action = pitbossTaskNextAction(state, task);
     const attempt = task.attempts.at(-1);
     if (!action || !["assign", "verify", "review", "recover", "accept"].includes(action)) continue;

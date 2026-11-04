@@ -256,6 +256,13 @@ export const PitbossSource = Schema.Struct({
   itemId: Id,
   scope: Schema.optional(Id),
   contentDigest: Schema.optional(Id),
+  ownership: Schema.optional(
+    Schema.Struct({
+      viewerId: Id,
+      assigneeId: Schema.NullOr(Id),
+      delegateId: Schema.NullOr(Id),
+    }),
+  ),
   key: Text,
   url: Text,
   status: Text,

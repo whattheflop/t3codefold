@@ -1,5 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import { ProjectId, type PitbossSourceConfig } from "@t3tools/contracts";
+import { sourceEligible } from "./Work.ts";
 import { readSourcePage } from "./TaskSources.ts";
 
 const config: PitbossSourceConfig = {
@@ -57,11 +58,14 @@ it("filters Linear results by team and follows its cursor", async () => {
   const fetcher: NonNullable<Parameters<typeof readSourcePage>[3]> = async () =>
     Response.json({
       data: {
+        viewer: { id: "glados" },
         issues: {
           nodes: [
             {
               id: "issue",
               identifier: "DEV-1",
+              assignee: null,
+              delegate: null,
               title: "Fix",
               description: null,
               url: "https://linear.app/test/issue",
@@ -104,6 +108,7 @@ it.each([
       return new Response(null, { status: 400 });
     return Response.json({
       data: {
+        viewer: { id: "glados" },
         issues: {
           nodes: [],
           pageInfo: { hasNextPage: false, endCursor: null },
@@ -114,4 +119,61 @@ it.each([
   await expect(
     readSourcePage({ ...config, kind: "linear" }, token, null, fetcher),
   ).resolves.toEqual({ observations: [], nextCursor: null });
+});
+
+it("fails closed when Linear omits ownership or viewer identity", async () => {
+  await expect(
+    readSourcePage({ ...config, kind: "linear" }, "test", null, async () =>
+      Response.json({
+        data: { issues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } },
+      }),
+    ),
+  ).rejects.toThrow();
+});
+
+it.each([
+  [null, null, true],
+  ["glados", null, true],
+  [null, "glados", true],
+  ["human", null, false],
+  [null, "simulator", false],
+  ["glados", "simulator", false],
+  ["human", "glados", false],
+])("captures stable Linear ownership %s/%s", async (assigneeId, delegateId, eligible) => {
+  const result = await readSourcePage(
+    { ...config, kind: "linear", remoteProjectId: "team" },
+    "test",
+    null,
+    async (_url, init) => {
+      expect(String(init?.body)).toContain("viewer { id }");
+      return Response.json({
+        data: {
+          viewer: { id: "glados" },
+          issues: {
+            nodes: [
+              {
+                id: "issue",
+                identifier: "DEV-1",
+                title: "Same",
+                description: null,
+                url: "",
+                priority: 1,
+                state: { name: "Open" },
+                team: { id: "team" },
+                assignee: assigneeId ? { id: assigneeId } : null,
+                delegate: delegateId ? { id: delegateId } : null,
+              },
+            ],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        },
+      });
+    },
+  );
+  expect(result.observations[0]?.source.ownership).toEqual({
+    viewerId: "glados",
+    assigneeId,
+    delegateId,
+  });
+  expect(sourceEligible(result.observations[0]!)).toBe(eligible);
 });
