@@ -48,7 +48,7 @@ it("keeps native dependency downloads when retiring older app releases", () => {
       },
     });
     expect(commands.filter((args) => args.includes("DELETE"))).toEqual([
-      ["api", "--method", "DELETE", "repos/BreakTheBeta/T3codefold/releases/2"],
+      ["api", "--method", "DELETE", "repos/whattheflop/T3codefold/releases/2"],
     ]);
   } finally {
     NodeFS.rmSync(directory, { recursive: true, force: true });

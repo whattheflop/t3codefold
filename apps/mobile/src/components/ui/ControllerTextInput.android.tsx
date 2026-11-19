@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useEffectEvent, useId, useRef, useState } from "react";
 import { type TextInputInstance } from "react-native";
 
@@ -8,6 +9,7 @@ import { AppTextInput } from "./AppText";
 import type { ControllerTextInputProps } from "./ControllerTextInput";
 
 export function ControllerTextInput({ ref, containerStyle, ...props }: ControllerTextInputProps) {
+  const gt = useGT();
   const inputRef = useRef<TextInputInstance>(null);
   const id = useId();
   const [nativeSelection, setSelection] = useState({ start: 0, end: 0 });
@@ -17,7 +19,7 @@ export function ControllerTextInput({ ref, containerStyle, ...props }: Controlle
   const readDraftMessage = useEffectEvent(() => props.value ?? "");
   const voice = useVoiceInputController({
     ownerKey: `controller-input:${id}`,
-    label: props.accessibilityLabel ?? props.placeholder ?? "Text input",
+    label: props.accessibilityLabel ?? props.placeholder ?? gt("Text input"),
     readDraftMessage,
     selection,
     disabled: props.editable === false,

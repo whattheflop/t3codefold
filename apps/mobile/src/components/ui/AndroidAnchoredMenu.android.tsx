@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { isAppSymbolName, SymbolView } from "./AppSymbol.android";
 import { dismissAndroidKeyboard } from "../../lib/android-back";
 import type { MenuAction, MenuComponentProps } from "@react-native-menu/menu";
@@ -49,6 +50,7 @@ export type AndroidAnchoredMenuProps = {
 };
 
 export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
+  const gt = useGT();
   const regionId = useControllerRegionId("content");
   const {
     scale,
@@ -205,7 +207,11 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                     {parent ? (
                       <ControllerPressable
                         accessibilityRole="button"
-                        accessibilityLabel={`Back to ${props.title ?? "menu"}`}
+                        accessibilityLabel={
+                          props.title == null
+                            ? gt("Back to menu")
+                            : gt("Back to {title}", { title: props.title })
+                        }
                         onActivate={() => setPath((current) => current.slice(0, -1))}
                         onPress={() => setPath((current) => current.slice(0, -1))}
                         style={{

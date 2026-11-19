@@ -1,3 +1,4 @@
+import { useGT, useMessages } from "gt-react";
 import type { CoreAgent } from "@t3tools/client-runtime/herdr/protocol";
 import { CircleDashedIcon, CircleOffIcon, MessageCircleQuestionIcon, PinIcon } from "lucide-react";
 
@@ -72,10 +73,12 @@ export function HerdrFleetList({
   readonly disabled: boolean;
   readonly onSelect: (agent: CoreAgent) => void;
 }) {
+  const m = useMessages();
+  const gt = useGT();
   return (
-    <ul className="flex flex-col gap-px px-2" aria-label="Factory agents">
+    <ul className="flex flex-col gap-px px-2" aria-label={gt("Factory agents")}>
       {nodes.map(({ agent, depth }) => {
-        const status = herdrAgentStatus(agent);
+        const status = herdrAgentStatus(agent, m);
         const StatusIcon = status ? STATUS_ICONS[status.kind] : null;
         const active = agent.id === activeId;
         return (

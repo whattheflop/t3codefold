@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import * as Schema from "effect/Schema";
 import { Hello, type CoreHello } from "./protocol.ts";
 
@@ -23,7 +25,9 @@ export class HerdrClient {
   private hello: CoreHello | null = null;
   private closed = false;
   private readonly transport: CoreTransport;
-  constructor(transport: CoreTransport) {
+  private readonly resolve: MFunctionType;
+  constructor(transport: CoreTransport, resolve: MFunctionType = mFallback) {
+    this.resolve = resolve;
     this.transport = transport;
   }
   async negotiate(expectedId?: string) {
@@ -47,8 +51,11 @@ export class HerdrClient {
     } catch (error) {
       if (mutation)
         throw new CoreDeliveryUnknown({
-          message:
-            "The operation may have been delivered. Verify its effect before issuing it again.",
+          message: this.resolve(
+            msg(
+              "The operation may have been delivered. Verify its effect before issuing it again.",
+            ),
+          ),
         });
       throw error;
     }

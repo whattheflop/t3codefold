@@ -7148,7 +7148,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           assert.equal(yield* git(created.worktree.path, ["branch", "--show-current"]), branch);
           assert.include(
             yield* git(cwd, ["-c", "core.quotePath=false", "worktree", "list", "--porcelain"]),
-            `worktree ${created.worktree.path}`,
+            `worktree ${NodeFS.realpathSync.native(created.worktree.path).replaceAll("\\", "/")}`,
           );
           folders.add(folder);
         }
@@ -8873,7 +8873,8 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         yield* git(cwd, ["add", "upstream.txt"]);
         yield* git(cwd, ["commit", "-m", "source advance"]);
         const remoteHead = yield* git(cwd, ["rev-parse", "HEAD"]);
-        yield* git(source, ["--git-dir=.", "fetch", cwd, "stable:refs/heads/release"]);
+        yield* git(cwd, ["push", source, "HEAD:refs/heads/release"]);
+        assert.equal(yield* git(cwd, ["rev-parse", "upstream/release"]), localHead);
         yield* git(cwd, ["reset", "--hard", localHead]);
         const driver = yield* GitVcsDriver.GitVcsDriver;
 

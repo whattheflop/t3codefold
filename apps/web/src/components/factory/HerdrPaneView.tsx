@@ -1,3 +1,5 @@
+import { T, Var, useGT, msg } from "gt-react";
+import { m } from "~/i18n/messages";
 import type { DesktopHerdrAttachInput } from "@t3tools/contracts";
 import { EyeIcon } from "lucide-react";
 import * as Schema from "effect/Schema";
@@ -42,7 +44,7 @@ export function HerdrPaneView(props: PaneProps) {
   if (!window.desktopBridge?.herdrAttach)
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        Live terminals need the desktop app.
+        <T>Live terminals need the desktop app.</T>
       </div>
     );
   return <LivePane key={attempt} {...props} onReconnect={() => setAttempt(attempt + 1)} />;
@@ -62,6 +64,7 @@ function LivePane({
   readOnly,
   onReconnect,
 }: PaneProps & { readonly onReconnect: () => void }) {
+  const gt = useGT();
   const mountRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<GhosttyTerminalSurface | null>(null);
   const [status, setStatus] = useState<PaneStatus>({ kind: "connecting" });
@@ -205,24 +208,28 @@ function LivePane({
       <div
         ref={mountRef}
         data-herdr-terminal=""
-        aria-label={`${label} terminal`}
+        aria-label={gt("{label} terminal", { label })}
         className="relative min-h-0 flex-1 overflow-hidden"
       />
       {readOnly && status.kind === "open" ? (
         <span className="pointer-events-none absolute top-2 right-4 flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
           <EyeIcon className="size-3" />
-          Watching
+          <T>Watching</T>
         </span>
       ) : null}
       {status.kind !== "open" ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 text-sm text-muted-foreground">
           {status.kind === "connecting" ? (
-            <p role="status">Attaching to {label}…</p>
+            <p role="status">
+              <T>
+                Attaching to <Var name="terminal">{label}</Var>…
+              </T>
+            </p>
           ) : (
             <>
               <p role="alert">{status.reason}</p>
               <Button size="sm" variant="outline" onClick={onReconnect}>
-                Reconnect
+                <T>Reconnect</T>
               </Button>
             </>
           )}
@@ -235,7 +242,7 @@ function LivePane({
 function closedReason(reason: string) {
   // Electron prefixes invoke failures with its own channel and error name.
   const message = reason.replace(/^Error invoking remote method '[^']+': (\w+: )?/, "").trim();
-  if (message === "" || message === "ended") return "The terminal stream ended.";
-  if (message === "detached") return "Detached from the terminal.";
+  if (message === "" || message === "ended") return m(msg("The terminal stream ended."));
+  if (message === "detached") return m(msg("Detached from the terminal."));
   return message;
 }

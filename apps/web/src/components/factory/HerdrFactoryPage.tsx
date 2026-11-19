@@ -1,3 +1,5 @@
+import { T, msg, useGT } from "gt-react";
+import { m } from "~/i18n/messages";
 import { desktopHerdrTransport } from "./desktopHerdrTransport";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { HerdrWorkspace } from "@t3tools/client-runtime/herdr/workspace";
@@ -44,6 +46,7 @@ import {
 } from "./herdrDestinations";
 
 export function HerdrFactoryPage() {
+  const gt = useGT();
   const destinations = useHerdrDestinations();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -57,7 +60,7 @@ export function HerdrFactoryPage() {
   const connections = (
     <div className="px-3 pb-3">
       <select
-        aria-label="Factory connection"
+        aria-label={gt("Factory connection")}
         className="w-full rounded-md bg-transparent py-2 text-sm font-medium outline-none"
         value={destination?.id ?? ""}
         onChange={(event) => setSelected(event.target.value)}
@@ -87,20 +90,26 @@ export function HerdrFactoryPage() {
         >
           <div className="max-w-sm space-y-4 text-center">
             <FactoryIcon className="mx-auto size-8 text-muted-foreground" />
-            <h1 className="text-lg font-medium">Your factory, in Fold</h1>
+            <h1 className="text-lg font-medium">
+              <T>Your factory, in Fold</T>
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Connect an existing Herdr Core to follow your commanders and conversations.
+              <T>Connect an existing Herdr Core to follow your commanders and conversations.</T>
             </p>
-            <Button onClick={() => setSettingsOpen(true)}>Connect factory</Button>
+            <Button onClick={() => setSettingsOpen(true)}>
+              <T>Connect factory</T>
+            </Button>
           </div>
         </main>
       )}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>Factory connections</DialogTitle>
+            <DialogTitle>
+              <T>Factory connections</T>
+            </DialogTitle>
             <DialogDescription>
-              Use an existing Herdr Core socket through your desktop account or SSH agent.
+              <T>Use an existing Herdr Core socket through your desktop account or SSH agent.</T>
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -113,6 +122,7 @@ export function HerdrFactoryPage() {
                   const id = randomUUID();
                   saveHerdrDestination({
                     id,
+                    // oxlint-disable-next-line t3code/no-untranslated-copy -- Persist the Core product name as the default connection label.
                     label: label.trim() || "Herdr",
                     socketPath,
                     ...(sshHost.trim() ? { sshHost: sshHost.trim() } : {}),
@@ -125,26 +135,28 @@ export function HerdrFactoryPage() {
                   setError(null);
                   setSettingsOpen(false);
                 } catch (cause) {
-                  setError(cause instanceof Error ? cause.message : "Could not save connection");
+                  setError(
+                    cause instanceof Error ? cause.message : gt("Could not save connection"),
+                  );
                 }
               }}
             >
               <Input
-                aria-label="Core label"
-                placeholder="Factory name"
+                aria-label={gt("Core label")}
+                placeholder={gt("Factory name")}
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
               />
               <Input
-                aria-label="Core socket path"
+                aria-label={gt("Core socket path")}
                 placeholder="/run/user/1000/herdr-core/factory.sock"
                 value={socketPath}
                 onChange={(event) => setSocketPath(event.target.value)}
                 required
               />
               <Input
-                aria-label="SSH host alias"
-                placeholder="SSH alias (blank for local)"
+                aria-label={gt("SSH host alias")}
+                placeholder={gt("SSH alias (blank for local)")}
                 value={sshHost}
                 onChange={(event) => setSshHost(event.target.value)}
               />
@@ -154,9 +166,11 @@ export function HerdrFactoryPage() {
                   checked={readOnly}
                   onChange={(event) => setReadOnly(event.target.checked)}
                 />
-                Read-only connection
+                <T>Read-only connection</T>
               </label>
-              <Button type="submit">Save connection</Button>
+              <Button type="submit">
+                <T>Save connection</T>
+              </Button>
             </form>
             {error && (
               <p role="alert" className="text-sm text-destructive">
@@ -171,7 +185,7 @@ export function HerdrFactoryPage() {
                   setSelected(null);
                 }}
               >
-                Remove {destination.label}
+                {gt("Remove {label}", { label: destination.label })}
               </Button>
             )}
           </DialogPanel>
@@ -190,8 +204,9 @@ function CoreWorkspace({
   connections: import("react").ReactNode;
   onSettings: () => void;
 }) {
+  const gt = useGT();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [workspace] = useState(() => new HerdrWorkspace());
+  const [workspace] = useState(() => new HerdrWorkspace(m));
   const [initialDestination] = useState(destination);
   const state = useSyncExternalStore(workspace.subscribe, workspace.getSnapshot);
   const [filter, setFilter] = useState("");
@@ -208,7 +223,7 @@ function CoreWorkspace({
     setBusy(true);
     setError(null);
     await operation().catch((cause: unknown) =>
-      setError(cause instanceof Error ? cause.message : "Core operation failed"),
+      setError(cause instanceof Error ? cause.message : gt("Core operation failed")),
     );
     setBusy(false);
   };
@@ -225,7 +240,7 @@ function CoreWorkspace({
         if (coreId && !initialDestination.coreId)
           saveHerdrDestination({ ...initialDestination, coreId });
       })
-      .catch(() => setError("Could not save Core identity."));
+      .catch(() => setError(m(msg("Could not save Core identity."))));
     return () => workspace.close();
   }, [initialDestination, workspace]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Core has no file watch API; refresh the visible destination's recorded transcript.
@@ -240,7 +255,8 @@ function CoreWorkspace({
           await workspace.syncHistory();
         }
       } catch (cause) {
-        if (!stopped) setError(cause instanceof Error ? cause.message : "Core refresh failed");
+        if (!stopped)
+          setError(cause instanceof Error ? cause.message : m(msg("Core refresh failed")));
       }
       if (!stopped)
         timer = setTimeout(() => {
@@ -285,8 +301,8 @@ function CoreWorkspace({
         fixedHeader={
           <div className="px-3 pb-2">
             <Input
-              aria-label="Filter fleet"
-              placeholder="Search conversations…"
+              aria-label={gt("Filter fleet")}
+              placeholder={gt("Search conversations…")}
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
             />
@@ -304,7 +320,9 @@ function CoreWorkspace({
                 }}
               >
                 <FactoryIcon />
-                <span>Factory</span>
+                <span>
+                  <T>Factory</T>
+                </span>
                 <span className="ml-auto text-xs text-muted-foreground">{visible.length}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -329,9 +347,9 @@ function CoreWorkspace({
         </SidebarGroup>
         <SidebarGroup>
           {fleet.map((group) => (
-            <section key={group.tab ?? ""} className="pb-2" aria-label={group.tab ?? "Agents"}>
+            <section key={group.tab ?? ""} className="pb-2" aria-label={group.tab ?? gt("Agents")}>
               <p className="truncate px-4 pb-1 text-xs font-medium text-muted-foreground">
-                {group.tab ?? "Agents"}
+                {group.tab ?? gt("Agents")}
               </p>
               <HerdrFleetList
                 nodes={group.nodes}
@@ -352,7 +370,9 @@ function CoreWorkspace({
           <SidebarMenuItem>
             <SidebarMenuButton onClick={onSettings}>
               <SettingsIcon />
-              <span>Factory settings</span>
+              <span>
+                <T>Factory settings</T>
+              </span>
               <span className="ml-auto text-xs text-muted-foreground">{state.connection}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -377,9 +397,11 @@ function CoreWorkspace({
         {module || !agent ? (
           <>
             <WorkspacePageHeader electron={isElectron}>
-              <WorkspaceBreadcrumb ariaLabel="Factory conversation">
+              <WorkspaceBreadcrumb ariaLabel={gt("Factory conversation")}>
                 <WorkspaceBreadcrumbItem>
-                  <WorkspaceBreadcrumbText>Factory</WorkspaceBreadcrumbText>
+                  <WorkspaceBreadcrumbText>
+                    <T>Factory</T>
+                  </WorkspaceBreadcrumbText>
                 </WorkspaceBreadcrumbItem>
                 <WorkspaceBreadcrumbSeparator />
                 <WorkspaceBreadcrumbItem current>
@@ -395,7 +417,7 @@ function CoreWorkspace({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label="Conversation details"
+                  aria-label={gt("Conversation details")}
                   onClick={() => setDetailsOpen(!detailsOpen)}
                 >
                   <PanelRightIcon />
@@ -406,7 +428,10 @@ function CoreWorkspace({
           </>
         ) : null}
         <div className="flex min-h-0 flex-1">
-          <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Herdr conversation">
+          <section
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            aria-label={gt("Herdr conversation")}
+          >
             {module ? (
               <div className="min-h-0 flex-1 overflow-auto p-6">
                 <div className="mb-4 flex gap-2">
@@ -437,7 +462,7 @@ function CoreWorkspace({
                     disabled={busy}
                     onClick={() => void run(() => workspace.resources(module.id, kind, true))}
                   >
-                    Load more resources
+                    <T>Load more resources</T>
                   </Button>
                 )}
               </div>
@@ -471,7 +496,7 @@ function CoreWorkspace({
               />
             ) : (
               <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                Select a conversation from your factory.
+                <T>Select a conversation from your factory.</T>
               </div>
             )}
           </section>
@@ -482,14 +507,18 @@ function CoreWorkspace({
               className="w-80 shrink-0 space-y-5 overflow-auto border-l p-5"
             >
               <div className="space-y-2">
-                <h2 className="text-sm font-medium">Session</h2>
+                <h2 className="text-sm font-medium">
+                  <T>Session</T>
+                </h2>
                 <p className="text-sm">{agent?.label ?? destination.label}</p>
                 <p className="text-xs text-muted-foreground">
                   {[agent?.provider, agent?.model, agent?.role].filter(Boolean).join(" · ")}
                 </p>
                 <p className="break-all text-xs text-muted-foreground">{agent?.cwd}</p>
                 {agent?.parentId && (
-                  <p className="text-xs text-muted-foreground">Parent: {agent.parentId}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <T>Parent:</T> {agent.parentId}
+                  </p>
                 )}
                 {agent && (
                   <Button
@@ -504,12 +533,14 @@ function CoreWorkspace({
                       })
                     }
                   >
-                    {pins.includes(agent.id) ? "Unpin conversation" : "Pin conversation"}
+                    {pins.includes(agent.id) ? gt("Unpin conversation") : gt("Pin conversation")}
                   </Button>
                 )}
               </div>
               <div className="space-y-2">
-                <h2 className="text-sm font-medium">Connection</h2>
+                <h2 className="text-sm font-medium">
+                  <T>Connection</T>
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   {state.hello?.core.name ?? destination.label} · {state.connection}
                 </p>
@@ -519,10 +550,10 @@ function CoreWorkspace({
                   disabled={busy || state.connection === "connecting"}
                   onClick={() => void run(connect)}
                 >
-                  Reconnect
+                  <T>Reconnect</T>
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => workspace.close()}>
-                  Disconnect
+                  <T>Disconnect</T>
                 </Button>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">
                   <input
@@ -530,23 +561,26 @@ function CoreWorkspace({
                     checked={showFinished}
                     onChange={(event) => setShowFinished(event.target.checked)}
                   />
-                  Include finished terminals
+                  <T>Include finished terminals</T>
                 </label>
               </div>
               {agent && (
                 <div className="space-y-2">
-                  <h2 className="text-sm font-medium">Conversation source</h2>
+                  <h2 className="text-sm font-medium">
+                    <T>Conversation source</T>
+                  </h2>
                   <p className="text-xs text-muted-foreground">
-                    Recorded Claude or Codex history, read through Core.
+                    <T>Recorded Claude or Codex history, read through Core.</T>
                   </p>
                   {source && (
                     <p className="break-all font-mono text-xs text-muted-foreground">
-                      {source.discovered ? "Detected" : "Attached"} {source.provider}: {source.path}
+                      {source.discovered ? gt("Detected") : gt("Attached")} {source.provider}:{" "}
+                      {source.path}
                     </p>
                   )}
                   <details open={!source}>
                     <summary className="cursor-pointer text-xs text-muted-foreground">
-                      {source ? "Use a different file" : "Attach a transcript"}
+                      {source ? gt("Use a different file") : gt("Attach a transcript")}
                     </summary>
                     <form
                       className="my-2 flex flex-wrap gap-2"
@@ -565,8 +599,8 @@ function CoreWorkspace({
                       }}
                     >
                       <Input
-                        aria-label="Transcript file on Core host"
-                        placeholder="Absolute provider JSONL transcript path"
+                        aria-label={gt("Transcript file on Core host")}
+                        placeholder={gt("Absolute provider JSONL transcript path")}
                         value={transcriptPath}
                         onChange={(event) => setTranscriptPath(event.target.value)}
                         required
@@ -588,7 +622,7 @@ function CoreWorkspace({
                         Codex
                       </Button>
                       <Button type="submit" size="sm">
-                        Attach history
+                        <T>Attach history</T>
                       </Button>
                     </form>
                   </details>
@@ -596,30 +630,33 @@ function CoreWorkspace({
               )}
               {state.unsupportedModules > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {state.unsupportedModules} unsupported modules
+                  {gt("{count} unsupported modules", { count: state.unsupportedModules })}
                 </p>
               )}
             </aside>
           )}
         </div>
         {state.prepared && (
-          <section className="max-h-80 overflow-auto border-t p-4" aria-label="Review Core action">
+          <section
+            className="max-h-80 overflow-auto border-t p-4"
+            aria-label={gt("Review Core action")}
+          >
             <h2 className="text-sm font-semibold">{state.prepared.summary}</h2>
             <pre className="my-3 whitespace-pre-wrap break-words text-xs">
               {state.prepared.payload}
             </pre>
             <p className="text-xs text-muted-foreground">
-              Payload hash: {state.prepared.payloadHash}
+              <T>Payload hash:</T> {state.prepared.payloadHash}
             </p>
             <div className="mt-3 flex gap-2">
               <Button
                 disabled={busy || state.connection !== "connected"}
                 onClick={() => void run(() => workspace.execute(randomUUID()))}
               >
-                Confirm exact action
+                <T>Confirm exact action</T>
               </Button>
               <Button variant="outline" onClick={() => workspace.cancelPrepared()}>
-                Cancel
+                <T>Cancel</T>
               </Button>
             </div>
           </section>
@@ -644,6 +681,7 @@ function ResourcePanel({
   busy: boolean;
   run: (operation: () => Promise<unknown>) => Promise<void>;
 }) {
+  const gt = useGT();
   const [input, setInput] = useState<Record<string, string>>({});
   return (
     <div className="space-y-3">
@@ -657,7 +695,7 @@ function ResourcePanel({
                 <dd className="min-w-0 whitespace-pre-wrap break-words">
                   {typeof value === "string"
                     ? value
-                    : (JSON.stringify(value, null, 2) ?? "Unknown")}
+                    : (JSON.stringify(value, null, 2) ?? gt("Unknown"))}
                 </dd>
               </div>
             ))}

@@ -1,6 +1,7 @@
+import { m } from "../../i18n/messages";
+import { msg, useGT, useMessages } from "gt-react-native";
 import { HerdrFactoryScreen } from "./HerdrFactoryScreen";
 import {
-  FACTORY_CARD_KIND_LABEL,
   factoryAgentRows,
   openFactoryCards,
   selectFactoryTarget,
@@ -25,25 +26,52 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 
+const factoryLabels = {
+  decision: msg("Decision"),
+  housekeeping: msg("Housekeeping"),
+  "fyi-chose": msg("Agent chose · FYI"),
+  now: msg("Now"),
+  today: msg("Today"),
+  "this-week": msg("This week"),
+  commander: msg("Commander"),
+  subcommander: msg("Subcommander"),
+  worker: msg("Worker"),
+  launching: msg("Launching"),
+  active: msg("Active"),
+  parked: msg("Parked"),
+  retired: msg("Retired"),
+  closed: msg("Closed"),
+  queued: msg("Queued"),
+  running: msg("Running"),
+  quarantined: msg("Quarantined"),
+  terminal: msg("Finished"),
+  reversible: msg("Reversible"),
+  costly: msg("Costly to reverse"),
+  irreversible: msg("Irreversible"),
+};
+
 async function confirmOutwardDecision(): Promise<string | null> {
   if (
     !(await LocalAuthentication.hasHardwareAsync()) ||
     !(await LocalAuthentication.isEnrolledAsync())
   )
-    return "Enrol biometrics to answer an outward-action card here, or answer on desktop.";
+    return m(msg("Enrol biometrics to answer an outward-action card here, or answer on desktop."));
   const auth = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Confirm Factory decision",
+    promptMessage: m(msg("Confirm Factory decision")),
     disableDeviceFallback: true,
     biometricsSecurityLevel: "strong",
   });
-  return auth.success ? null : "Biometric confirmation was not completed. Nothing was sent.";
+  return auth.success
+    ? null
+    : m(msg("Biometric confirmation was not completed. Nothing was sent."));
 }
 
 export function FactoryPin() {
+  const gt = useGT();
   const navigation = useNavigation();
   return (
     <View className="px-4 py-2">
-      <Button label="Factory" onPress={() => navigation.navigate("Factory", {})} />
+      <Button label={gt("Factory")} onPress={() => navigation.navigate("Factory", {})} />
     </View>
   );
 }
@@ -51,17 +79,18 @@ export function FactoryPin() {
 export function FactoryRouteScreen({
   route,
 }: StaticScreenProps<{ readonly environmentId?: EnvironmentId; readonly cardId?: string }>) {
+  const gt = useGT();
   const [backend, setBackend] = useState<"t3" | "herdr">("t3");
   return (
     <View className="flex-1">
       <View className="flex-row gap-2 px-4 py-2">
         <Button
-          label="T3 Factory"
+          label={gt("T3 Factory")}
           tone={backend === "t3" ? "primary" : "secondary"}
           onPress={() => setBackend("t3")}
         />
         <Button
-          label="Herdr Core"
+          label={gt("Herdr Core")}
           tone={backend === "herdr" ? "primary" : "secondary"}
           onPress={() => setBackend("herdr")}
         />
@@ -83,11 +112,12 @@ function FactoryScreen({
 }: {
   readonly destination: { readonly environmentId?: EnvironmentId; readonly cardId?: string };
 }) {
+  const gt = useGT();
   const { environments } = useEnvironments();
   const [selected, setSelected] = useState<EnvironmentId | null>(null);
   const { environment, cardId } = selectFactoryTarget(environments, selected, destination);
   return (
-    <SettingsScreen title="Factory">
+    <SettingsScreen title={gt("Factory")}>
       <View className="flex-1 overflow-hidden">
         <View pointerEvents="none" className="absolute inset-0 overflow-hidden bg-screen">
           <ThreadCanvasBackdrop />
@@ -112,7 +142,7 @@ function FactoryScreen({
             />
           ) : (
             <Text className="p-5 text-foreground-muted">
-              Connect this environment before opening its Factory.
+              {gt("Connect this environment before opening its Factory.")}
             </Text>
           )}
         </ScreenScrollViewSurface>
@@ -130,6 +160,8 @@ function FactoryInbox({
   readonly environmentLabel: string;
   readonly cardId?: string;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const selectDetail = useSelectWorkspaceDetail();
   const query = useEnvironmentQuery(serverEnvironment.factoryBoard({ environmentId, input: {} }));
   const [selected, setSelected] = useState<string | null>(null);
@@ -148,14 +180,18 @@ function FactoryInbox({
     >
       <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border-subtle bg-card px-4 py-3">
         <View className="flex-1 gap-1">
-          <Text className="text-xs text-foreground-muted">FACTORY</Text>
+          <Text className="text-xs text-foreground-muted">{gt("FACTORY")}</Text>
           <Text className="font-t3-bold" numberOfLines={1}>
             {environmentLabel}
           </Text>
         </View>
         {query.data && (
           <Text className="text-xs text-foreground-muted">
-            {query.data.status.stopping ? "Stopping" : query.data.status.enabled ? "On" : "Off"}
+            {query.data.status.stopping
+              ? gt("Stopping")
+              : query.data.status.enabled
+                ? gt("On")
+                : gt("Off")}
           </Text>
         )}
       </View>
@@ -165,23 +201,28 @@ function FactoryInbox({
         </Text>
       )}
       {!query.data ? (
-        <Text className="text-foreground-muted">Loading Factory…</Text>
+        <Text className="text-foreground-muted">{gt("Loading Factory…")}</Text>
       ) : !query.data.status.enabled ? (
         <View className="gap-4 rounded-[22px] border border-border-subtle bg-card p-5">
           <Text className="text-xs text-foreground-muted">
-            OFF BY DEFAULT · YOUR SERVER, YOUR CALL
+            {gt("OFF BY DEFAULT · YOUR SERVER, YOUR CALL")}
           </Text>
-          <Text className="font-t3-bold text-2xl">A workspace for your agents.</Text>
+          <Text className="font-t3-bold text-2xl">{gt("A workspace for your agents.")}</Text>
           <Text className="leading-relaxed text-foreground-muted">
-            Review decisions. Follow your crew. Open their threads. Enable Factory for this server
-            when you’re ready; your regular T3 threads continue normally.
+            {gt(
+              "Review decisions. Follow your crew. Open their threads. Enable Factory for this server when you’re ready; your regular T3 threads continue normally.",
+            )}
           </Text>
           <Text className="text-foreground-muted">
             {query.data.status.forcedOff
-              ? "The server forces Factory off. Remove T3CODE_FACTORY_DISABLED and restart the server to allow enabling it."
+              ? gt(
+                  "The server forces Factory off. Remove T3CODE_FACTORY_DISABLED and restart the server to allow enabling it.",
+                )
               : query.data.status.stopping
-                ? "Waiting for active Factory turns and commands to stop. History is retained."
-                : "Enable Factory to use its Commander, checks and automation. Turning it off cancels queued work and requests stops for active turns and commands."}
+                ? gt("Waiting for active Factory turns and commands to stop. History is retained.")
+                : gt(
+                    "Enable Factory to use its Commander, checks and automation. Turning it off cancels queued work and requests stops for active turns and commands.",
+                  )}
           </Text>
           <FactoryPowerControl environmentId={environmentId} status={query.data.status} />
           {query.data.status.stopping &&
@@ -189,7 +230,10 @@ function FactoryInbox({
               .filter((job) => job.state !== "terminal")
               .map((job) => (
                 <Text key={job.id} className="text-foreground-muted">
-                  {job.argv.join(" ")} · {job.state} · cancellation requested
+                  {gt("{command} · {state} · cancellation requested", {
+                    command: job.argv.join(" "),
+                    state: resolve(factoryLabels[job.state]),
+                  })}
                 </Text>
               ))}
         </View>
@@ -197,20 +241,23 @@ function FactoryInbox({
         <>
           <FactoryPowerControl environmentId={environmentId} status={query.data.status} />
           <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border-subtle bg-card p-4">
-            <Text className="font-t3-bold text-lg">Needs you · {cards.length}</Text>
+            <Text className="font-t3-bold text-lg">
+              {gt("Needs you · {count}", { count: cards.length })}
+            </Text>
             <Text className="text-xs text-foreground-muted">
-              {cards.filter((c) => c.body.blocking).length} blocking
+              {gt("{count} blocking", { count: cards.filter((c) => c.body.blocking).length })}
             </Text>
           </View>
           {query.data.executions.some((execution) => execution.state === "unknown") && (
             <Text accessibilityRole="alert" className="text-danger">
-              An action result is unknown. Verify its external result before authorising another
-              action.
+              {gt(
+                "An action result is unknown. Verify its external result before authorising another action.",
+              )}
             </Text>
           )}
           {commander && (
             <Button
-              label="Open Commander"
+              label={gt("Open Commander")}
               tone="secondary"
               onPress={() =>
                 selectDetail({
@@ -225,12 +272,12 @@ function FactoryInbox({
           )}
           {cardId && !query.data.cards.some((c) => c.id === cardId) && (
             <Text className="text-foreground-muted">
-              This decision is unavailable. The inbox below shows current decisions.
+              {gt("This decision is unavailable. The inbox below shows current decisions.")}
             </Text>
           )}
           {card ? (
             <>
-              <Button label="Back to decisions" onPress={() => setSelected("")} />
+              <Button label={gt("Back to decisions")} onPress={() => setSelected("")} />
               <MobileCard
                 key={`${card.id}:${card.revision}`}
                 environmentId={environmentId}
@@ -244,8 +291,10 @@ function FactoryInbox({
             <>
               {!cards.length && (
                 <EmptyState
-                  title="You’re all caught up."
-                  detail="Your agents can keep working. New questions will appear here when they need your input."
+                  title={gt("You’re all caught up.")}
+                  detail={gt(
+                    "Your agents can keep working. New questions will appear here when they need your input.",
+                  )}
                 />
               )}
               {cards.map((c) => (
@@ -254,15 +303,16 @@ function FactoryInbox({
                   className="gap-3 rounded-2xl border border-border-subtle bg-card p-4"
                 >
                   <Text className="text-foreground-muted">
-                    {FACTORY_CARD_KIND_LABEL[c.body.kind]} · {c.ownerId} · {c.body.urgency}
-                    {c.body.blocking ? " · blocking" : ""}
+                    {resolve(factoryLabels[c.body.kind])} · {c.ownerId} ·{" "}
+                    {resolve(factoryLabels[c.body.urgency])}
+                    {c.body.blocking ? ` · ${gt("blocking")}` : ""}
                   </Text>
                   <Button label={c.body.title} onPress={() => setSelected(c.id)} />
                 </View>
               ))}
-              <Text className="font-t3-bold text-lg">Fleet</Text>
+              <Text className="font-t3-bold text-lg">{gt("Fleet")}</Text>
               <Text className="text-xs text-foreground-muted">
-                Roles and lifecycle. Open a thread for live activity.
+                {gt("Roles and lifecycle. Open a thread for live activity.")}
               </Text>
               {factoryAgentRows(query.data.agents).map(({ agent: a, depth }) => (
                 <View
@@ -271,7 +321,7 @@ function FactoryInbox({
                   style={{ marginLeft: Math.min(depth, 3) * 12 }}
                 >
                   <Button
-                    label={`${a.id} · ${a.role}`}
+                    label={`${a.id} · ${resolve(factoryLabels[a.role])}`}
                     tone="text"
                     onPress={() =>
                       selectDetail({
@@ -284,18 +334,19 @@ function FactoryInbox({
                     }
                   />
                   <Text className="text-foreground-muted">
-                    {a.lifecycle} · {a.next}
+                    {resolve(factoryLabels[a.lifecycle])} · {a.next}
                   </Text>
-                  {a.needs && <Text>Needs: {a.needs}</Text>}
+                  {a.needs && <Text>{gt("Needs: {needs}", { needs: a.needs })}</Text>}
                 </View>
               ))}
-              <Text className="font-t3-bold text-lg">Triggers</Text>
+              <Text className="font-t3-bold text-lg">{gt("Triggers")}</Text>
               {query.data.triggers.map((t) => (
                 <Text
                   key={t.id}
                   className="rounded-xl border border-border-subtle bg-card p-3 text-foreground-muted"
                 >
-                  {t.id} · {t.shadow ? "shadow" : "live"} · {t.failing ? "failing" : "healthy"}
+                  {t.id} · {t.shadow ? gt("shadow") : gt("live")} ·{" "}
+                  {t.failing ? gt("failing") : gt("healthy")}
                 </Text>
               ))}
             </>
@@ -313,22 +364,23 @@ function FactoryPowerControl({
   readonly environmentId: EnvironmentId;
   readonly status: FactoryStatus;
 }) {
+  const gt = useGT();
   const allowed = useAtomValue(serverEnvironment.factorySetEnabled.permissionAtom(environmentId));
   const setEnabled = useAtomCommand(
     serverEnvironment.factorySetEnabled,
-    "Change Factory availability",
+    gt("Change Factory availability"),
   );
   const [busy, setBusy] = useState(false);
   return (
     <Button
       label={
         busy
-          ? "Updating…"
+          ? gt("Updating…")
           : status.enabled
-            ? "Turn Factory off"
+            ? gt("Turn Factory off")
             : status.stopping
-              ? "Stopping Factory…"
-              : "Enable Factory"
+              ? gt("Stopping Factory…")
+              : gt("Enable Factory")
       }
       tone="secondary"
       disabled={!allowed || busy || status.forcedOff || (!status.enabled && status.stopping)}
@@ -350,6 +402,8 @@ function MobileCard({
   readonly card: FactoryCard;
   readonly ownerThreadId: ThreadId | undefined;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const selectDetail = useSelectWorkspaceDetail();
   const noteRef = useRef<TextInputInstance>(null);
   const [option, setOption] = useState<string | null>(null);
@@ -357,7 +411,7 @@ function MobileCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allowed = useAtomValue(serverEnvironment.factoryAnswerCard.permissionAtom(environmentId));
-  const answer = useAtomCommand(serverEnvironment.factoryAnswerCard, "Answer Factory decision");
+  const answer = useAtomCommand(serverEnvironment.factoryAnswerCard, gt("Answer Factory decision"));
   const payload = useEnvironmentQuery(
     card.body.action
       ? serverEnvironment.factoryPayload({
@@ -372,8 +426,8 @@ function MobileCard({
     setBusy(true);
     setError(null);
     const approvalError = card.body.action
-      ? await confirmOutwardDecision().catch(
-          () => "Biometric confirmation is unavailable. Nothing was sent.",
+      ? await confirmOutwardDecision().catch(() =>
+          gt("Biometric confirmation is unavailable. Nothing was sent."),
         )
       : null;
     if (approvalError) {
@@ -389,18 +443,22 @@ function MobileCard({
         ...(option === "default" ? { yourCall: true } : option ? { optionId: option } : {}),
         ...(note.trim() ? { note } : {}),
       },
-    }).catch(() => setError("The decision could not be sent. Reload it before trying again."));
+    }).catch(() => setError(gt("The decision could not be sent. Reload it before trying again.")));
     setBusy(false);
   };
   return (
     <View className="gap-4 rounded-2xl border border-border-subtle bg-card p-4">
       <Text className="font-t3-bold text-xl">{card.body.title}</Text>
       <Text className="text-foreground-muted">
-        {FACTORY_CARD_KIND_LABEL[card.body.kind]} · {card.ownerId} · revision {card.revision}
+        {gt("{kind} · {owner} · revision {revision}", {
+          kind: resolve(factoryLabels[card.body.kind]),
+          owner: card.ownerId,
+          revision: card.revision,
+        })}
       </Text>
       {ownerThreadId && (
         <Button
-          label="Open owner thread"
+          label={gt("Open owner thread")}
           tone="text"
           onPress={() =>
             selectDetail({
@@ -416,7 +474,7 @@ function MobileCard({
         link.kind === "thread" ? (
           <Button
             key={`${link.kind}:${link.ref}`}
-            label={link.label ?? "Open thread"}
+            label={link.label ?? gt("Open thread")}
             tone="text"
             onPress={() =>
               selectDetail({
@@ -432,7 +490,7 @@ function MobileCard({
             tone="text"
             onPress={() => {
               void Linking.openURL(link.ref).catch(() =>
-                setError("This link could not be opened."),
+                setError(gt("This link could not be opened.")),
               );
             }}
           />
@@ -442,33 +500,41 @@ function MobileCard({
           </Text>
         ),
       )}
-      <Text>Doing: {card.body.context.doing}</Text>
-      <Text>Why you: {card.body.context.whyNotMe}</Text>
-      <Text>Waiting: {card.body.context.costOfWaiting}</Text>
+      <Text>{gt("Doing: {detail}", { detail: card.body.context.doing })}</Text>
+      <Text>{gt("Why you: {detail}", { detail: card.body.context.whyNotMe })}</Text>
+      <Text>{gt("Waiting: {detail}", { detail: card.body.context.costOfWaiting })}</Text>
       {card.body.action && (
         <View className="gap-3 rounded-2xl border border-border-subtle bg-card p-4">
-          <Text className="font-t3-medium">Exact action awaiting your decision</Text>
+          <Text className="font-t3-medium">{gt("Exact action awaiting your decision")}</Text>
           <Text selectable className="text-xs text-foreground-muted">
-            SHA-256 {card.body.action.payloadSha256}
+            {gt("SHA-256 {hash}", { hash: card.body.action.payloadSha256 })}
           </Text>
           <Text selectable>
             {payload.data
               ? JSON.stringify(payload.data.envelope, null, 2)
-              : (payload.error ?? "Loading action…")}
+              : (payload.error ?? gt("Loading action…"))}
           </Text>
         </View>
       )}
       {card.body.options.map((o) => (
         <View key={o.id} className="gap-3 rounded-2xl border border-border-subtle bg-card p-4">
           <Button
-            label={`${option === o.id ? "Selected: " : ""}${o.id} · ${o.label}${o.recommended ? " · recommended" : ""}`}
+            label={
+              option === o.id
+                ? o.recommended
+                  ? gt("Selected: {id} · {label} · recommended", { id: o.id, label: o.label })
+                  : gt("Selected: {id} · {label}", { id: o.id, label: o.label })
+                : o.recommended
+                  ? gt("{id} · {label} · recommended", { id: o.id, label: o.label })
+                  : `${o.id} · ${o.label}`
+            }
             tone={option === o.id ? "primary" : "secondary"}
             disabled={!allowed || busy}
             onPress={() => setOption(o.id)}
           />
-          <Text>Next: {o.nextStep}</Text>
+          <Text>{gt("Next: {detail}", { detail: o.nextStep })}</Text>
           <Text className="text-foreground-muted">
-            {o.cost} · {o.reversibility}
+            {o.cost} · {resolve(factoryLabels[o.reversibility])}
           </Text>
           <Text>{o.consequences}</Text>
         </View>
@@ -480,13 +546,13 @@ function MobileCard({
         </Text>
       ))}
       <Button
-        label="Defer to agent (uses recommendation)"
+        label={gt("Defer to agent (uses recommendation)")}
         tone={option === "default" ? "primary" : "secondary"}
         disabled={!allowed || busy}
         onPress={() => setOption("default")}
       />
       <Button
-        label="Write my own direction"
+        label={gt("Write my own direction")}
         tone="text"
         disabled={!allowed || busy}
         onPress={() => {
@@ -496,11 +562,11 @@ function MobileCard({
       />
       <TextInput
         ref={noteRef}
-        accessibilityLabel="Decision note"
+        accessibilityLabel={gt("Decision note")}
         multiline
         value={note}
         onChangeText={setNote}
-        placeholder="Add a note or your own direction"
+        placeholder={gt("Add a note or your own direction")}
         className="min-h-24 rounded-xl border border-border-subtle bg-card p-4 text-foreground"
       />
       {error && (
@@ -510,13 +576,18 @@ function MobileCard({
       )}
       <Text className="text-foreground-muted">
         {option
-          ? `Staged: ${option === "default" ? "take the recommendation" : (card.body.options.find((item) => item.id === option)?.label ?? option)}. `
+          ? `${gt("Staged: {choice}.", {
+              choice:
+                option === "default"
+                  ? gt("take the recommendation")
+                  : (card.body.options.find((item) => item.id === option)?.label ?? option),
+            })} `
           : ""}
-        Your choice is staged until Send.
-        {card.body.action ? " Biometric confirmation is required." : ""}
+        {gt("Your choice is staged until Send.")}
+        {card.body.action ? ` ${gt("Biometric confirmation is required.")}` : ""}
       </Text>
       <Button
-        label="Send"
+        label={gt("Send")}
         tone="primary"
         loading={busy}
         disabled={!allowed || (!option && !note.trim()) || (!!card.body.action && !payload.data)}

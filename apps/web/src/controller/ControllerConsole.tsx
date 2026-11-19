@@ -1,3 +1,5 @@
+import { T, msg, useGT } from "gt-react";
+import { m } from "~/i18n/messages";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useRightPanelStore } from "../rightPanelStore";
 import { resolveThreadRouteTarget } from "../threadRoutes";
@@ -12,32 +14,40 @@ import { setControllerEnabled, useControllerSettings } from "./controllerStore";
 import "./controller.css";
 
 export function ControllerConsoleSettings() {
+  const gt = useGT();
   const enabled = useControllerSettings((state) => state.enabled);
   return (
-    <section aria-label="Controller console" className="space-y-2 px-4 py-3">
-      <h3 className="text-sm font-medium">Controller console</h3>
+    <section aria-label={gt("Controller console")} className="space-y-2 px-4 py-3">
+      <h3 className="text-sm font-medium">
+        <T>Controller console</T>
+      </h3>
       <p className="text-sm text-muted-foreground">
-        PlayStation or standard-mapped controllers, in this window only. Enable, then release all
-        controls before navigating.
+        <T>
+          PlayStation or standard-mapped controllers, in this window only. Enable, then release all
+          controls before navigating.
+        </T>
       </p>
       <Button
         variant="outline"
         aria-pressed={enabled}
         onClick={() => setControllerEnabled(!enabled)}
       >
-        {enabled ? "Disable controller mode" : "Enable controller mode"}
+        {enabled ? gt("Disable controller mode") : gt("Enable controller mode")}
       </Button>
       <p className="text-sm text-muted-foreground">
-        D-pad / left stick: focus · ×: activate · ○: back · □: dictate · △: focus send (× sends). L1
-        / R1: threads · L2 / R2: panes · L3: read chat · R3: reply · right stick: scroll · Options:
-        commands · Share: thread chooser. Voice uses your configured microphone and never sends
-        automatically. Editors, terminals and browser guests may need keyboard or touch.
+        <T>
+          D-pad / left stick: focus · ×: activate · ○: back · □: dictate · △: focus send (× sends).
+          L1 / R1: threads · L2 / R2: panes · L3: read chat · R3: reply · right stick: scroll ·
+          Options: commands · Share: thread chooser. Voice uses your configured microphone and never
+          sends automatically. Editors, terminals and browser guests may need keyboard or touch.
+        </T>
       </p>
     </section>
   );
 }
 
 export function ControllerConsole() {
+  const gt = useGT();
   const enabled = useControllerSettings((state) => state.enabled);
   const router = useRouter();
   const [hint, setHint] = useState("");
@@ -104,7 +114,11 @@ export function ControllerConsole() {
       padIndex = pad.index;
       if (pad.mapping !== "standard") {
         setHint(
-          "This controller needs standard Gamepad mapping. Use keyboard or touch to configure another controller.",
+          m(
+            msg(
+              "This controller needs standard Gamepad mapping. Use keyboard or touch to configure another controller.",
+            ),
+          ),
         );
         setUsingController(true);
         reader.reset();
@@ -203,7 +217,8 @@ export function ControllerConsole() {
       role="status"
       className="pointer-events-none fixed bottom-2 left-1/2 z-[200] max-w-[95vw] -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
     >
-      {hint || "× Activate · ○ Back · □ Dictate · △ Focus send · L1/R1 Threads · Options Commands"}
+      {hint ||
+        gt("× Activate · ○ Back · □ Dictate · △ Focus send · L1/R1 Threads · Options Commands")}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import {
   FACTORY_CARD_KIND_LABEL,
   factoryAgentRows,
@@ -45,6 +46,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 const TABS = ["Decisions", "Fleet", "Checks"] as const;
 
 export function FactoryPage() {
+  const gt = useGT();
   const environments = useEnvironmentIdentities();
   const [selected, setSelected] = useState<EnvironmentId | null>(null);
   const { environment } = selectFactoryTarget(environments, selected);
@@ -56,7 +58,7 @@ export function FactoryPage() {
           value={environmentId ?? ""}
           onValueChange={(id) => setSelected(id as EnvironmentId)}
         >
-          <SelectTrigger size="sm" aria-label="Factory environment">
+          <SelectTrigger size="sm" aria-label={gt("Factory environment")}>
             <SelectValue>
               {environments.find((env) => env.environmentId === environmentId)?.label}
             </SelectValue>
@@ -87,13 +89,15 @@ export function FactoryPage() {
       ) : (
         <>
           <WorkspacePageHeader electron={isElectron}>
-            <h1 className="text-sm font-semibold">Factory</h1>
+            <h1 className="text-sm font-semibold">
+              <T>Factory</T>
+            </h1>
             <div className="ml-auto">{environmentPicker}</div>
           </WorkspacePageHeader>
           <p className="p-4 text-sm text-muted-foreground">
             {selected
-              ? "The selected server is unavailable. Reconnect it or choose another server."
-              : "Connect an environment to open its Factory."}
+              ? gt("The selected server is unavailable. Reconnect it or choose another server.")
+              : gt("Connect an environment to open its Factory.")}
           </p>
         </>
       )}
@@ -110,6 +114,7 @@ function EnvironmentFactory({
   readonly environmentLabel: string;
   readonly environmentPicker: ReactNode;
 }) {
+  const gt = useGT();
   const query = useEnvironmentQuery(serverEnvironment.factoryBoard({ environmentId, input: {} }));
   const [tab, setTab] = useState<(typeof TABS)[number]>("Decisions");
   const board = query.data;
@@ -122,7 +127,7 @@ function EnvironmentFactory({
   const failing = board?.triggers.filter((trigger) => trigger.failing).length ?? 0;
   const undelivered = board?.wakes.filter((wake) => wake.state === "undelivered").length ?? 0;
   const tabs = (
-    <nav className="flex gap-1" aria-label="Factory sections">
+    <nav className="flex gap-1" aria-label={gt("Factory sections")}>
       {TABS.map((name) => (
         <Button
           key={name}
@@ -138,7 +143,7 @@ function EnvironmentFactory({
           ) : (
             <CheckCircle2Icon />
           )}
-          {name}
+          {name === "Decisions" ? gt("Decisions") : name === "Fleet" ? gt("Fleet") : gt("Checks")}
           {board && (
             <Badge variant="secondary" size="sm">
               {name === "Decisions"
@@ -158,7 +163,7 @@ function EnvironmentFactory({
       <WorkspacePageHeader electron={isElectron} className="border-b border-border bg-background">
         <h1 className="flex shrink-0 items-center gap-2 text-sm font-semibold">
           <FactoryIcon className="size-4 text-primary" />
-          Factory
+          <T>Factory</T>
         </h1>
         <div className="hidden @min-[64rem]/factory:block">{board?.status.enabled && tabs}</div>
         <div className="ml-auto flex min-w-0 items-center gap-2">
@@ -172,10 +177,12 @@ function EnvironmentFactory({
             <Link
               to="/$environmentId/$threadId"
               params={{ environmentId, threadId: commander.threadId }}
-              aria-label="Open Commander"
+              aria-label={gt("Open Commander")}
               className="inline-flex shrink-0 items-center gap-1 rounded-sm p-1 text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
             >
-              <span className="hidden sm:inline">Commander</span>
+              <span className="hidden sm:inline">
+                <T>Commander</T>
+              </span>
               <ArrowUpRightIcon className="size-4" />
             </Link>
           )}
@@ -183,7 +190,7 @@ function EnvironmentFactory({
             variant="ghost"
             size="icon-sm"
             onClick={query.refresh}
-            aria-label="Refresh Factory"
+            aria-label={gt("Refresh Factory")}
           >
             <RefreshCwIcon />
           </Button>
@@ -205,8 +212,10 @@ function EnvironmentFactory({
                     onClick={() => setTab("Fleet")}
                     className="rounded-sm text-left underline focus-visible:outline-2 focus-visible:outline-ring"
                   >
-                    {unknown} action result{unknown === 1 ? "" : "s"} unknown. Verify before
-                    authorising another action.
+                    {gt(
+                      "{count, plural, one {{count} action result} other {{count} action results}} unknown. Verify before authorising another action.",
+                      { count: unknown },
+                    )}
                   </button>
                 )}
                 {!!failing && (
@@ -215,7 +224,10 @@ function EnvironmentFactory({
                     onClick={() => setTab("Checks")}
                     className="rounded-sm underline focus-visible:outline-2 focus-visible:outline-ring"
                   >
-                    {failing} failing check{failing === 1 ? "" : "s"}
+                    {gt(
+                      "{count, plural, one {{count} failing check} other {{count} failing checks}}",
+                      { count: failing },
+                    )}
                   </button>
                 )}
                 {!!undelivered && (
@@ -224,7 +236,10 @@ function EnvironmentFactory({
                     onClick={() => setTab("Checks")}
                     className="rounded-sm underline focus-visible:outline-2 focus-visible:outline-ring"
                   >
-                    {undelivered} undelivered wake{undelivered === 1 ? "" : "s"}
+                    {gt(
+                      "{count, plural, one {{count} undelivered wake} other {{count} undelivered wakes}}",
+                      { count: undelivered },
+                    )}
                   </button>
                 )}
               </div>
@@ -239,7 +254,7 @@ function EnvironmentFactory({
       )}
       {!board ? (
         <p className="p-4 text-sm text-muted-foreground">
-          {query.error ? "Factory is unavailable. Refresh to retry." : "Loading Factory…"}
+          {query.error ? gt("Factory is unavailable. Refresh to retry.") : gt("Loading Factory…")}
         </p>
       ) : !board.status.enabled ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -251,38 +266,41 @@ function EnvironmentFactory({
                 </div>
                 <Badge variant={board.status.stopping ? "warning" : "secondary"}>
                   {board.status.stopping
-                    ? "Stopping"
+                    ? gt("Stopping")
                     : board.status.forcedOff
-                      ? "Disabled by server"
-                      : "Off by default"}
+                      ? gt("Disabled by server")
+                      : gt("Off by default")}
                 </Badge>
               </div>
               <p className="mb-2 truncate text-xs font-medium text-muted-foreground">
                 {environmentLabel}
               </p>
               <h2 className="text-2xl font-semibold tracking-tight">
-                A workspace for your agents.
+                <T>A workspace for your agents.</T>
               </h2>
               <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">
-                Your Commander coordinates the work. You make the calls that matter. Enable Factory
-                for this server when you’re ready; your regular T3 threads continue normally.
+                <T>
+                  Your Commander coordinates the work. You make the calls that matter. Enable
+                  Factory for this server when you’re ready; your regular T3 threads continue
+                  normally.
+                </T>
               </p>
               <div className="my-6 grid gap-4 border-y border-border py-5 sm:grid-cols-3">
                 {[
                   {
                     icon: MessageSquareIcon,
-                    title: "Make the call",
-                    text: "Review decisions, then explicitly send your answer.",
+                    title: gt("Make the call"),
+                    text: gt("Review decisions, then explicitly send your answer."),
                   },
                   {
                     icon: UsersIcon,
-                    title: "See the crew",
-                    text: "Follow the hierarchy and open each agent’s thread.",
+                    title: gt("See the crew"),
+                    text: gt("Follow the hierarchy and open each agent’s thread."),
                   },
                   {
                     icon: ShieldCheckIcon,
-                    title: "Stay in control",
-                    text: "Enable and turn off Factory separately on each server.",
+                    title: gt("Stay in control"),
+                    text: gt("Enable and turn off Factory separately on each server."),
                   },
                 ].map(({ icon: Icon, title, text }) => (
                   <div key={title}>
@@ -294,10 +312,16 @@ function EnvironmentFactory({
               </div>
               <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
                 {board.status.forcedOff
-                  ? "This server forces Factory off with T3CODE_FACTORY_DISABLED. Remove that setting and restart the server before enabling it."
+                  ? gt(
+                      "This server forces Factory off with T3CODE_FACTORY_DISABLED. Remove that setting and restart the server before enabling it.",
+                    )
                   : board.status.stopping
-                    ? "Waiting for Factory turns and command jobs to stop. History is retained; enable becomes available after shutdown is confirmed."
-                    : "Turning it off cancels queued work and requests stops for active turns and commands. Outward actions already in progress may finish; unexecuted action approvals are withdrawn."}
+                    ? gt(
+                        "Waiting for Factory turns and command jobs to stop. History is retained; enable becomes available after shutdown is confirmed.",
+                      )
+                    : gt(
+                        "Turning it off cancels queued work and requests stops for active turns and commands. Outward actions already in progress may finish; unexecuted action approvals are withdrawn.",
+                      )}
               </p>
               <FactoryPowerControl environmentId={environmentId} status={board.status} />
             </div>
@@ -327,6 +351,7 @@ function FactoryPowerControl({
   readonly environmentId: EnvironmentId;
   readonly status: FactoryStatus;
 }) {
+  const gt = useGT();
   const allowed = useAtomValue(serverEnvironment.factorySetEnabled.permissionAtom(environmentId));
   const setEnabled = useAtomCommand(
     serverEnvironment.factorySetEnabled,
@@ -345,17 +370,18 @@ function FactoryPowerControl({
       }}
     >
       {busy
-        ? "Updating…"
+        ? gt("Updating…")
         : status.enabled
-          ? "Turn Factory off"
+          ? gt("Turn Factory off")
           : status.stopping
-            ? "Stopping Factory…"
-            : "Enable Factory"}
+            ? gt("Stopping Factory…")
+            : gt("Enable Factory")}
     </Button>
   );
 }
 
 function CommanderSetup({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const allowed = useAtomValue(
     serverEnvironment.factoryEnsureCommander.permissionAtom(environmentId),
@@ -382,16 +408,20 @@ function CommanderSetup({ environmentId }: { readonly environmentId: Environment
     models[0];
   return (
     <section className="mx-4 mt-4 shrink-0 space-y-4 rounded-xl border border-border bg-card/95 p-5 shadow-sm">
-      <h2 className="font-medium">Open your Factory</h2>
+      <h2 className="font-medium">
+        <T>Open your Factory</T>
+      </h2>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        A pinned Commander coordinates Subcommanders and Workers across this environment. Decisions
-        appear here when your answer is needed.
+        <T>
+          A pinned Commander coordinates Subcommanders and Workers across this environment.
+          Decisions appear here when your answer is needed.
+        </T>
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-full min-w-0 sm:w-80">
           <Select value={selected?.key ?? ""} onValueChange={(key) => setModelKey(key)}>
-            <SelectTrigger aria-label="Commander model">
-              <SelectValue placeholder="Choose a model">{selected?.label}</SelectValue>
+            <SelectTrigger aria-label={gt("Commander model")}>
+              <SelectValue placeholder={gt("Choose a model")}>{selected?.label}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
               {models.map((model) => (
@@ -414,12 +444,14 @@ function CommanderSetup({ environmentId }: { readonly environmentId: Environment
             setBusy(false);
           }}
         >
-          {busy ? "Starting…" : "Start Commander"}
+          {busy ? gt("Starting…") : gt("Start Commander")}
         </Button>
       </div>
       <p className="max-w-3xl text-xs text-muted-foreground">
-        Factory action tools enforce approval for outward actions. Agents are instructed to use
-        them; direct shells, other tools and script effects can bypass this workflow.
+        <T>
+          Factory action tools enforce approval for outward actions. Agents are instructed to use
+          them; direct shells, other tools and script effects can bypass this workflow.
+        </T>
       </p>
     </section>
   );
@@ -432,6 +464,7 @@ export function Decisions({
   readonly environmentId: EnvironmentId;
   readonly board: FactoryBoard;
 }) {
+  const gt = useGT();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const cards = openFactoryCards(board.cards);
@@ -447,11 +480,15 @@ export function Decisions({
         )}
       >
         <div className="mb-2 flex items-center justify-between border-b border-border px-3 pb-3 pt-2">
-          <h2 className="text-xs font-semibold text-muted-foreground">Needs you</h2>
+          <h2 className="text-xs font-semibold text-muted-foreground">
+            <T>Needs you</T>
+          </h2>
           <Badge variant="secondary">{cards.length}</Badge>
         </div>
         {!cards.length && (
-          <p className="p-3 text-sm text-muted-foreground">No decisions need your answer.</p>
+          <p className="p-3 text-sm text-muted-foreground">
+            <T>No decisions need your answer.</T>
+          </p>
         )}
         {cards.map((card) => (
           <button
@@ -472,14 +509,16 @@ export function Decisions({
             <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
               {card.body.blocking && (
                 <Badge variant="warning" size="sm">
-                  Blocking
+                  <T>Blocking</T>
                 </Badge>
               )}
               <span>{FACTORY_CARD_KIND_LABEL[card.body.kind]}</span>
               <span>{card.body.urgency.replace("this-week", "this week")}</span>
               <time
                 dateTime={new Date(card.createdAt).toISOString()}
-                aria-label={`Created ${new Date(card.createdAt).toLocaleString()}`}
+                aria-label={gt("Created {date}", {
+                  date: new Date(card.createdAt).toLocaleString(),
+                })}
               >
                 {new Date(card.createdAt).toLocaleDateString(undefined, {
                   month: "short",
@@ -494,17 +533,19 @@ export function Decisions({
         ))}
         {board.cards.some((card) => card.state === "answered" || card.state === "acked") && (
           <details className="px-2 py-3 text-xs text-muted-foreground">
-            <summary className="cursor-pointer">Recent answers</summary>
+            <summary className="cursor-pointer">
+              <T>Recent answers</T>
+            </summary>
             {recentFactoryAnswers(board.cards).map((card) => (
               <p key={card.id} className="px-2 py-1 text-sm">
                 <span className="text-muted-foreground">
                   {card.outcome === "DEFAULTED"
-                    ? "Deferred to agent"
+                    ? gt("Deferred to agent")
                     : card.outcome === "RULED"
-                      ? "Your direction"
+                      ? gt("Your direction")
                       : card.outcome === "CHOSE-against"
-                        ? "Chose another option"
-                        : "Chosen"}
+                        ? gt("Chose another option")
+                        : gt("Chosen")}
                 </span>{" "}
                 · {card.body.title}
               </p>
@@ -523,7 +564,7 @@ export function Decisions({
           <div className="border-b border-border px-4 py-2 @min-[48rem]/factory:hidden">
             <Button variant="ghost" size="sm" onClick={() => setShowDetail(false)}>
               <ArrowLeftIcon />
-              All decisions · {cards.length}
+              {gt("All decisions · {count}", { count: cards.length })}
             </Button>
           </div>
           <CardDetail
@@ -536,9 +577,14 @@ export function Decisions({
       ) : (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-border bg-card/95 p-8 text-center shadow-sm">
           <CheckCircle2Icon className="mb-4 size-8 text-success-foreground" />
-          <h2 className="text-lg font-semibold">You’re all caught up.</h2>
+          <h2 className="text-lg font-semibold">
+            <T>You’re all caught up.</T>
+          </h2>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Your agents can keep working. New questions will appear here when they need your input.
+            <T>
+              Your agents can keep working. New questions will appear here when they need your
+              input.
+            </T>
           </p>
         </div>
       )}
@@ -555,6 +601,7 @@ export function CardDetail({
   readonly card: FactoryCard;
   readonly owner: FactoryBoard["agents"][number] | undefined;
 }) {
+  const gt = useGT();
   const [staged, setStaged] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -598,10 +645,13 @@ export function CardDetail({
         <div>
           <p className="text-xs text-muted-foreground">
             {card.body.blocking && (
-              <span className="mr-2 font-medium text-warning-foreground">Blocking</span>
+              <span className="mr-2 font-medium text-warning-foreground">
+                <T>Blocking</T>
+              </span>
             )}
             {FACTORY_CARD_KIND_LABEL[card.body.kind]} ·{" "}
-            {card.body.urgency.replace("this-week", "this week")} · revision {card.revision}
+            {card.body.urgency.replace("this-week", "this week")}{" "}
+            {gt("· revision {revision}", { revision: card.revision })}
             {owner ? (
               <>
                 {" "}
@@ -623,31 +673,45 @@ export function CardDetail({
           </h2>
         </div>
         <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-3 rounded-lg border border-border bg-muted/30 p-4 text-sm">
-          <dt className="text-muted-foreground">Doing</dt>
+          <dt className="text-muted-foreground">
+            <T>Doing</T>
+          </dt>
           <dd>{card.body.context.doing}</dd>
-          <dt className="text-muted-foreground">Why you</dt>
+          <dt className="text-muted-foreground">
+            <T>Why you</T>
+          </dt>
           <dd>{card.body.context.whyNotMe}</dd>
-          <dt className="text-muted-foreground">Waiting</dt>
+          <dt className="text-muted-foreground">
+            <T>Waiting</T>
+          </dt>
           <dd>{card.body.context.costOfWaiting}</dd>
         </dl>
         {action && (
           <div className="space-y-2 rounded-md border border-border p-4">
-            <p className="text-sm font-medium">Exact action payload</p>
-            <p className="break-all font-mono text-xs">SHA-256 {action.payloadSha256}</p>
+            <p className="text-sm font-medium">
+              <T>Exact action payload</T>
+            </p>
+            <p className="break-all font-mono text-xs">
+              <T>SHA-256</T> {action.payloadSha256}
+            </p>
             {payload.data ? (
               <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">
                 {JSON.stringify(payload.data.envelope, null, 2)}
               </pre>
             ) : (
-              <p className="text-sm text-muted-foreground">{payload.error ?? "Loading action…"}</p>
+              <p className="text-sm text-muted-foreground">
+                {payload.error ?? gt("Loading action…")}
+              </p>
             )}
             <p className="text-xs text-muted-foreground">
-              A changed merge head voids consent. An uncertain execution result requires
-              reconciliation, never an automatic repeat.
+              <T>
+                A changed merge head voids consent. An uncertain execution result requires
+                reconciliation, never an automatic repeat.
+              </T>
             </p>
           </div>
         )}
-        <div className="space-y-2" aria-label="Options">
+        <div className="space-y-2" aria-label={gt("Options")}>
           {card.body.options.map((option) => (
             <button
               key={option.id}
@@ -675,13 +739,15 @@ export function CardDetail({
                 {option.recommended && (
                   <Badge variant="success">
                     <StarIcon />
-                    Recommended
+                    <T>Recommended</T>
                   </Badge>
                 )}
               </span>
-              <span className="block text-sm text-muted-foreground">Next: {option.nextStep}</span>
+              <span className="block text-sm text-muted-foreground">
+                <T>Next:</T> {option.nextStep}
+              </span>
               <span className="block text-xs text-muted-foreground">
-                Cost: {option.cost} ·{" "}
+                <T>Cost:</T> {option.cost} ·{" "}
                 <Badge
                   variant={
                     option.reversibility === "irreversible"
@@ -700,7 +766,9 @@ export function CardDetail({
           ))}
         </div>
         <details className="space-y-2 text-sm">
-          <summary className="cursor-pointer font-medium">Reasoning</summary>
+          <summary className="cursor-pointer font-medium">
+            <T>Reasoning</T>
+          </summary>
           <p className="text-muted-foreground">{card.body.rationale}</p>
         </details>
         {[...new Set(card.body.caveats)].map((text) => (
@@ -731,7 +799,7 @@ export function CardDetail({
                 params={{ environmentId, threadId: ThreadId.make(link.ref) }}
                 className="rounded-sm underline focus-visible:outline-2 focus-visible:outline-ring"
               >
-                {link.label ?? "Open thread"}
+                {link.label ?? gt("Open thread")}
               </Link>
             ) : (
               <span
@@ -751,7 +819,7 @@ export function CardDetail({
             disabled={!allowed || busy}
             aria-pressed={staged === "default"}
           >
-            Defer to agent (uses recommendation)
+            <T>Defer to agent (uses recommendation)</T>
           </Button>
           <Button
             variant={staged === "ruled" ? "secondary" : "ghost"}
@@ -763,15 +831,15 @@ export function CardDetail({
               noteRef.current?.focus();
             }}
           >
-            Write my own direction
+            <T>Write my own direction</T>
           </Button>
         </div>
         <Textarea
           size="sm"
           ref={noteRef}
-          aria-label="Decision note"
+          aria-label={gt("Decision note")}
           disabled={!allowed || busy}
-          placeholder="Add a note, or write your own direction…"
+          placeholder={gt("Add a note, or write your own direction…")}
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />
@@ -779,8 +847,15 @@ export function CardDetail({
       <footer className="sticky bottom-0 mt-auto flex items-center justify-between gap-4 border-t border-border bg-background px-4 py-3">
         <p className="min-w-0 text-sm text-muted-foreground" role="status">
           {staged
-            ? `Staged: ${staged === "default" ? "defer to agent" : staged === "ruled" ? "your own direction" : (card.body.options.find((option) => option.id === staged)?.label ?? staged)}`
-            : "Choose an option. Nothing is sent until Send."}
+            ? gt("Staged: {choice}", {
+                choice:
+                  staged === "default"
+                    ? gt("defer to agent")
+                    : staged === "ruled"
+                      ? gt("your own direction")
+                      : (card.body.options.find((option) => option.id === staged)?.label ?? staged),
+              })
+            : gt("Choose an option. Nothing is sent until Send.")}
         </p>
         <Button
           disabled={
@@ -792,7 +867,7 @@ export function CardDetail({
           }
           onClick={() => void send()}
         >
-          {busy ? "Sending…" : "Send"}
+          {busy ? gt("Sending…") : gt("Send")}
         </Button>
       </footer>
     </section>
@@ -806,6 +881,7 @@ function Triggers({
   readonly environmentId: EnvironmentId;
   readonly board: FactoryBoard;
 }) {
+  const gt = useGT();
   const run = useAtomCommand(serverEnvironment.factoryRunTrigger, "Run Factory check");
   const shadow = useAtomCommand(
     serverEnvironment.factorySetTriggerShadow,
@@ -817,13 +893,15 @@ function Triggers({
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
       <h2 className="flex items-center gap-2 font-medium">
         <CheckCircle2Icon className="size-4 text-muted-foreground" />
-        Checks & run history
+        <T>Checks & run history</T>
       </h2>
       {!board.triggers.length && (
         <div className="rounded-xl border border-border bg-card/95 p-6 shadow-sm">
-          <h3 className="text-sm font-medium">No checks configured</h3>
+          <h3 className="text-sm font-medium">
+            <T>No checks configured</T>
+          </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Checks will appear here with their latest results and run history.
+            <T>Checks will appear here with their latest results and run history.</T>
           </p>
         </div>
       )}
@@ -836,9 +914,13 @@ function Triggers({
             <div>
               <h3 className="font-medium">{trigger.id}</h3>
               <p className="text-xs text-muted-foreground">
-                Every {Math.round(trigger.intervalMs / 60_000)} min ·{" "}
-                {!trigger.enabled ? "disabled" : trigger.shadow ? "observe only" : "live"} ·{" "}
-                {trigger.failing ? "last check failed" : "no failure recorded"}
+                {gt("Every {minutes} min ·", { minutes: Math.round(trigger.intervalMs / 60_000) })}{" "}
+                {!trigger.enabled
+                  ? gt("disabled")
+                  : trigger.shadow
+                    ? gt("observe only")
+                    : gt("live")}{" "}
+                · {trigger.failing ? gt("last check failed") : gt("no failure recorded")}
               </p>
             </div>
             <div className="flex gap-2">
@@ -850,7 +932,7 @@ function Triggers({
                   void shadow({ environmentId, input: { id: trigger.id, shadow: !trigger.shadow } })
                 }
               >
-                {trigger.shadow ? "Make live" : "Use shadow"}
+                {trigger.shadow ? gt("Make live") : gt("Use shadow")}
               </Button>
               <Button
                 size="sm"
@@ -859,7 +941,7 @@ function Triggers({
                 onClick={() => void run({ environmentId, input: { id: trigger.id } })}
               >
                 <PlayIcon />
-                Run now
+                <T>Run now</T>
               </Button>
             </div>
           </div>
@@ -870,17 +952,23 @@ function Triggers({
             .map((record) => (
               <details key={record.id} className="text-xs">
                 <summary className="cursor-pointer text-muted-foreground">
-                  {record.outcome} · {record.newItemCount}/{record.itemCount} new ·{" "}
-                  {Math.round(record.tookMs)} ms
+                  {gt("{outcome} · {newCount}/{total} new · {duration} ms", {
+                    outcome: record.outcome,
+                    newCount: record.newItemCount,
+                    total: record.itemCount,
+                    duration: Math.round(record.tookMs),
+                  })}
                 </summary>
                 <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap">
-                  {record.stderr || "No stderr."}
+                  {record.stderr || gt("No stderr.")}
                 </pre>
               </details>
             ))}
         </section>
       ))}
-      <h3 className="font-medium">Undelivered wakes</h3>
+      <h3 className="font-medium">
+        <T>Undelivered wakes</T>
+      </h3>
       {board.wakes
         .filter((w) => w.state === "undelivered")
         .map((wake) => (
@@ -894,7 +982,7 @@ function Triggers({
               disabled={!allowed}
               onClick={() => void retry({ environmentId, input: { wakeId: wake.id } })}
             >
-              Retry
+              <T>Retry</T>
             </Button>
           </div>
         ))}
@@ -909,6 +997,7 @@ function Fleet({
   readonly environmentId: EnvironmentId;
   readonly board: FactoryBoard;
 }) {
+  const gt = useGT();
   const cancel = useAtomCommand(serverEnvironment.factoryCancelLaneJob, "Cancel Factory command");
   const allowed = useAtomValue(
     serverEnvironment.factoryCancelLaneJob.permissionAtom(environmentId),
@@ -917,10 +1006,10 @@ function Fleet({
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
       <h2 className="flex items-center gap-2 font-medium">
         <UsersIcon className="size-4 text-muted-foreground" />
-        Your crew
+        <T>Your crew</T>
       </h2>
       <p className="text-xs text-muted-foreground">
-        Factory roles and lifecycle. Open a thread for its live activity.
+        <T>Factory roles and lifecycle. Open a thread for its live activity.</T>
       </p>
       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm">
         {factoryAgentRows(board.agents).map(({ agent, depth }) => (
@@ -944,32 +1033,44 @@ function Fleet({
               </div>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {agent.next || "No next step recorded"}
+              {agent.next || gt("No next step recorded")}
             </p>
             {agent.needs && (
-              <p className="mt-1 text-sm text-warning-foreground">Needs: {agent.needs}</p>
+              <p className="mt-1 text-sm text-warning-foreground">
+                <T>Needs:</T> {agent.needs}
+              </p>
             )}
             {agent.parentId && (
-              <p className="mt-1 text-xs text-muted-foreground">Reports to {agent.parentId}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <T>Reports to</T> {agent.parentId}
+              </p>
             )}
           </section>
         ))}
         {!board.agents.some((agent) => agent.lifecycle !== "closed") && (
-          <p className="p-3 text-sm text-muted-foreground">No agents enrolled yet.</p>
+          <p className="p-3 text-sm text-muted-foreground">
+            <T>No agents enrolled yet.</T>
+          </p>
         )}
       </div>
       <h3 className="text-sm font-medium">
-        Waiting for capacity · {board.spawns.filter((spawn) => spawn.state === "held").length}
+        <T>Waiting for capacity ·</T>{" "}
+        {board.spawns.filter((spawn) => spawn.state === "held").length}
       </h3>
       {board.spawns
         .filter((s) => s.state === "held")
         .map((spawn) => (
           <p key={spawn.id} className="text-sm text-muted-foreground">
-            {spawn.title} · held for {spawn.modelSelection.model}
+            {gt("{title} · held for {model}", {
+              title: spawn.title,
+              model: spawn.modelSelection.model,
+            })}
           </p>
         ))}
       <h3 className="text-sm font-medium">
-        Command lanes · {board.jobs.filter((job) => job.state !== "terminal").length} in progress
+        {gt("Command lanes · {count} in progress", {
+          count: board.jobs.filter((job) => job.state !== "terminal").length,
+        })}
       </h3>
       {board.jobs.slice(-20).map((job) => (
         <div
@@ -989,7 +1090,7 @@ function Fleet({
               disabled={!allowed}
               onClick={() => void cancel({ environmentId, input: { id: job.id } })}
             >
-              Cancel
+              <T>Cancel</T>
             </Button>
           )}
         </div>
@@ -1002,8 +1103,10 @@ function Fleet({
             role="alert"
             className="rounded-md border border-destructive p-4 text-sm"
           >
-            Action {execution.cardId} has an unknown result. Verify its external result before
-            authorising any new action.
+            {gt(
+              "Action {cardId} has an unknown result. Verify its external result before authorising any new action.",
+              { cardId: execution.cardId },
+            )}
           </p>
         ))}
     </div>

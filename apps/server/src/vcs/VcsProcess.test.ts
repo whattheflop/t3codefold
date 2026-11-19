@@ -230,6 +230,11 @@ describe("VcsProcess.run", () => {
       fsyncMethods: ["fsync"],
     },
     {
+      stderr:
+        "error: unable to write file /repo/.git/objects/tmp_objdir-t3-checkpoint-test/pack/pack-0123456789abcdef0123456789abcdef01234567.pack: No such file or directory",
+      fsyncMethods: ["batch", "fsync"],
+    },
+    {
       stderr: "fatal: fsync error on '.git/objects/bulk_fsync_Pseg66': Operation not supported",
       fsyncMethods: ["batch", "writeout-only"],
     },
@@ -239,7 +244,7 @@ describe("VcsProcess.run", () => {
       fsyncMethods: ["batch", "writeout-only"],
     },
   ] as const)(
-    "falls back to writeout-only only for unsupported flushes on macOS ($fsyncMethods): $stderr",
+    "selects the checkpoint flush fallback for $stderr ($fsyncMethods)",
     ({ stderr, fsyncMethods, ...scenario }) =>
       Effect.gen(function* () {
         const seen: Array<ReadonlyArray<string>> = [];

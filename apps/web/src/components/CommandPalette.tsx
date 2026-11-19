@@ -1374,9 +1374,53 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [
     ...useFoldVoiceActionItems(),
-    foldGladosActionItem(navigate, activeThread?.environmentId, messages),
   ];
 
+  if (projects.length > 0) {
+    const activeProjectTitle =
+      projectPickerEntries.find((entry) => entry.isPreferred)?.group.displayName ??
+      currentProject?.title ??
+      null;
+
+    if (activeProjectTitle) {
+      actionItems.push({
+        kind: "action",
+        value: "action:new-thread",
+        searchTerms: ["new thread", "chat", "create", "draft"],
+        title: (
+          <T>
+            New thread in{" "}
+            <span className="font-semibold">
+              <Var>{activeProjectTitle}</Var>
+            </span>
+          </T>
+        ),
+        searchTitle: gt("New thread in {project}", { project: activeProjectTitle }),
+        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand: "chat.newLocal",
+        run: async () => {
+          await startNewThreadFromContext({
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          });
+        },
+      });
+    }
+
+    actionItems.push({
+      kind: "submenu",
+      value: "action:new-thread-in",
+      searchTerms: ["new thread", "project", "pick", "choose", "select"],
+      title: gt("New thread in..."),
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
+      groups: [{ value: NEW_THREAD_IN_GROUP, label: gt("Projects"), items: projectThreadItems }],
+    });
+  }
+
+  actionItems.push(foldGladosActionItem(navigate, activeThread?.environmentId, messages));
   actionItems.push({
     kind: "action",
     value: "action:next-attention-thread",
@@ -1429,50 +1473,6 @@ function OpenCommandPaletteDialog(props: {
           ],
         },
       ],
-    });
-  }
-
-  if (projects.length > 0) {
-    const activeProjectTitle =
-      projectPickerEntries.find((entry) => entry.isPreferred)?.group.displayName ??
-      currentProject?.title ??
-      null;
-
-    if (activeProjectTitle) {
-      actionItems.push({
-        kind: "action",
-        value: "action:new-thread",
-        searchTerms: ["new thread", "chat", "create", "draft"],
-        title: (
-          <T>
-            New thread in{" "}
-            <span className="font-semibold">
-              <Var>{activeProjectTitle}</Var>
-            </span>
-          </T>
-        ),
-        searchTitle: gt("New thread in {project}", { project: activeProjectTitle }),
-        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.newLocal",
-        run: async () => {
-          await startNewThreadFromContext({
-            activeDraftThread,
-            activeThread: activeThread ?? undefined,
-            defaultProjectRef,
-            handleNewThread,
-          });
-        },
-      });
-    }
-
-    actionItems.push({
-      kind: "submenu",
-      value: "action:new-thread-in",
-      searchTerms: ["new thread", "project", "pick", "choose", "select"],
-      title: gt("New thread in..."),
-      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: NEW_THREAD_IN_GROUP, label: gt("Projects"), items: projectThreadItems }],
     });
   }
 

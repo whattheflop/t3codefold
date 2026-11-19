@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 // @effect-diagnostics globalDate:off - Client-side staged action expiry is checked outside an Effect runtime.
 import * as Schema from "effect/Schema";
 import { HerdrClient, type CoreTransport } from "./client.ts";
@@ -79,6 +81,10 @@ interface TranscriptBinding {
   readonly discovered?: boolean;
 }
 export class HerdrWorkspace {
+  private readonly resolve: MFunctionType;
+  constructor(resolve: MFunctionType = mFallback) {
+    this.resolve = resolve;
+  }
   private state = initial();
   private listeners = new Set<() => void>();
   private client: HerdrClient | null = null;
@@ -124,7 +130,7 @@ export class HerdrWorkspace {
     const previous = this.state.selected?.id;
     this.close();
     const epoch = ++this.epoch;
-    const client = new HerdrClient(transport);
+    const client = new HerdrClient(transport, this.resolve);
     this.client = client;
     this.readOnly = destination.readOnly;
     this.bindings.clear();
@@ -183,7 +189,8 @@ export class HerdrWorkspace {
       if (epoch === this.epoch)
         this.update({
           connection: "stale",
-          error: error instanceof Error ? error.message : "Core connection failed",
+          error:
+            error instanceof Error ? error.message : this.resolve(msg("Core connection failed")),
         });
       return null;
     }
@@ -335,7 +342,9 @@ export class HerdrWorkspace {
       this.update({
         items: [],
         history: "unavailable",
-        error: "Transcript was replaced or truncated. Reopen this session to reload it.",
+        error: this.resolve(
+          msg("Transcript was replaced or truncated. Reopen this session to reload it."),
+        ),
       });
       return;
     }
@@ -364,7 +373,11 @@ export class HerdrWorkspace {
       cursor: String(this.lines.get(agent.id)),
       history: "ready",
       ...(invalidRecords
-        ? { error: "Some provider records could not be decoded. This history is incomplete." }
+        ? {
+            error: this.resolve(
+              msg("Some provider records could not be decoded. This history is incomplete."),
+            ),
+          }
         : {}),
     });
   }
@@ -527,7 +540,11 @@ export class HerdrWorkspace {
       );
     } catch (error) {
       this.unknownDelivery = true;
-      this.update({ error: "The action may have run. Verify service state before repeating it." });
+      this.update({
+        error: this.resolve(
+          msg("The action may have run. Verify service state before repeating it."),
+        ),
+      });
       throw error;
     }
   }

@@ -1,3 +1,4 @@
+import { T } from "gt-react";
 import { useEffect, useRef, useState } from "react";
 import { openCommandPalette } from "~/commandPaletteBus";
 import { redirectDropdownNavigationKey } from "~/lib/dropdownNavigationKey";
@@ -1489,58 +1490,110 @@ export function TimelineVimMode({ previewThreads = false }: { previewThreads?: b
       {view.helpOpen ? (
         <div className="fixed inset-0 z-90 flex items-center justify-center bg-black/35 p-4">
           <div className="max-w-xl rounded-xl bg-popover p-5 text-sm text-popover-foreground shadow-xl ring-1 ring-border">
-            <h2 className="mb-3 text-base font-semibold">T3 Vim keyboard mode</h2>
+            <h2 className="mb-3 text-base font-semibold">
+              <T>T3 Vim keyboard mode</T>
+            </h2>
             <div className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 font-mono">
               <kbd>j / k</kbd>
-              <span>scroll down / up</span>
+              <span>
+                <T>scroll down / up</T>
+              </span>
               <kbd>Ctrl-d / Ctrl-u</kbd>
-              <span>half page down / up</span>
+              <span>
+                <T>half page down / up</T>
+              </span>
               <kbd>gg / G</kbd>
-              <span>conversation start / end</span>
+              <span>
+                <T>conversation start / end</T>
+              </span>
               <kbd>{"{ / }"}</kbd>
-              <span>previous / next message</span>
+              <span>
+                <T>previous / next message</T>
+              </span>
               <kbd>m… / `… / ``</kbd>
-              <span>set mark / jump / jump back</span>
+              <span>
+                <T>set mark / jump / jump back</T>
+              </span>
               <kbd>f / F</kbd>
-              <span>activate / focus a visible control</span>
+              <span>
+                <T>activate / focus a visible control</T>
+              </span>
               <kbd>Ctrl-w h / j / k / l</kbd>
-              <span>focus left / down / up / right</span>
+              <span>
+                <T>focus left / down / up / right</T>
+              </span>
               <kbd>Ctrl-w w</kbd>
-              <span>cycle threads / conversation / composer / right panel</span>
+              <span>
+                <T>cycle threads / conversation / composer / right panel</T>
+              </span>
               <kbd>Sidebar j / k</kbd>
-              <span>previous / next project or thread</span>
+              <span>
+                <T>previous / next project or thread</T>
+              </span>
               <kbd>Sidebar / · Enter / i</kbd>
-              <span>filter threads · open selection</span>
+              <span>
+                <T>filter threads · open selection</T>
+              </span>
               <kbd>Sidebar s / u</kbd>
-              <span>settle / un-settle focused thread</span>
+              <span>
+                <T>settle / un-settle focused thread</T>
+              </span>
               <kbd>Right panel j / k · Enter</kbd>
-              <span>previous / next control · open selection</span>
+              <span>
+                <T>previous / next control · open selection</T>
+              </span>
               <kbd>File tree h / l · gg / G</kbd>
-              <span>collapse / expand · first / last file</span>
+              <span>
+                <T>collapse / expand · first / last file</T>
+              </span>
               <kbd>Right panel H / L · /</kbd>
-              <span>previous / next tab · focus search</span>
+              <span>
+                <T>previous / next tab · focus search</T>
+              </span>
               <kbd>Right panel f / F</kbd>
-              <span>activate / focus a visible panel control</span>
+              <span>
+                <T>activate / focus a visible panel control</T>
+              </span>
               <kbd>Other pages j / k · Enter · /</kbd>
-              <span>next / previous row or scroll · open · search</span>
+              <span>
+                <T>next / previous row or scroll · open · search</T>
+              </span>
               <kbd>Other pages i</kbd>
-              <span>focus the area's message field</span>
+              <span>
+                <T>focus the area's message field</T>
+              </span>
               <kbd>Esc in a field</kbd>
-              <span>leave it and return to its region</span>
+              <span>
+                <T>leave it and return to its region</T>
+              </span>
               <kbd>i / gi</kbd>
-              <span>composer Insert / Normal mode</span>
+              <span>
+                <T>composer Insert / Normal mode</T>
+              </span>
               <kbd>v · motions · v / V</kbd>
-              <span>place caret · start character / line selection</span>
+              <span>
+                <T>place caret · start character / line selection</T>
+              </span>
               <kbd>Caret f</kbd>
-              <span>jump to visible conversation text</span>
+              <span>
+                <T>jump to visible conversation text</T>
+              </span>
               <kbd>y / c</kbd>
-              <span>copy / cite selected messages</span>
+              <span>
+                <T>copy / cite selected messages</T>
+              </span>
               <kbd>z</kbd>
-              <span>pass keys through until Escape</span>
+              <span>
+                <T>pass keys through until Escape</T>
+              </span>
               <kbd>: · Space f / /</kbd>
-              <span>commands · files / conversation search</span>
+              <span>
+                <T>commands · files / conversation search</T>
+              </span>
             </div>
-            <p className="mt-4 text-muted-foreground">Press any key to close this help.</p>
+            <p className="mt-4 text-muted-foreground">
+              <T>Press any key to close this help.</T>
+            </p>
           </div>
         </div>
       ) : null}

@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react-native";
 import { ControllerPressable } from "../controller/ControllerPressable";
 import { ControllerConsole } from "../controller/ControllerConsole";
 import { androidKeyboardFirst } from "../../lib/android-back";
@@ -39,6 +40,7 @@ export interface PendingUserInputFullScreenProps extends Omit<
  * presentations read and write the host's drafts.
  */
 export function PendingUserInputFullScreen(props: PendingUserInputFullScreenProps) {
+  const gt = useGT();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const posture = useWindowPosture();
@@ -87,17 +89,19 @@ export function PendingUserInputFullScreen(props: PendingUserInputFullScreenProp
             >
               <View className="flex-1 gap-1" style={{ paddingLeft: layout.horizontalPadding }}>
                 <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-                  User input needed
+                  <T>User input needed</T>
                 </Text>
                 <Text className="font-t3-bold text-2xl text-foreground">
-                  {questionCount} question{questionCount === 1 ? "" : "s"}
+                  {gt("{count, plural, one {{count} question} other {{count} questions}}", {
+                    count: questionCount,
+                  })}
                 </Text>
               </View>
               <View style={{ paddingRight: layout.horizontalPadding }}>
                 <ControllerPressable
                   onActivate={close}
                   accessibilityRole="button"
-                  accessibilityLabel="Close full screen user input"
+                  accessibilityLabel={gt("Close full screen user input")}
                   onPress={close}
                   className="h-11 w-11 items-center justify-center rounded-full bg-subtle-strong active:opacity-70"
                 >
@@ -143,7 +147,7 @@ export function PendingUserInputFullScreen(props: PendingUserInputFullScreenProp
               }}
             >
               <Button
-                label="Submit answers"
+                label={gt("Submit answers")}
                 controllerFooter
                 controllerKey={props.pendingUserInput.requestId}
                 fullWidth
@@ -172,7 +176,7 @@ export function PendingUserInputFullScreen(props: PendingUserInputFullScreenProp
                   }}
                 >
                   <Text className="font-t3-bold text-sm text-foreground-muted">
-                    Dismiss without answering
+                    {gt("Dismiss without answering")}
                   </Text>
                 </ControllerPressable>
               ) : null}

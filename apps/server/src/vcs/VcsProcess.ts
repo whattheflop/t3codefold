@@ -310,6 +310,27 @@ export const make = Effect.gen(function* () {
 
     let result = yield* spawn(input, baseError);
 
+    // Git 2.50 can lose a new pack when a batch fsync transaction contains both loose and packed objects.
+    if (
+      input.operation === CHECKPOINT_CAPTURE_OPERATION &&
+      input.command === "git" &&
+      !input.allowNonZeroExit &&
+      input.args.includes(BATCH_FSYNC_ARG) &&
+      input.args.includes("add") &&
+      result.code === 128 &&
+      /unable to write file [^\r\n]+[/\\]pack[/\\]pack-(?:[0-9a-f]{40}|[0-9a-f]{64})\.pack: no such file or directory\r?$/im.test(
+        result.stderr,
+      )
+    ) {
+      result = yield* spawn(
+        {
+          ...input,
+          args: input.args.map((arg) => (arg === BATCH_FSYNC_ARG ? FULL_FSYNC_ARG : arg)),
+        },
+        baseError,
+      );
+    }
+
     if (
       hostPlatform === "darwin" &&
       input.operation === CHECKPOINT_CAPTURE_OPERATION &&

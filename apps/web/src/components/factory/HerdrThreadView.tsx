@@ -1,3 +1,4 @@
+import { T, useGT, useMessages } from "gt-react";
 import type { LegendListRef } from "@legendapp/list/react";
 import { EnvironmentId, ProviderDriverKind } from "@t3tools/contracts";
 import type { CoreAgent } from "@t3tools/client-runtime/herdr/protocol";
@@ -73,12 +74,14 @@ export function HerdrThreadView({
   readonly onViewChange: (view: "chat" | "terminal") => void;
   readonly attachTarget: HerdrAttachTarget | null;
 }) {
+  const m = useMessages();
+  const gt = useGT();
   // No ":" so the timeline finds no environment thread behind the key.
   const threadKey = `herdr-${agent.id}`;
   const listRef = useRef<LegendListRef | null>(null);
   const { resolvedTheme } = useTheme();
   const entries = coreItemsToTimelineEntries(state.items);
-  const status = herdrAgentStatus(agent);
+  const status = herdrAgentStatus(agent, m);
   const isWorking = status?.kind === "working";
   const lastUserAt =
     entries.findLast((entry) => entry.kind === "message" && entry.message.role === "user")
@@ -111,8 +114,10 @@ export function HerdrThreadView({
     state.receipt?.state === "unknown" ? (
       <div className={cn(LANE, "pb-4 text-xs text-muted-foreground")}>
         <p>
-          Delivery is unconfirmed. Core has no send receipts, so check the transcript before sending
-          again.
+          <T>
+            Delivery is unconfirmed. Core has no send receipts, so check the transcript before
+            sending again.
+          </T>
         </p>
         <Button
           size="xs"
@@ -120,7 +125,7 @@ export function HerdrThreadView({
           className="mt-2"
           onClick={() => workspace.acknowledgeUnknownDelivery()}
         >
-          I checked. Allow sending
+          <T>I checked. Allow sending</T>
         </Button>
       </div>
     ) : null;
@@ -133,7 +138,7 @@ export function HerdrThreadView({
           isElectron ? "drag-region px-3 sm:px-5" : "px-(--workspace-gutter-start)",
         )}
       >
-        <WorkspaceBreadcrumb ariaLabel="Factory conversation">
+        <WorkspaceBreadcrumb ariaLabel={gt("Factory conversation")}>
           {parent ? (
             <>
               <WorkspaceBreadcrumbItem>
@@ -150,7 +155,7 @@ export function HerdrThreadView({
           <span className={cn("text-xs font-medium", status.className)}>{status.label}</span>
         ) : null}
         <ToggleGroup
-          aria-label="Conversation view"
+          aria-label={gt("Conversation view")}
           variant="segmented"
           className="ml-auto [-webkit-app-region:no-drag]"
           value={[view]}
@@ -160,15 +165,17 @@ export function HerdrThreadView({
           }}
         >
           <Toggle value="chat" disabled={agent.conversationId === null}>
-            Chat
+            <T>Chat</T>
           </Toggle>
-          <Toggle value="terminal">Terminal</Toggle>
+          <Toggle value="terminal">
+            <T>Terminal</T>
+          </Toggle>
         </ToggleGroup>
         <Button
           size="icon-sm"
           variant="ghost"
           className="[-webkit-app-region:no-drag]"
-          aria-label="Conversation details"
+          aria-label={gt("Conversation details")}
           aria-pressed={detailsOpen}
           onClick={onToggleDetails}
         >
@@ -188,8 +195,8 @@ export function HerdrThreadView({
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             {agent.processState === "live"
-              ? "Connecting to the factory…"
-              : "This terminal has finished."}
+              ? gt("Connecting to the factory…")
+              : gt("This terminal has finished.")}
           </div>
         )
       ) : (
@@ -231,12 +238,12 @@ export function HerdrThreadView({
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
                 {state.history === "loading" ? (
-                  "Loading conversation…"
+                  gt("Loading conversation…")
                 ) : (
                   <span>
-                    No conversation recorded for this terminal yet.{" "}
+                    <T>No conversation recorded for this terminal yet.</T>{" "}
                     <Button variant="link" size="sm" onClick={onToggleDetails}>
-                      Attach a transcript
+                      <T>Attach a transcript</T>
                     </Button>
                   </span>
                 )}
@@ -300,6 +307,7 @@ function HerdrComposer({
   readonly onSend: (text: string) => void;
   readonly onInterrupt: () => void;
 }) {
+  const gt = useGT();
   const driver = providerDriver(agent.provider);
   const providerLabel = agent.model ?? agent.provider ?? "Terminal";
   const send = () => {
@@ -322,8 +330,12 @@ function HerdrComposer({
     >
       <textarea
         data-vim-insert=""
-        aria-label={`Message ${agent.label}`}
-        placeholder={readOnly ? "This connection is read-only" : `Message ${agent.label}`}
+        aria-label={gt("Message {label}", { label: agent.label })}
+        placeholder={
+          readOnly
+            ? gt("This connection is read-only")
+            : gt("Message {label}", { label: agent.label })
+        }
         rows={2}
         value={draft}
         disabled={readOnly}
@@ -334,7 +346,7 @@ function HerdrComposer({
       <div className="flex items-center gap-3">
         <ComposerControl
           render={<span />}
-          aria-label={`Agent: ${providerLabel}`}
+          aria-label={gt("Agent: {label}", { label: providerLabel })}
           className="pointer-events-none min-w-0 shrink"
         >
           {driver ? (
@@ -350,18 +362,20 @@ function HerdrComposer({
         {readOnly ? (
           <ComposerControl
             render={<span />}
-            aria-label="Read-only connection"
+            aria-label={gt("Read-only connection")}
             className="pointer-events-none"
           >
             <ComposerControlIcon icon={EyeIcon} />
-            <span>Read only</span>
+            <span>
+              <T>Read only</T>
+            </span>
           </ComposerControl>
         ) : null}
         <span className="min-w-0 flex-1" />
         {isWorking && canInterrupt ? (
           <button
             type="button"
-            aria-label="Interrupt"
+            aria-label={gt("Interrupt")}
             onClick={onInterrupt}
             className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-message-action text-message-action-foreground shadow-xs hover:bg-message-action-hover focus-visible:outline-2 focus-visible:outline-ring"
           >
@@ -370,7 +384,7 @@ function HerdrComposer({
         ) : (
           <button
             type="submit"
-            aria-label="Send"
+            aria-label={gt("Send")}
             disabled={!canSend || draft.trim() === ""}
             className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-message-action text-message-action-foreground shadow-xs hover:bg-message-action-hover focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-64"
           >
