@@ -124,6 +124,7 @@ it("uses custom menu/select handlers and closes popups through their Escape owne
   screen.container.querySelector<HTMLElement>("[data-slot=menu-trigger]")!.focus();
   await act(() => controller.dispatch("activate"));
   await expect.element(page.getByRole("menu")).toBeVisible();
+  await expect.element(page.getByRole("menuitem", { name: "Choose" })).toHaveFocus();
   await act(() => controller.dispatch("activate"));
   expect(choose).toHaveBeenCalledOnce();
   screen.container.querySelector<HTMLElement>("[data-slot=select-trigger]")!.focus();
