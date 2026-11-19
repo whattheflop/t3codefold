@@ -15,8 +15,9 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { vcsEnvironment } from "../../state/vcs";
 import { useTerminalUiStateStore } from "../../terminalUiStateStore";
 import type { Thread } from "../../types";
+import { focusTerminal } from "../../lib/terminalFocus";
 import { resolveVisibleWorktreeSetup, resolveWorktreeSetupProgress } from "../ChatView.logic";
-import { worktreeSetupAgentStarted } from "./MessagesTimeline.logic";
+import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 
 // Share in-flight preparation retries across ChatView instances.
 const retryingWorkspacePreparationRunIds = new Set<RunId>();
@@ -99,7 +100,7 @@ export function useWorktreeSetup(input: {
   const worktreeSetup = resolveVisibleWorktreeSetup({
     live: liveSnapshot,
     recorded: null,
-    turnStarted: activityRun?.startedAt != null,
+    runs: serverProjection?.runs ?? [],
     followUpSent,
   });
   // After agent handoff, sends queue behind setup without awaiting its scripts.
@@ -152,6 +153,7 @@ export function useWorktreeSetup(input: {
   const openSetupTerminal = setupThreadRef
     ? (terminalId: string) => {
         storeEnsureTerminal(setupThreadRef, terminalId, { open: true, active: true });
+        focusTerminal(setupThreadRef, terminalId);
       }
     : null;
 

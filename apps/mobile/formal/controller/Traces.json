@@ -1,0 +1,930 @@
+[
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "action": "conversation" }
+      }
+    ],
+    "name": "reply-edit-back/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "inspecting",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "inspecting",
+          "activations": 1
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 1
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "acquire-is-not-activate/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "delayed-reply/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      }
+    ],
+    "name": "cancel-reply-reappears/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      }
+    ],
+    "name": "cancel-reply-was-missing/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "suspended",
+          "activations": 0
+        },
+        "event": { "action": "suspended" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "suspended",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "resumed" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "interruption-keeps-editor/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 99, "scope": 1, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 100,
+          "scope": 2,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 100, "scope": 2, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "nested-overlay-return/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 7,
+    "steps": [
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 99, "scope": 1, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 7,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "overlay-cannot-cancel-parent/surface-7",
+    "initial": {
+      "surface": 7,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "action": "conversation" }
+      }
+    ],
+    "name": "reply-edit-back/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "inspecting",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "inspecting",
+          "activations": 1
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 1
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "acquire-is-not-activate/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reading",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "delayed-reply/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      }
+    ],
+    "name": "cancel-reply-reappears/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "available": false, "action": "scene" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": false,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "available": true, "action": "scene" }
+      }
+    ],
+    "name": "cancel-reply-was-missing/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "suspended",
+          "activations": 0
+        },
+        "event": { "action": "suspended" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "suspended",
+          "activations": 0
+        },
+        "event": { "action": "activate" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "editing",
+          "activations": 0
+        },
+        "event": { "action": "resumed" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "interruption-keeps-editor/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "reply" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 99, "scope": 1, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 100,
+          "scope": 2,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 100, "scope": 2, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "nested-overlay-return/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  },
+  {
+    "surface": 42,
+    "steps": [
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "dictate" }
+      },
+      {
+        "expected": {
+          "surface": 99,
+          "scope": 1,
+          "replySelected": false,
+          "mode": "navigation",
+          "activations": 0
+        },
+        "event": { "surface": 99, "scope": 1, "action": "push" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "recording",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      },
+      {
+        "expected": {
+          "surface": 42,
+          "scope": 0,
+          "replySelected": true,
+          "mode": "reply",
+          "activations": 0
+        },
+        "event": { "action": "back" }
+      }
+    ],
+    "name": "overlay-cannot-cancel-parent/surface-42",
+    "initial": {
+      "surface": 42,
+      "scope": 0,
+      "replySelected": false,
+      "mode": "reading",
+      "activations": 0
+    }
+  }
+]

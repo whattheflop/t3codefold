@@ -11,10 +11,13 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { Tool, Toolkit } from "effect/ai";
 
 import * as ServerConfig from "../../../config.ts";
+import * as DocumentText from "../../../provider/DocumentText.ts";
+import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
 import * as ThreadLaunch from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -28,8 +31,15 @@ import { OrchestratorMcpService } from "../../OrchestratorMcpService.ts";
 import { ThreadMetadataMcpService } from "../../ThreadMetadataMcpService.ts";
 import { layer as handlersLayer } from "./handlers.ts";
 import { OrchestratorToolkit } from "./tools.ts";
+import { layer as threadStartLayer } from "../foldThreadStart/handlers.ts";
+import { FoldThreadStartToolkit } from "../foldThreadStart/tools.ts";
 
 type Tools = Toolkit.Tools<typeof OrchestratorToolkit>;
+
+const encodeParams = Schema.encodeSync(Schema.toCodecJson(Schema.Unknown));
+const encodeThreadStartParams = Schema.encodeSync(
+  Schema.toCodecJson(FoldThreadStartToolkit.tools.t3_thread_start.parametersSchema),
+);
 
 /** Calls a tool through its declared handler; fails with the tool's declared failure. */
 const call = <Name extends keyof Tools & string>(
@@ -38,7 +48,7 @@ const call = <Name extends keyof Tools & string>(
 ) =>
   OrchestratorToolkit.pipe(
     Effect.provide(McpToolAccess.HandlersLayer.layer(handlersLayer)),
-    Effect.flatMap((built) => built.handle(name, params)),
+    Effect.flatMap((built) => built.handle(name, encodeParams(params))),
     Stream.unwrap,
     Stream.runLast,
     Effect.orDie,
@@ -48,6 +58,24 @@ const call = <Name extends keyof Tools & string>(
         : output.value.isFailure
           ? Effect.fail(output.value.result as Tool.Failure<Tools[Name]>)
           : Effect.succeed(output.value.result as Tool.Success<Tools[Name]>),
+    ),
+  );
+
+const callThreadStart = (
+  params: Tool.Parameters<typeof FoldThreadStartToolkit.tools.t3_thread_start>,
+) =>
+  FoldThreadStartToolkit.pipe(
+    Effect.provide(McpToolAccess.HandlersLayer.layer(threadStartLayer)),
+    Effect.flatMap((built) => built.handle("t3_thread_start", encodeThreadStartParams(params))),
+    Stream.unwrap,
+    Stream.runLast,
+    Effect.orDie,
+    Effect.flatMap((output) =>
+      Option.isNone(output)
+        ? Effect.die("no result")
+        : output.value.isFailure
+          ? Effect.fail(output.value.result)
+          : Effect.succeed(output.value.result),
     ),
   );
 
@@ -100,6 +128,12 @@ const setup = (remoteResult: unknown) => {
       interruptThread: () => Effect.die("must not interrupt locally"),
     }),
     Layer.mock(FleetRouter)({
+      environments: Effect.succeed({
+        environments: [
+          { environmentId, label: "Source" },
+          { environmentId: remote, label: "Destination" },
+        ],
+      }),
       invoke: (caller, request) =>
         Effect.sync(() => {
           routed.push([caller, request]);
@@ -109,6 +143,8 @@ const setup = (remoteResult: unknown) => {
     Layer.mock(ThreadLaunch.ThreadLaunchService)({
       launch: () => Effect.die("must not launch locally"),
     }),
+    Layer.mock(DocumentText.DocumentText)({}),
+    Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
     Layer.mock(Project.ProjectService)({}),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/projects" }),
     Layer.mock(GitVcsDriver.GitVcsDriver)({}),
@@ -127,7 +163,7 @@ it.effect("routes the t3_thread_start alias as a launch with the source thread's
     status: null,
   });
   return Effect.gen(function* () {
-    const result = yield* call("t3_thread_start", {
+    const result = yield* callThreadStart({
       environmentId: remote,
       projectId: remoteProjectId,
       prompt: "Continue from commit abc",
@@ -166,14 +202,15 @@ it.effect("validates destination results and keeps local calls local", () => {
   }).pipe(Effect.provide(layer));
 });
 
-it.effect("refuses to interrupt a thread named for another environment", () => {
+it.effect("never routes an interrupt through fleet or runs it locally", () => {
   const { routed, layer } = setup({});
   return Effect.gen(function* () {
     const refused = yield* call("t3_thread_interrupt", {
       environmentId: remote,
       threadId: ThreadId.make("remote-thread"),
     }).pipe(Effect.match({ onFailure: (error) => error.code, onSuccess: () => "unexpected" }));
-    assert.equal(refused, "invalid_request");
+    // Interrupts reach other environments only through links, and none is available here.
+    assert.equal(refused, "orchestration_error");
     assert.equal(routed.length, 0);
   }).pipe(Effect.provide(layer));
 });

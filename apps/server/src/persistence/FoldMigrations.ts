@@ -10,10 +10,18 @@ import * as Effect from "effect/Effect";
 import * as Migrator from "effect/sql/Migrator";
 
 import Migration0001 from "./FoldMigrations/001_Pitboss.ts";
+import Migration0003 from "./FoldMigrations/003_Factory.ts";
+import Migration0004 from "./FoldMigrations/004_FactoryControl.ts";
 
 export const FOLD_MIGRATIONS_TABLE = "fold_sql_migrations";
 
-export const foldMigrationEntries = [[1, "Pitboss", Migration0001]] as const;
+export const foldMigrationEntries = [
+  [1, "Pitboss", Migration0001],
+  [3, "Factory", Migration0003],
+  [4, "FactoryControl", Migration0004],
+  // Factory-only databases may already have applied upstream migration 2, which dropped these tables.
+  [5, "EnsurePitboss", Migration0001],
+] as const;
 
 const loader = Migrator.fromRecord(
   Object.fromEntries(

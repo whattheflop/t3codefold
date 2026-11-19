@@ -1,11 +1,11 @@
-import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useRef } from "react";
+import { NavigationContext } from "@react-navigation/native";
+import { use, useCallback, useEffect, useRef } from "react";
 import {
   voiceInputBlocksSubmission,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
 
-import type { ComposerEditorSelection } from "../../components/ComposerEditor";
+import type { ComposerEditorSelection } from "../../native/T3ComposerEditor.types";
 import { useGlobalVoiceInput } from "./VoiceInputProvider";
 import { createVoiceInputTarget } from "./voiceInputSession";
 
@@ -15,17 +15,19 @@ export function useVoiceInputController(input: {
   readonly ownerKey: string | null;
   readonly label: string;
   readonly readDraftMessage: () => string | null;
-  readonly subscribeToDraftChanges: (onChange: () => void) => () => void;
   readonly selection: ComposerEditorSelection;
   readonly disabled?: boolean;
   readonly onChangeDraftMessage: (value: string) => void;
   readonly onChangeSelection: (selection: ComposerEditorSelection) => void;
 }) {
   const global = useGlobalVoiceInput();
-  const { setOwnerFocused, session } = global;
+  const { session } = global;
+  const navigation = use(NavigationContext);
   const latestInput = useRef(input);
+  // oxlint-disable-next-line react/refs -- Transcription finishes asynchronously and must reach the composer's current selection setter, not the one captured at start.
   latestInput.current = input;
   const mounted = useRef(true);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks mount so async transcription results skip a composer that has unmounted
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -33,14 +35,21 @@ export function useVoiceInputController(input: {
     };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      const ownerKey = input.ownerKey;
-      if (!ownerKey) return;
-      setOwnerFocused(ownerKey, true);
-      return () => setOwnerFocused(ownerKey, false);
-    }, [input.ownerKey, setOwnerFocused]),
-  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- synchronizes voice ownership with route focus, or the lifetime of a standalone modal field
+  useEffect(() => {
+    const ownerKey = input.ownerKey;
+    if (!ownerKey) return;
+    const focus = () => session.setOwnerFocused(ownerKey, true);
+    const blur = () => session.setOwnerFocused(ownerKey, false);
+    if (!navigation || navigation.isFocused()) focus();
+    const stopFocus = navigation?.addListener("focus", focus);
+    const stopBlur = navigation?.addListener("blur", blur);
+    return () => {
+      stopFocus?.();
+      stopBlur?.();
+      blur();
+    };
+  }, [input.ownerKey, navigation, session]);
 
   const start = useCallback(() => {
     const captured = latestInput.current;
@@ -56,7 +65,6 @@ export function useVoiceInputController(input: {
           }
         },
         captured.selection,
-        captured.subscribeToDraftChanges,
       ),
       label: captured.label,
     });

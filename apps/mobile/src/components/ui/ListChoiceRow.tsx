@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Platform, View } from "react-native";
 import { useResolveClassNames } from "uniwind";
 
@@ -9,7 +10,9 @@ import { RowPressable } from "./RowPressable";
 
 export function ListChoiceRow(props: {
   readonly label: string;
+  readonly leading?: ReactNode;
   readonly description?: string;
+  readonly meta?: ReactNode;
   readonly selected: boolean;
   readonly separated?: boolean;
   readonly disabled?: boolean;
@@ -23,17 +26,18 @@ export function ListChoiceRow(props: {
       accessibilityHint={props.description}
       accessibilityState={{ checked: props.selected, disabled: Boolean(props.disabled) }}
       disabled={props.disabled}
+      controllerActivate={props.onPress}
       onPress={props.onPress}
       android_ripple={{ color: rippleStyle.backgroundColor }}
       unstable_pressDelay={Platform.OS === "android" ? 50 : undefined}
-      className={cn(
-        props.selected ? "bg-subtle" : "bg-grouped-card",
-        props.separated && "border-t border-border-subtle",
-      )}
+      // Like UIKit and Material lists, only the checkmark or radio marks the selected row.
+      className={cn("bg-grouped-card", props.separated && "border-t border-border-subtle")}
     >
       <ListRowLayout
         label={props.label}
+        leading={props.leading}
         description={props.description}
+        meta={props.meta}
         disabled={props.disabled}
         accessory={
           <View

@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { withDeviceHubQuery } from "@t3tools/client-runtime/state/deviceHubAccess";
 import type { DeviceHubAccess } from "@t3tools/client-runtime/state/deviceHubAccess";
 import type { DevicePlatform } from "@t3tools/contracts";
@@ -32,36 +33,43 @@ export interface DeviceForegroundInfo {
   readonly isReactNative?: boolean;
 }
 
-interface Target {
+export interface DeviceHubTarget {
   readonly access: DeviceHubAccess;
   readonly platform: DevicePlatform;
   readonly deviceId: string;
 }
 
-const vendorBase = (target: Target) =>
+const vendorBase = (target: DeviceHubTarget) =>
   `${target.access.httpBase}${target.platform === "ios" ? "/vendor/serve-sim" : "/vendor/serve-emu"}`;
 
-const hubUrl = (target: Target, path: string, params?: Record<string, string>) => {
+const hubUrl = (target: DeviceHubTarget, path: string, params?: Record<string, string>) => {
   const search = params ? `?${new URLSearchParams(params).toString()}` : "";
   return withDeviceHubQuery(`${vendorBase(target)}${path}${search}`, target.access);
 };
 
-class DeviceHubRequestError extends Error {
-  constructor(
-    readonly status: number,
-    statusText: string,
-  ) {
-    super(`${status} ${statusText}`);
-  }
-}
+class DeviceHubRequestError extends Schema.TaggedError<DeviceHubRequestError>()(
+  "DeviceHubRequestError",
+  { status: Schema.Number, message: Schema.String },
+) {}
 
-const fetchJson = async (target: Target, url: string, signal?: AbortSignal): Promise<unknown> => {
+const isDeviceHubRequestError = Schema.is(DeviceHubRequestError);
+
+const fetchJson = async (
+  target: DeviceHubTarget,
+  url: string,
+  signal?: AbortSignal,
+): Promise<unknown> => {
   const response = await fetch(url, {
     cache: "no-store",
     credentials: target.access.credentials ? "include" : "same-origin",
     ...(signal ? { signal } : {}),
   });
-  if (!response.ok) throw new DeviceHubRequestError(response.status, response.statusText);
+  if (!response.ok) {
+    throw new DeviceHubRequestError({
+      status: response.status,
+      message: `${response.status} ${response.statusText}`,
+    });
+  }
   return response.json();
 };
 
@@ -105,7 +113,7 @@ const flattenIosAxTree = (roots: ReadonlyArray<unknown>): ReadonlyArray<DeviceAx
 };
 
 export async function fetchDeviceAxTree(
-  target: Target,
+  target: DeviceHubTarget,
   signal?: AbortSignal,
 ): Promise<DeviceAxTree> {
   if (target.platform === "ios") {
@@ -163,7 +171,7 @@ export async function fetchDeviceAxTree(
 }
 
 const openEventSource = (
-  target: Target,
+  target: DeviceHubTarget,
   url: string,
   onMessage: (data: unknown) => void,
 ): (() => void) => {
@@ -177,7 +185,7 @@ const openEventSource = (
 };
 
 export function subscribeDeviceForeground(
-  target: Target,
+  target: DeviceHubTarget,
   onChange: (app: DeviceForegroundInfo | null) => void,
   onUnauthorized?: () => void,
 ): () => void {
@@ -208,7 +216,7 @@ export function subscribeDeviceForeground(
       } catch (cause) {
         if (controller.signal.aborted) return;
         onChange(null);
-        if (cause instanceof DeviceHubRequestError && cause.status === 401) {
+        if (isDeviceHubRequestError(cause) && cause.status === 401) {
           // An open video socket can outlive its ticket. Wait for fresh access
           // instead of continuing to inspect with expired credentials.
           controller.abort();
@@ -256,8 +264,20 @@ const toEventLogEntry = (raw: unknown): DeviceEventLogEntry | null => {
   };
 };
 
+export const DEVICE_EVENT_LOG_LIMIT = 100;
+
+/** A reset batch replaces the log; the log keeps the newest entries up to the limit. */
+export function appendDeviceEventLog(
+  current: ReadonlyArray<DeviceEventLogEntry>,
+  incoming: ReadonlyArray<DeviceEventLogEntry>,
+  reset: boolean,
+): ReadonlyArray<DeviceEventLogEntry> {
+  const merged = reset ? [...incoming] : [...current, ...incoming];
+  return merged.length > DEVICE_EVENT_LOG_LIMIT ? merged.slice(-DEVICE_EVENT_LOG_LIMIT) : merged;
+}
+
 export function subscribeDeviceEventLog(
-  target: Target,
+  target: DeviceHubTarget,
   onEvents: (entries: ReadonlyArray<DeviceEventLogEntry>, reset: boolean) => void,
 ): () => void {
   if (target.platform !== "ios") return () => {};

@@ -10,7 +10,8 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EventStore from "../orchestration-v2/EventStore.ts";
-import * as ProjectionMaintenance from "../orchestration-v2/ProjectionMaintenance.ts";
+// A legacy Fold database keeps its full event log, so a one-time replay is valid here.
+import * as ProjectionReplay from "../orchestration-v2/testkit/ProjectionReplay.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import { FOLD_MIGRATIONS_TABLE, runFoldMigrations } from "./FoldMigrations.ts";
 import { migrationManifest, runMigrations } from "./Migrations.ts";
@@ -187,26 +188,24 @@ const acquireImportLock = Effect.fn("importFoldDatabase.acquireImportLock")(func
     new FoldDatabaseImportError({ databasePath, reason: "import-running", detail });
   yield* Effect.acquireRelease(
     create.pipe(
-      Effect.catch((error) =>
-        error.reason._tag !== "AlreadyExists"
-          ? Effect.fail(error)
-          : Effect.gen(function* () {
-              const holder = Number.parseInt(
-                yield* fs.readFileString(lockPath).pipe(Effect.orElseSucceed(() => "")),
-                10,
-              );
-              if (Number.isInteger(holder) && holder > 0 && isProcessAlive(holder)) {
-                return yield* held(`pid ${holder}`);
-              }
-              yield* fs.remove(lockPath, { force: true });
-              yield* create.pipe(
-                Effect.mapError((retryError) =>
-                  retryError.reason._tag === "AlreadyExists"
-                    ? held(`lock ${lockPath}`)
-                    : retryError,
-                ),
-              );
-            }),
+      Effect.catchIf(
+        (error) => !(error.reason._tag !== "AlreadyExists"),
+        () =>
+          Effect.gen(function* () {
+            const holder = Number.parseInt(
+              yield* fs.readFileString(lockPath).pipe(Effect.orElseSucceed(() => "")),
+              10,
+            );
+            if (Number.isInteger(holder) && holder > 0 && isProcessAlive(holder)) {
+              return yield* held(`pid ${holder}`);
+            }
+            yield* fs.remove(lockPath, { force: true });
+            yield* create.pipe(
+              Effect.mapError((retryError) =>
+                retryError.reason._tag === "AlreadyExists" ? held(`lock ${lockPath}`) : retryError,
+              ),
+            );
+          }),
       ),
       Effect.mapError((cause) =>
         isFoldDatabaseImportError(cause)
@@ -275,16 +274,23 @@ const lockSource = (databasePath: string) =>
     (database) => Effect.sync(() => database.isOpen && database.close()),
   );
 
-const snapshotSource = (source: NodeSqlite.DatabaseSync, snapshotPath: string) =>
-  Effect.tryPromise(async () => {
-    await NodeSqlite.backup(source, snapshotPath);
-    // A rollback-journal snapshot is one self-contained file, for ATTACH and as the backup.
-    const snapshot = new NodeSqlite.DatabaseSync(snapshotPath);
-    try {
-      snapshot.exec("PRAGMA journal_mode = DELETE");
-    } finally {
-      snapshot.close();
-    }
+const snapshotSource = (
+  source: NodeSqlite.DatabaseSync,
+  snapshotPath: string,
+  databasePath: string,
+) =>
+  Effect.tryPromise({
+    try: async () => {
+      await NodeSqlite.backup(source, snapshotPath);
+      // A rollback-journal snapshot is one self-contained file, for ATTACH and as the backup.
+      const snapshot = new NodeSqlite.DatabaseSync(snapshotPath);
+      try {
+        snapshot.exec("PRAGMA journal_mode = DELETE");
+      } finally {
+        snapshot.close();
+      }
+    },
+    catch: (cause) => new FoldDatabaseImportError({ databasePath, reason: "failed", cause }),
   });
 
 /** Copies the fork snapshot into the current database, which already has the upstream schema. */
@@ -359,6 +365,7 @@ const copySnapshot = Effect.fn("importFoldDatabase.copySnapshot")(function* (sna
             last_error = 'fork import'
         WHERE status IN ('pending', 'running')
       `;
+
       // Replaying `assign` or `create-lead` would create threads that already exist.
       yield* sql`
         UPDATE pitboss_effects SET state = 'failed', error = 'imported'
@@ -380,7 +387,7 @@ const copySnapshot = Effect.fn("importFoldDatabase.copySnapshot")(function* (sna
 const verifyProjections = Effect.fn("importFoldDatabase.verifyProjections")(function* (
   databasePath: string,
 ) {
-  const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
+  const maintenance = yield* ProjectionReplay.ProjectionReplay;
   const verified = yield* maintenance.verify;
   const result = verified.valid ? verified : yield* maintenance.rebuild;
   if (!result.valid) {
@@ -405,7 +412,7 @@ const buildDatabase = Effect.fn("importFoldDatabase.buildDatabase")(function* (
   snapshotPath: string,
 ) {
   const sqlite = NodeSqliteClient.layer({ filename: buildPath });
-  const maintenance = ProjectionMaintenance.layer.pipe(
+  const maintenance = ProjectionReplay.layer.pipe(
     Layer.provide(Layer.mergeAll(EventStore.layer, ProjectionStore.layer)),
     Layer.provideMerge(sqlite),
   );
@@ -417,15 +424,8 @@ const buildDatabase = Effect.fn("importFoldDatabase.buildDatabase")(function* (
   }).pipe(Effect.provide(maintenance));
 });
 
-/**
- * Replaces a fork-ledgered database with an upstream-ledgered one holding the same rows.
- *
- * Runs before the persistence layer migrates. The fork database is snapshotted under an exclusive
- * lock, copied into a fresh upstream schema (plus the fold ledger), verified, and renamed over the
- * original. The snapshot is kept beside it as `<name>.fold-backup-<timestamp>.sqlite`. A failure
- * before the rename leaves the original untouched, and the next start retries. Once published the
- * ledger is upstream's, so later starts are no-ops.
- */
+// Import under an exclusive lock before persistence migrates. Preserve the snapshot beside
+// the database; failures before publication leave the original untouched and retry on start.
 export const importFoldDatabase = Effect.fn("importFoldDatabase")(function* (
   databasePath: string,
   options: ImportFoldDatabaseOptions = {},
@@ -460,7 +460,7 @@ export const importFoldDatabase = Effect.fn("importFoldDatabase")(function* (
     yield* Effect.log("Upgrading Fold database to the upstream schema").pipe(
       Effect.annotateLogs({ databasePath }),
     );
-    yield* snapshotSource(source, snapshotPath);
+    yield* snapshotSource(source, snapshotPath, databasePath);
     const { rebuilt } = yield* buildDatabase(databasePath, buildPath, snapshotPath);
 
     let backupPath: string | undefined;

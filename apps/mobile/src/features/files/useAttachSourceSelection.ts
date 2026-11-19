@@ -1,4 +1,4 @@
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { ComposerContextId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useCallback } from "react";
 import { Alert } from "react-native";

@@ -1,4 +1,6 @@
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { LegendList } from "@legendapp/list/react-native";
+import { NativeScrollView } from "../../native/NativeScrollViewMarker";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { openSettings as openSettingsPage } from "../settings/settings-navigation";
 import { GladosBoard } from "./GladosBoard";
 import { managedWorkerStateLabel } from "@t3tools/client-runtime/glados-board";
@@ -19,7 +21,6 @@ import {
 } from "./glados-inbox";
 import {
   AppState,
-  FlatList,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -83,12 +84,17 @@ export function PitbossWork(props: {
   connected?: boolean;
   onComposeWork?: () => void;
 }) {
-  const query = useEnvironmentQuery(
+  const {
+    refresh,
+    data: state,
+    error: queryError,
+  } = useEnvironmentQuery(
     serverEnvironment.pitbossLive({ environmentId: props.environmentId, input: {} }),
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Refresh the environment query when its connection returns.
   useEffect(() => {
-    if (props.connected) query.refresh();
-  }, [props.connected, query.refresh]);
+    if (props.connected) refresh();
+  }, [props.connected, refresh]);
   const mutate = useAtomCommand(serverEnvironment.pitbossCommand, "GLaDOS work");
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -114,11 +120,13 @@ export function PitbossWork(props: {
   const serverConfigs = useServerConfigs();
   const [visible, setVisible] = useState(false);
   const composeAfterDismiss = useRef(false);
+  const { onComposeWork } = props;
   const finishDismiss = useCallback(() => {
     if (!composeAfterDismiss.current) return;
     composeAfterDismiss.current = false;
-    props.onComposeWork?.();
-  }, [props.onComposeWork]);
+    onComposeWork?.();
+  }, [onComposeWork]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Focus the composer after native modal dismissal.
   useEffect(() => {
     // iOS reports the completed native dismissal; Android removes the modal on commit.
     if (visible || Platform.OS === "ios") return;
@@ -130,9 +138,9 @@ export function PitbossWork(props: {
   const [busy, setBusy] = useState(false);
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const state = query.data;
   const role = state?.role;
   const isBoss = role?.threadId === props.threadId;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Subscribe to native foreground events while the inbox is open.
   useEffect(() => {
     if (!visible) return;
     const listener = AppState.addEventListener("change", (value) => {
@@ -140,6 +148,7 @@ export function PitbossWork(props: {
     });
     return () => listener.remove();
   }, [visible]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Schedule the next receipt expiry while the inbox is open.
   useEffect(() => {
     if (!visible) return;
     const expiry = Math.min(
@@ -163,7 +172,7 @@ export function PitbossWork(props: {
   const command = async (action: PitbossAction) => {
     if (!state) return false;
     if (inFlight.current) return false;
-    if (query.error || props.connected === false) {
+    if (queryError || props.connected === false) {
       setError("Reconnect to send this change. Your draft is still here.");
       return false;
     }
@@ -218,24 +227,6 @@ export function PitbossWork(props: {
     else if (selectedKey) leaveDetail();
     else setVisible(false);
   };
-  const button = (label: string, action: () => void, disabled = false) => (
-    <Pressable
-      accessibilityRole="button"
-      disabled={busy || disabled}
-      accessibilityState={{
-        disabled: busy || disabled,
-      }}
-      style={{
-        minHeight: 44,
-        justifyContent: "center",
-        opacity: busy || disabled ? 0.45 : 1,
-      }}
-      onPress={action}
-      className="rounded-lg bg-primary/10 px-3 py-2"
-    >
-      <Text className="text-sm text-primary">{label}</Text>
-    </Pressable>
-  );
   return (
     <>
       <Pressable
@@ -282,33 +273,42 @@ export function PitbossWork(props: {
                 {role?.paused ? "New work paused" : "Your projects, one conversation"}
               </Text>
             </View>
-            {button("Back to chat", () => setVisible(false))}
+            <WorkButton label="Back to chat" onPress={() => setVisible(false)} disabled={busy} />
           </View>
-          {(error || query.error || props.connected === false) && (
+          {(error || queryError || props.connected === false) && (
             <View className="border-b border-border px-4 py-3">
               <Text accessibilityRole="alert" className="text-red-500">
-                {query.error || props.connected === false
+                {queryError || props.connected === false
                   ? "Disconnected – showing retained work. Actions resume when reconnected."
                   : error}
               </Text>
-              {props.connected !== false && query.error && button("Reconnect work", query.refresh)}
+              {props.connected !== false && queryError && (
+                <WorkButton label="Reconnect work" onPress={refresh} disabled={busy} />
+              )}
             </View>
           )}
           {panel === "inbox" ? (
             <>
               <View className="flex-row flex-wrap items-center justify-between gap-2 px-4 py-2">
-                {button("Team", () => setPanel("settings"))}
-                {button("Settings", openSettings)}
-                {isBoss &&
-                  button("Talk to GLaDOS", () => {
-                    composeAfterDismiss.current = true;
-                    setVisible(false);
-                  })}
-                {isBoss &&
-                  button(
-                    role.paused ? "Resume" : "Pause",
-                    () => void command({ type: "pause", paused: !role.paused }),
-                  )}
+                <WorkButton label="Team" onPress={() => setPanel("settings")} disabled={busy} />
+                <WorkButton label="Settings" onPress={openSettings} disabled={busy} />
+                {isBoss && (
+                  <WorkButton
+                    label="Talk to GLaDOS"
+                    onPress={() => {
+                      composeAfterDismiss.current = true;
+                      setVisible(false);
+                    }}
+                    disabled={busy}
+                  />
+                )}
+                {isBoss && (
+                  <WorkButton
+                    label={role.paused ? "Resume" : "Pause"}
+                    onPress={() => void command({ type: "pause", paused: !role.paused })}
+                    disabled={busy}
+                  />
+                )}
               </View>
               <View className="flex-row gap-2 px-4 pb-2">
                 {(["board", "advanced"] as const).map((view) => (
@@ -434,11 +434,12 @@ export function PitbossWork(props: {
                             </View>
                           </ScrollView>
                         </View>
-                        <FlatList<GladosInboxRow>
+                        <LegendList<GladosInboxRow>
+                          renderScrollComponent={NativeScrollView}
                           data={rows}
                           keyExtractor={(row) => row.key}
                           contentContainerStyle={{ padding: 12, gap: 8 }}
-                          extraData={selectedKey}
+                          extraData={{ selectedKey, projects, state }}
                           keyboardShouldPersistTaps="handled"
                           ListEmptyComponent={
                             <View className="gap-2 p-5">
@@ -500,7 +501,13 @@ export function PitbossWork(props: {
                         contentContainerStyle={{ padding: 16, gap: 12 }}
                         keyboardShouldPersistTaps="handled"
                       >
-                        {selectedKey && button("Back to outcomes", leaveDetail)}
+                        {selectedKey && (
+                          <WorkButton
+                            label="Back to outcomes"
+                            onPress={leaveDetail}
+                            disabled={busy}
+                          />
+                        )}
                         {!selectedRow && (
                           <View className="gap-2 py-8">
                             <Text className="text-xl font-semibold">Choose an outcome</Text>
@@ -515,12 +522,16 @@ export function PitbossWork(props: {
                               {pitbossMessageHeadline(selectedRow.message)}
                             </Text>
                             <Text selectable>{selectedRow.message.text}</Text>
-                            {button("Acknowledge", () => {
-                              void command({
-                                type: "acknowledge",
-                                messageId: selectedRow.message!.id,
-                              });
-                            })}
+                            <WorkButton
+                              label="Acknowledge"
+                              onPress={() => {
+                                void command({
+                                  type: "acknowledge",
+                                  messageId: selectedRow.message!.id,
+                                });
+                              }}
+                              disabled={busy}
+                            />
                           </View>
                         )}
                         {selectedTask &&
@@ -588,17 +599,20 @@ export function PitbossWork(props: {
                                       {task.proposedVerificationRecipe.artifacts.join(", ") ||
                                         "No captured files"}
                                     </Text>
-                                    {verificationProposalSaveAction(task) &&
-                                      button(
-                                        verificationProposalApprovalAction(task)
-                                          ? "Approve and save exact proposal"
-                                          : "Save evidence profile",
-                                        () => {
+                                    {verificationProposalSaveAction(task) && (
+                                      <WorkButton
+                                        label={
+                                          verificationProposalApprovalAction(task)
+                                            ? "Approve and save exact proposal"
+                                            : "Save evidence profile"
+                                        }
+                                        onPress={() => {
                                           const action = verificationProposalSaveAction(task);
                                           if (action) void command(action);
-                                        },
-                                        !!task.homeEnvironmentId,
-                                      )}
+                                        }}
+                                        disabled={busy || !!task.homeEnvironmentId}
+                                      />
+                                    )}
                                   </View>
                                 )}
                                 {task.status !== "cancelled" &&
@@ -622,15 +636,15 @@ export function PitbossWork(props: {
                                         {verificationProposalApprovalAction(task)?.decisionId ===
                                           decision.id && (
                                           <View className="gap-2">
-                                            {button(
-                                              "Approve and save evidence profile",
-                                              () => {
+                                            <WorkButton
+                                              label="Approve and save evidence profile"
+                                              onPress={() => {
                                                 const action =
                                                   verificationProposalApprovalAction(task);
                                                 if (action) void command(action);
-                                              },
-                                              !!task.homeEnvironmentId,
-                                            )}
+                                              }}
+                                              disabled={busy || !!task.homeEnvironmentId}
+                                            />
                                             <Text className="text-xs text-foreground-muted">
                                               Other choices and written replies do not change proof
                                               requirements.
@@ -639,17 +653,18 @@ export function PitbossWork(props: {
                                         )}
                                         {decision.options.map((option) => (
                                           <View key={option}>
-                                            {button(
-                                              option,
-                                              () =>
+                                            <WorkButton
+                                              label={option}
+                                              onPress={() =>
                                                 void command({
                                                   type: "resolve-decision",
                                                   taskId: task.id,
                                                   decisionId: decision.id,
                                                   answer: option,
-                                                }),
-                                              !!task.homeEnvironmentId,
-                                            )}
+                                                })
+                                              }
+                                              disabled={busy || !!task.homeEnvironmentId}
+                                            />
                                           </View>
                                         ))}
                                         <TextInput
@@ -665,9 +680,9 @@ export function PitbossWork(props: {
                                           }
                                           className="min-h-12 rounded-lg border border-border p-3 text-foreground"
                                         />
-                                        {button(
-                                          "Send decision",
-                                          () => {
+                                        <WorkButton
+                                          label="Send decision"
+                                          onPress={() => {
                                             if (decisionDrafts[decision.id]?.trim())
                                               void command({
                                                 type: "resolve-decision",
@@ -681,11 +696,18 @@ export function PitbossWork(props: {
                                                     [decision.id]: "",
                                                   }));
                                               });
-                                          },
-                                          !decisionDrafts[decision.id]?.trim() ||
-                                            !!task.homeEnvironmentId,
-                                        )}
-                                        {button("Decide later", leaveDetail)}
+                                          }}
+                                          disabled={
+                                            busy ||
+                                            !decisionDrafts[decision.id]?.trim() ||
+                                            !!task.homeEnvironmentId
+                                          }
+                                        />
+                                        <WorkButton
+                                          label="Decide later"
+                                          onPress={leaveDetail}
+                                          disabled={busy}
+                                        />
                                       </View>
                                     ))}
                                 <Text>{task.outcome}</Text>
@@ -698,20 +720,23 @@ export function PitbossWork(props: {
                                       );
                                       return (
                                         <View key={id}>
-                                          {button(
-                                            dependency?.title ?? id,
-                                            () => setSelectedKey(`task:${id}`),
-                                            !dependency,
-                                          )}
+                                          <WorkButton
+                                            label={dependency?.title ?? id}
+                                            onPress={() => setSelectedKey(`task:${id}`)}
+                                            disabled={busy || !dependency}
+                                          />
                                         </View>
                                       );
                                     })}
                                   </View>
                                 )}
-                                {button(
-                                  showCriteria ? "Hide success criteria" : "What success means",
-                                  () => setShowCriteria(!showCriteria),
-                                )}
+                                <WorkButton
+                                  label={
+                                    showCriteria ? "Hide success criteria" : "What success means"
+                                  }
+                                  onPress={() => setShowCriteria(!showCriteria)}
+                                  disabled={busy}
+                                />
                                 {showCriteria && (
                                   <Text className="text-sm text-foreground-muted">
                                     {task.criteria}
@@ -751,14 +776,16 @@ export function PitbossWork(props: {
                                         {pitbossMessageHeadline(message)}
                                       </Text>
                                       <Text selectable>{message.text}</Text>
-                                      {button(
-                                        "Acknowledge",
-                                        () =>
+                                      <WorkButton
+                                        label="Acknowledge"
+                                        onPress={() =>
                                           void command({
                                             type: "acknowledge",
                                             messageId: message.id,
-                                          }),
-                                      )}
+                                          })
+                                        }
+                                        disabled={busy}
+                                      />
                                     </View>
                                   ))}
                                 {task.source && (
@@ -792,12 +819,15 @@ export function PitbossWork(props: {
                                     {task.verification.receipt?.target && (
                                       <Text>Target: {task.verification.receipt.target}</Text>
                                     )}
-                                    {button(
-                                      showHistory
-                                        ? "Hide logs and history"
-                                        : "Show logs and history",
-                                      () => setShowHistory(!showHistory),
-                                    )}
+                                    <WorkButton
+                                      label={
+                                        showHistory
+                                          ? "Hide logs and history"
+                                          : "Show logs and history"
+                                      }
+                                      onPress={() => setShowHistory(!showHistory)}
+                                      disabled={busy}
+                                    />
                                     {showHistory &&
                                       task.verification.receipt?.checks.map((check) => (
                                         <View key={check.name}>
@@ -814,31 +844,34 @@ export function PitbossWork(props: {
                                   </View>
                                 )}
                                 {verificationRecipeForTask(state, task) &&
-                                  verificationRecipeForTask(state, task)?.enabled !== false &&
-                                  button(
-                                    "Run captured verification",
-                                    () => {
-                                      const latest = task.evidence.at(-1);
-                                      if (latest)
-                                        void command({
-                                          type: "verify",
-                                          taskId: task.id,
-                                          evidenceId: latest.id,
-                                        });
-                                    },
-                                    busy ||
-                                      !!role?.paused ||
-                                      !task.evidence.length ||
-                                      task.verification?.state === "pending" ||
-                                      task.verification?.state === "running" ||
-                                      task.attempts.some((attempt) =>
-                                        [
-                                          "pending",
-                                          "running",
-                                          "submitted",
-                                          "stop_requested",
-                                        ].includes(attempt.state),
-                                      ),
+                                  verificationRecipeForTask(state, task)?.enabled !== false && (
+                                    <WorkButton
+                                      label="Run captured verification"
+                                      onPress={() => {
+                                        const latest = task.evidence.at(-1);
+                                        if (latest)
+                                          void command({
+                                            type: "verify",
+                                            taskId: task.id,
+                                            evidenceId: latest.id,
+                                          });
+                                      }}
+                                      disabled={
+                                        busy ||
+                                        !!role?.paused ||
+                                        !task.evidence.length ||
+                                        task.verification?.state === "pending" ||
+                                        task.verification?.state === "running" ||
+                                        task.attempts.some((attempt) =>
+                                          [
+                                            "pending",
+                                            "running",
+                                            "submitted",
+                                            "stop_requested",
+                                          ].includes(attempt.state),
+                                        )
+                                      }
+                                    />
                                   )}
                                 {task.decisions
                                   ?.filter((decision) => decision.answer !== undefined)
@@ -852,12 +885,15 @@ export function PitbossWork(props: {
                                       <Text>{decision.answer}</Text>
                                     </View>
                                   ))}
-                                {button(
-                                  showProfiles
-                                    ? "Close profile choices"
-                                    : "Change evidence profile",
-                                  () => setShowProfiles(!showProfiles),
-                                )}
+                                <WorkButton
+                                  label={
+                                    showProfiles
+                                      ? "Close profile choices"
+                                      : "Change evidence profile"
+                                  }
+                                  onPress={() => setShowProfiles(!showProfiles)}
+                                  disabled={busy}
+                                />
                                 <Text className="text-xs">
                                   Evidence profile:{" "}
                                   {verificationRecipeForTask(state, task)?.name ??
@@ -872,33 +908,36 @@ export function PitbossWork(props: {
                                     )
                                     .map((recipe) => (
                                       <View key={recipe.profileId ?? "default"}>
-                                        {button(
-                                          `Use ${recipe.name}`,
-                                          () => {
+                                        <WorkButton
+                                          label={`Use ${recipe.name}`}
+                                          onPress={() => {
                                             void command({
                                               type: "verification-profile",
                                               taskId: task.id,
                                               profileId: recipe.profileId ?? "default",
                                             });
-                                          },
-                                          busy ||
+                                          }}
+                                          disabled={
+                                            busy ||
                                             task.verification?.state === "running" ||
-                                            task.verification?.state === "pending",
-                                        )}
+                                            task.verification?.state === "pending"
+                                          }
+                                        />
                                       </View>
                                     ))}
-                                {showProfiles &&
-                                  button(
-                                    "Use reported evidence",
-                                    () => {
+                                {showProfiles && (
+                                  <WorkButton
+                                    label="Use reported evidence"
+                                    onPress={() => {
                                       void command({
                                         type: "verification-profile",
                                         taskId: task.id,
                                         profileId: null,
                                       });
-                                    },
-                                    busy,
-                                  )}
+                                    }}
+                                    disabled={busy}
+                                  />
+                                )}
 
                                 {(showHistory ? task.evidence : task.evidence.slice(-1)).map(
                                   (evidence) => (
@@ -932,60 +971,77 @@ export function PitbossWork(props: {
                                             verificationRecipeForTask(state, task),
                                             evidence.candidate,
                                             now,
-                                          )) &&
-                                        button(
-                                          "Accept inspected evidence",
-                                          () =>
-                                            void command({
-                                              type: "accept",
-                                              taskId: task.id,
-                                              evidenceId: evidence.id,
-                                              note: "User inspected and accepted evidence.",
-                                            }),
+                                          )) && (
+                                          <WorkButton
+                                            label="Accept inspected evidence"
+                                            onPress={() =>
+                                              void command({
+                                                type: "accept",
+                                                taskId: task.id,
+                                                evidenceId: evidence.id,
+                                                note: "User inspected and accepted evidence.",
+                                              })
+                                            }
+                                            disabled={busy}
+                                          />
                                         )}
                                     </View>
                                   ),
                                 )}
-                                {button(
-                                  showManagement ? "Close work controls" : "Manage work",
-                                  () => setShowManagement(!showManagement),
-                                )}
+                                <WorkButton
+                                  label={showManagement ? "Close work controls" : "Manage work"}
+                                  onPress={() => setShowManagement(!showManagement)}
+                                  disabled={busy}
+                                />
                                 {showManagement && (
                                   <View className="gap-2">
-                                    {task.status === "queued" &&
-                                      task.attempts.length === 0 &&
-                                      button(
-                                        "Assign worker",
-                                        () => void command({ type: "assign", taskId: task.id }),
-                                      )}
+                                    {task.status === "queued" && task.attempts.length === 0 && (
+                                      <WorkButton
+                                        label="Assign worker"
+                                        onPress={() =>
+                                          void command({ type: "assign", taskId: task.id })
+                                        }
+                                        disabled={busy}
+                                      />
+                                    )}
                                     {task.status !== "cancelled" &&
                                       !task.revisionRequest &&
-                                      (task.attempts.length > 0 || task.evidence.length > 0) &&
-                                      button(
-                                        "Revise result",
-                                        () =>
-                                          void command({
-                                            type: "revise-result",
-                                            taskId: task.id,
-                                            note: "Revise the retained result within the current scope.",
-                                          }),
+                                      (task.attempts.length > 0 || task.evidence.length > 0) && (
+                                        <WorkButton
+                                          label="Revise result"
+                                          onPress={() =>
+                                            void command({
+                                              type: "revise-result",
+                                              taskId: task.id,
+                                              note: "Revise the retained result within the current scope.",
+                                            })
+                                          }
+                                          disabled={busy}
+                                        />
                                       )}
-                                    {task.status === "cancelled" &&
-                                      button(
-                                        "Restore to queue",
-                                        () => void command({ type: "reopen", taskId: task.id }),
-                                      )}
-                                    {task.status !== "cancelled" &&
-                                      button(
-                                        "Close outcome",
-                                        () =>
+                                    {task.status === "cancelled" && (
+                                      <WorkButton
+                                        label="Restore to queue"
+                                        onPress={() =>
+                                          void command({ type: "reopen", taskId: task.id })
+                                        }
+                                        disabled={busy}
+                                      />
+                                    )}
+                                    {task.status !== "cancelled" && (
+                                      <WorkButton
+                                        label="Close outcome"
+                                        onPress={() =>
                                           void command({
                                             type: "close",
                                             taskId: task.id,
                                             reason:
                                               "Closed by user as historical or superseded work.",
-                                          }),
-                                      )}
+                                          })
+                                        }
+                                        disabled={busy}
+                                      />
+                                    )}
                                   </View>
                                 )}
 
@@ -994,13 +1050,15 @@ export function PitbossWork(props: {
                                     {" "}
                                     {task.attempts.map((attempt) => (
                                       <View key={attempt.id}>
-                                        {button(
-                                          serverConfigs.has(
-                                            task.homeEnvironmentId ?? props.environmentId,
-                                          )
-                                            ? `Worker ${attempt.generation} · ${managedWorkerStateLabel(task, attempt, state.awaitingApproval)}${attempt.workspacePath ? ` · ${attempt.workspacePath}` : ""}`
-                                            : "Connect task home first",
-                                          () => {
+                                        <WorkButton
+                                          label={
+                                            serverConfigs.has(
+                                              task.homeEnvironmentId ?? props.environmentId,
+                                            )
+                                              ? `Worker ${attempt.generation} · ${managedWorkerStateLabel(task, attempt, state.awaitingApproval)}${attempt.workspacePath ? ` · ${attempt.workspacePath}` : ""}`
+                                              : "Connect task home first"
+                                          }
+                                          onPress={() => {
                                             setVisible(false);
                                             selectDetail({
                                               name: "Thread",
@@ -1010,11 +1068,14 @@ export function PitbossWork(props: {
                                                 threadId: attempt.threadId,
                                               },
                                             });
-                                          },
-                                          !serverConfigs.has(
-                                            task.homeEnvironmentId ?? props.environmentId,
-                                          ),
-                                        )}
+                                          }}
+                                          disabled={
+                                            busy ||
+                                            !serverConfigs.has(
+                                              task.homeEnvironmentId ?? props.environmentId,
+                                            )
+                                          }
+                                        />
                                       </View>
                                     ))}
                                   </View>
@@ -1033,14 +1094,24 @@ export function PitbossWork(props: {
               contentContainerStyle={{ padding: 16, gap: 12 }}
               keyboardShouldPersistTaps="handled"
             >
-              {button("Back to outcomes", () => setPanel("inbox"))}
+              <WorkButton
+                label="Back to outcomes"
+                onPress={() => setPanel("inbox")}
+                disabled={busy}
+              />
               {panel === "settings" && (
                 <>
                   <Text className="text-sm text-foreground-muted">
                     Tell GLaDOS what you want in chat. Use these controls when you want to manage
                     the details yourself.
                   </Text>
-                  {isBoss && button("Add outcome manually", () => setPanel("create"))}
+                  {isBoss && (
+                    <WorkButton
+                      label="Add outcome manually"
+                      onPress={() => setPanel("create")}
+                      disabled={busy}
+                    />
+                  )}
                   {(state.leads ?? []).map((lead) => {
                     const active = isPitbossLeadActive(role, lead);
                     return (
@@ -1058,26 +1129,33 @@ export function PitbossWork(props: {
                         <Text className="text-sm">
                           Context v{lead.contextRevision}: {lead.context || "Not recorded yet"}
                         </Text>
-                        {button("Open lead thread", () => {
-                          setVisible(false);
-                          selectDetail({
-                            name: "Thread",
-                            params: {
-                              environmentId: props.environmentId,
-                              threadId: lead.threadId,
-                            },
-                          });
-                        })}
-                        {role?.brief.projectIds.includes(lead.projectId) &&
-                          button(
-                            active ? "Return to GLaDOS" : "Reactivate lead",
-                            () =>
+                        <WorkButton
+                          label="Open lead thread"
+                          onPress={() => {
+                            setVisible(false);
+                            selectDetail({
+                              name: "Thread",
+                              params: {
+                                environmentId: props.environmentId,
+                                threadId: lead.threadId,
+                              },
+                            });
+                          }}
+                          disabled={busy}
+                        />
+                        {role?.brief.projectIds.includes(lead.projectId) && (
+                          <WorkButton
+                            label={active ? "Return to GLaDOS" : "Reactivate lead"}
+                            onPress={() =>
                               void command({
                                 type: "lead-status",
                                 leadId: lead.id,
                                 status: active ? "dormant" : "active",
-                              }),
-                          )}
+                              })
+                            }
+                            disabled={busy}
+                          />
+                        )}
                       </View>
                     );
                   })}
@@ -1085,7 +1163,7 @@ export function PitbossWork(props: {
                     Priorities, projects, autonomy, models, sources and peers live in GLaDOS
                     settings.
                   </Text>
-                  {button("Open GLaDOS settings", openSettings)}
+                  <WorkButton label="Open GLaDOS settings" onPress={openSettings} disabled={busy} />
                 </>
               )}
               {panel === "create" && isBoss && (
@@ -1124,17 +1202,19 @@ export function PitbossWork(props: {
                       ))}
                   </View>
                   <Text className="font-semibold">Workspace</Text>
-                  {button(isolatedCode ? "Use project files" : "Use isolated code checkout", () =>
-                    setIsolatedCode(!isolatedCode),
-                  )}
+                  <WorkButton
+                    label={isolatedCode ? "Use project files" : "Use isolated code checkout"}
+                    onPress={() => setIsolatedCode(!isolatedCode)}
+                    disabled={busy}
+                  />
                   <Text className="text-sm text-foreground-muted">
                     {isolatedCode
                       ? "Creates a Git worktree for code changes."
                       : "Uses this project's files. Suitable for research and home-server work; Git is not required."}
                   </Text>
-                  {button(
-                    "Create outcome",
-                    () => {
+                  <WorkButton
+                    label="Create outcome"
+                    onPress={() => {
                       if (title.trim() && criteria.trim())
                         void command(
                           gladosNewTask({
@@ -1153,11 +1233,14 @@ export function PitbossWork(props: {
                             leaveDetail();
                           }
                         });
-                    },
-                    !title.trim() ||
+                    }}
+                    disabled={
+                      busy ||
+                      !title.trim() ||
                       !criteria.trim() ||
-                      !role.brief.projectIds.includes(taskProjectId),
-                  )}
+                      !role.brief.projectIds.includes(taskProjectId)
+                    }
+                  />
                 </>
               )}
             </ScrollView>
@@ -1165,5 +1248,34 @@ export function PitbossWork(props: {
         </KeyboardAvoidingView>
       </Modal>
     </>
+  );
+}
+
+function WorkButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      accessibilityState={{
+        disabled: disabled,
+      }}
+      style={{
+        minHeight: 44,
+        justifyContent: "center",
+        opacity: disabled ? 0.45 : 1,
+      }}
+      onPress={onPress}
+      className="rounded-lg bg-primary/10 px-3 py-2"
+    >
+      <Text className="text-sm text-primary">{label}</Text>
+    </Pressable>
   );
 }

@@ -20,6 +20,11 @@ run in a checkout. The cache is per checkout; a new worktree warms its own.
   errors.
 - Typecheck covers the workspaces listed in `TYPECHECK_GATED`; add a workspace there once it
   typechecks cleanly.
+- Android controller changes also run the native navigation contract tests before the JavaScript
+  suites. This requires a configured Android SDK/JDK and an existing incremental native project
+  (`vp run mobile:install android --prepare` creates it). A missing native project or failed
+  native test blocks the push. See the [navigation contract](../internals/controller-navigation.md)
+  for the distinction between adapter tests and physical controller acceptance.
 - Checks run against the working tree, so push the checked-out branch.
 - Desktop, SSH, task-cache, and packaging-script tests run without task caching because its instrumentation
   replaces `/bin/sh` and virtualizes filesystem paths. These suites verify native
@@ -63,6 +68,11 @@ update feeds (`fold-server-latest`, `fold-server-nightly`, `fold-desktop-latest`
 `fold-desktop-nightly`, and `mobile-ota` when present). Installed clients require
 those URLs. The maintainer chose permanent cleanup of older published releases; do not keep
 adding archived drafts to the signed-in release list. Existing drafts are left alone.
+
+Retain `fold-native-dependencies` and its versioned assets too: Android builds verify and
+download the Moonshine runtime from that release. Rebuild it with
+`python3 scripts/build-android-speech-runtime.py --work-dir <directory>` using Python 3.12+
+and the pinned Android NDK/CMake versions. Upload new versioned assets without replacing old ones.
 Omit `--delete-old-releases` only when recoverable drafts are explicitly wanted.
 The script saves release metadata in an OS temporary directory, not a backup of
 binaries. Never delete Git tags or the retained update-feed assets.

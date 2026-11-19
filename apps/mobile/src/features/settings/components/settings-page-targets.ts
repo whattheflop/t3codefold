@@ -7,16 +7,17 @@ export const SETTINGS_PAGE_TARGETS = [
   "SettingsAbout",
   "SettingsArchive",
   "SettingsAppearance",
+  "SettingsLanguage",
   "SettingsNavigation",
   "SettingsOrganization",
   "SettingsProjectOverview",
-  "SettingsEnvironmentNewThreads",
   "SettingsEnvironmentSourceControl",
-  "SettingsEnvironmentAgentBehavior",
+  "SettingsWorktrees",
+  "SettingsLabs",
   "SettingsEnvironmentMaintenance",
   "SettingsProviderAccounts",
   "SettingsKeyboard",
-  "SettingsMicrophone",
+  "SettingsVoice",
   "SettingsFollowUp",
   "SettingsScheduledTasks",
   "SettingsProjectGrouping",
@@ -24,6 +25,7 @@ export const SETTINGS_PAGE_TARGETS = [
   "SettingsDiagnostics",
   "SettingsOpenSourceLicenses",
   "SettingsUsage",
+  // Fold
 ] as const;
 
 export type SettingsPageTarget = (typeof SETTINGS_PAGE_TARGETS)[number];

@@ -1,4 +1,5 @@
 import type { ProviderSetupError } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
@@ -15,6 +16,8 @@ interface Connection {
   readonly scope: Scope.Closeable;
   readonly client: Client;
   readonly revision: string;
+  /** Completes when rotation replaces this connection, so its exit is not the session's. */
+  readonly retired: Deferred.Deferred<void>;
 }
 
 function responseThreadId(response: unknown): string | undefined {
@@ -28,14 +31,8 @@ function payloadRecord(payload: unknown): Record<string, unknown> {
   return typeof payload === "object" && payload !== null ? { ...payload } : {};
 }
 
-/**
- * A Codex client for ChatGPT-managed sessions. Managed Codex reads the ChatGPT access token from
- * its process environment, so a rotated token needs a new process. Before a turn starts on an idle
- * client, the runtime is resolved again; when the token changed, Codex is respawned, handler
- * registrations and initialization are replayed, and every thread the old process had loaded is
- * resumed. A turn that is already running, or other work reported by `isBusy` (such as a live
- * voice call), keeps the old process until the next idle turn start.
- */
+// Token rotation respawns idle managed clients and replays registrations and loaded threads.
+// Active turns and voice calls keep their process until the next idle turn start.
 export const makeManagedCodexClient = Effect.fn("makeManagedCodexClient")(function* (input: {
   readonly resolve: Effect.Effect<CodexEffectiveRuntime, ProviderSetupError, Scope.Scope>;
   readonly open: (
@@ -64,15 +61,19 @@ export const makeManagedCodexClient = Effect.fn("makeManagedCodexClient")(functi
       Effect.provideService(Scope.Scope, scope),
       Effect.onError(() => Scope.close(scope, Exit.void)),
     );
-  const openIn = (scope: Scope.Closeable, runtime: CodexEffectiveRuntime) =>
-    Effect.gen(function* () {
+  const openIn = Effect.fn("CodexManagedClient.openIn")(
+    function* (scope: Scope.Closeable, runtime: CodexEffectiveRuntime) {
       const client = yield* input.open(runtime);
       yield* trackTurns(client);
-      return { scope, client, revision: runtime.revision } satisfies Connection;
-    }).pipe(
-      Effect.provideService(Scope.Scope, scope),
-      Effect.onError(() => Scope.close(scope, Exit.void)),
-    );
+      const retired = yield* Deferred.make<void>();
+      return { scope, client, revision: runtime.revision, retired } satisfies Connection;
+    },
+    (effect, scope) =>
+      effect.pipe(
+        Effect.provideService(Scope.Scope, scope),
+        Effect.onError(() => Scope.close(scope, Exit.void)),
+      ),
+  );
   const connect = Effect.gen(function* () {
     const scope = yield* Scope.fork(sessionScope, "sequential");
     return yield* openIn(scope, yield* resolveIn(scope));
@@ -105,6 +106,7 @@ export const makeManagedCodexClient = Effect.fn("makeManagedCodexClient")(functi
         const next = yield* openIn(scope, runtime);
         const previous = current;
         current = next;
+        yield* Deferred.succeed(previous.retired, undefined);
         yield* Scope.close(previous.scope, Exit.void);
         for (const registration of registrations) yield* registration(next.client);
         for (const step of initialization) yield* step(next.client);
@@ -123,44 +125,54 @@ export const makeManagedCodexClient = Effect.fn("makeManagedCodexClient")(functi
       }),
     )
     .pipe(
-      Effect.catchTag("ProviderAdapterOpenSessionError", (error) =>
-        Effect.fail(
-          new CodexErrors.CodexAppServerRequestError({
-            code: -32000,
-            errorMessage:
-              typeof error.cause === "object" &&
-              error.cause !== null &&
-              "detail" in error.cause &&
-              typeof error.cause.detail === "string"
-                ? error.cause.detail
-                : "Could not restart managed Codex.",
-            method: "turn/start",
-          }),
-        ),
-      ),
+      Effect.catchTags({
+        ProviderAdapterOpenSessionError: (error) =>
+          Effect.fail(
+            new CodexErrors.CodexAppServerRequestError({
+              code: -32000,
+              errorMessage:
+                typeof error.cause === "object" &&
+                error.cause !== null &&
+                "detail" in error.cause &&
+                typeof error.cause.detail === "string"
+                  ? error.cause.detail
+                  : "Could not restart managed Codex.",
+              method: "turn/start",
+            }),
+          ),
+      }),
     );
 
-  const request: Client["request"] = (method, payload) =>
-    Effect.gen(function* () {
-      if (method === "turn/start") yield* rotateIfStale;
-      const response = yield* current.client.request(method, payload);
-      if (method === "initialize") {
-        initialization.push((client) => client.request(method, payload));
-      } else if (method === "thread/start" || method === "thread/fork") {
-        const threadId = responseThreadId(response);
-        if (threadId !== undefined) {
-          loadedThreads.set(threadId, method === "thread/start" ? payloadRecord(payload) : {});
-        }
-      } else if (method === "thread/unsubscribe") {
-        loadedThreads.delete((payload as { readonly threadId: string }).threadId);
-      } else if (method === "turn/start") {
-        const turnId = (response as { readonly turn?: { readonly id?: unknown } }).turn?.id;
-        if (typeof turnId === "string") activeTurns.add(turnId);
+  const request: Client["request"] = Effect.fn("request")(function* (method, payload) {
+    if (method === "turn/start") yield* rotateIfStale;
+    const response = yield* current.client.request(method, payload);
+    if (method === "initialize") {
+      initialization.push((client) => client.request(method, payload));
+    } else if (method === "thread/start" || method === "thread/fork") {
+      const threadId = responseThreadId(response);
+      if (threadId !== undefined) {
+        loadedThreads.set(threadId, method === "thread/start" ? payloadRecord(payload) : {});
       }
-      return response;
-    });
+    } else if (method === "thread/unsubscribe") {
+      loadedThreads.delete((payload as { readonly threadId: string }).threadId);
+    } else if (method === "turn/start") {
+      const turnId = (response as { readonly turn?: { readonly id?: unknown } }).turn?.id;
+      if (typeof turnId === "string") activeTurns.add(turnId);
+    }
+    return response;
+  });
+
+  // The session ends when its current process does; a process rotated away ends quietly.
+  const awaitTermination: Client["awaitTermination"] = Effect.suspend(() => {
+    const connection = current;
+    return Effect.raceFirst(
+      connection.client.awaitTermination,
+      Deferred.await(connection.retired).pipe(Effect.andThen(awaitTermination)),
+    );
+  });
 
   return {
+    awaitTermination,
     raw: {
       get notifications() {
         return current.client.raw.notifications;

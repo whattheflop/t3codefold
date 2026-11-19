@@ -3,21 +3,25 @@ package expo.modules.t3voiceaudio
 import org.junit.Assert.*
 import androidx.core.telecom.CallEndpointCompat
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.channels.Channel
 
 class LocalSpeechStreamTest {
-  private class Engine : SpeechEngine {
+  private open class Engine : SpeechEngine {
     var frames = 0
     var total = 0L
     var maximum = 0
     var resets = 0
     var incomplete = false
     var closed = false
+    var closes = 0
+    var ends = 0
     override fun begin() {}
     override fun add(samples: FloatArray) { frames += samples.size; total += samples.size; maximum = maxOf(maximum, frames) }
     override fun phrases(final: Boolean) = listOf(SpeechPhrase(1, "recognized phrase", !incomplete || final))
-    override fun end() {}
+    override fun end() { ++ends }
     override fun reset() { frames = 0; ++resets }
-    override fun close() { closed = true }
+    override fun close() { closed = true; ++closes }
   }
   @Test fun longSessionsRetireHistoryWithoutDroppingAudio() {
     val engine = Engine()
@@ -45,6 +49,105 @@ class LocalSpeechStreamTest {
       assertTrue(speech.accept(FloatArray(8000)).isEmpty())
       assertTrue(speech.finish().isEmpty())
     }
+  }
+  @Test fun closedStreamsNeverReachTheNativeEngineAgain() {
+    val engine = Engine()
+    val speech = LocalSpeechStream(engine)
+    speech.close()
+    speech.close()
+    assertEquals(1, engine.closes)
+    assertThrows(IllegalStateException::class.java) { speech.accept(FloatArray(1600)) }
+    assertThrows(IllegalStateException::class.java) { speech.finish() }
+    assertEquals(0L, engine.total)
+    assertEquals(0, engine.ends)
+  }
+  @Test fun finishedStreamsDoNotStopTwiceOrAcceptMoreAudio() {
+    val engine = Engine()
+    LocalSpeechStream(engine).use { speech ->
+      assertEquals(listOf("recognized phrase"), speech.finish())
+      assertTrue(speech.finish().isEmpty())
+      assertEquals(1, engine.ends)
+      assertThrows(IllegalStateException::class.java) { speech.accept(FloatArray(1600)) }
+      assertEquals(0L, engine.total)
+    }
+  }
+  @Test fun invalidPcmIsRejectedBeforeNativeInference() {
+    val engine = Engine()
+    LocalSpeechStream(engine).use { speech ->
+      for (audio in listOf(floatArrayOf(Float.NaN), floatArrayOf(Float.POSITIVE_INFINITY), floatArrayOf(1.01f), floatArrayOf(-1.01f), FloatArray(16001))) {
+        assertThrows(IllegalArgumentException::class.java) { speech.accept(audio) }
+      }
+      assertTrue(speech.accept(FloatArray(0)).isEmpty())
+      assertEquals(0L, engine.total)
+      speech.accept(floatArrayOf(-1f, 0f, 1f))
+      assertEquals(3L, engine.total)
+    }
+  }
+  @Test fun failedNativeStartupPreservesTheFailureAndReleasesTheEngine() {
+    val failure = UnsatisfiedLinkError("unavailable JNI symbol")
+    val cleanupFailure = IllegalStateException("cleanup failed")
+    val engine = object : Engine() {
+      override fun begin() { throw failure }
+      override fun close() { super.close(); throw cleanupFailure }
+    }
+    val caught = assertThrows(UnsatisfiedLinkError::class.java) { LocalSpeechStream(engine) }
+    assertSame(failure, caught)
+    assertEquals(listOf(cleanupFailure), caught.suppressed.toList())
+    assertEquals(1, engine.closes)
+  }
+  @Test fun failedCloseStillRetiresNativeOwnership() {
+    val engine = object : Engine() {
+      override fun close() { super.close(); throw OutOfMemoryError("native allocation failed") }
+    }
+    val speech = LocalSpeechStream(engine)
+    assertThrows(OutOfMemoryError::class.java) { speech.close() }
+    speech.close()
+    assertEquals(1, engine.closes)
+    assertThrows(IllegalStateException::class.java) { speech.accept(FloatArray(1600)) }
+  }
+  @Test fun decoderContainsJvmNativeFailuresAndPublishesOnlyAfterCleanup() = runBlocking {
+    for (failure in listOf(UnsatisfiedLinkError("missing native symbol"), OutOfMemoryError("model allocation"))) {
+      val cleanup = IllegalStateException("native close failure")
+      val engine = object : Engine() {
+        override fun add(samples: FloatArray) { throw failure }
+        override fun close() { super.close(); throw cleanup }
+      }
+      val chunks = Channel<FloatArray>(1)
+      chunks.trySend(FloatArray(1600))
+      chunks.close()
+      val result = decodeSpeech(LocalSpeechStream(engine), chunks, { true }, { true }, {})
+      assertSame(failure, result.exceptionOrNull())
+      assertEquals(listOf(cleanup), failure.suppressed.toList())
+      assertEquals(1, engine.closes)
+    }
+  }
+  @Test fun decoderReportsCleanupFailureInsteadOfLettingItEscapeItsWorker() = runBlocking {
+    val failure = UnsatisfiedLinkError("native free symbol")
+    val engine = object : Engine() {
+      override fun close() { super.close(); throw failure }
+    }
+    val chunks = Channel<FloatArray>(1)
+    chunks.close()
+    val result = decodeSpeech(LocalSpeechStream(engine), chunks, { true }, { false }, {})
+    assertSame(failure, result.exceptionOrNull())
+    assertEquals(1, engine.closes)
+  }
+  @Test fun decoderDiscardsQueuedAudioAndLatePhrasesOnCancel() = runBlocking {
+    var recording = true
+    val engine = object : Engine() {
+      override fun add(samples: FloatArray) { super.add(samples); recording = false }
+    }
+    val chunks = Channel<FloatArray>(2)
+    chunks.trySend(FloatArray(8000))
+    chunks.trySend(FloatArray(8000))
+    chunks.close()
+    val phrases = mutableListOf<String>()
+    val result = decodeSpeech(LocalSpeechStream(engine), chunks, { recording }, { false }, { phrases.add(it) })
+    assertTrue(result.getOrThrow().isEmpty())
+    assertTrue(phrases.isEmpty())
+    assertEquals(8000L, engine.total)
+    assertEquals(0, engine.ends)
+    assertEquals(1, engine.closes)
   }
   @Test fun wiredHeadsetsAcceptTheirMicrophonesWithoutAcceptingPhoneFallback() {
     assertTrue(LocalDictationCapture.acceptsInput(CallEndpointCompat.TYPE_WIRED_HEADSET, 3, "", ""))

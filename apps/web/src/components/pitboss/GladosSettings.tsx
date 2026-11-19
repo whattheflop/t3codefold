@@ -31,12 +31,7 @@ import { useEnvironmentProviders } from "../../state/environments";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { randomUUID } from "../../lib/utils";
 import { getAppModelOptionsForInstance } from "../../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  isProviderInstancePickerReady,
-  sortProviderInstanceEntries,
-} from "../../providerInstances";
+import { providerInstanceEntriesFor, isProviderInstancePickerReady } from "../../providerInstances";
 import { useProjects, useServerConfigs } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -95,15 +90,7 @@ function useWorkerModelCatalog(environmentId: EnvironmentId, saved: ReadonlyArra
   const providers = useEnvironmentProviders().get(environmentId);
   const settings = useEnvironmentSettings(environmentId);
   const entries =
-    config && providers
-      ? sortProviderInstanceEntries(
-          applyProviderInstanceSettings(
-            deriveProviderInstanceEntries(providers),
-            config.settings,
-            null,
-          ),
-        )
-      : [];
+    config && providers ? providerInstanceEntriesFor(providers, config.settings, null) : [];
   const modelOptions = new Map(
     entries.map((entry) => {
       const options = getAppModelOptionsForInstance(settings, entry, null);
@@ -131,7 +118,6 @@ function useWorkerModelCatalog(environmentId: EnvironmentId, saved: ReadonlyArra
     entries,
     modelOptions,
     available,
-    planModeEnabled: settings.planModeEnabled,
   };
 }
 
@@ -174,7 +160,6 @@ function WorkerModelPicker({
           model={value.model}
           modelOptions={value.options}
           allowPromptInjectedEffort={false}
-          planModeEnabled={catalog.planModeEnabled}
           triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
           onModelOptionsChange={(options) => {
             const { options: _previous, ...rest } = value;
@@ -509,7 +494,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
               ? "Full auto: GLaDOS and its workers run without approval prompts and verify their own work."
               : autonomy === "ask"
                 ? "Ask me: GLaDOS and its workers ask for approvals, and you review each new verification recipe."
-                : "Custom permissions — pick one to simplify."
+                : "Custom permissions. Pick a preset to simplify."
           }
           control={
             <ToggleGroup

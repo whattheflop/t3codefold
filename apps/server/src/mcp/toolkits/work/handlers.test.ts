@@ -7,12 +7,13 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationV2ThreadShell,
-  type PitbossCommand,
+  PitbossCommand,
   type PitbossSnapshot,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -28,6 +29,7 @@ import * as WorkHandlers from "./handlers.ts";
 import { requireLedgerDelegation } from "./ledgerGuard.ts";
 import { WorkToolkit } from "./tools.ts";
 
+const encodeCommand = Schema.encodeSync(Schema.toCodecJson(PitbossCommand));
 const projectId = ProjectId.make("project");
 const providerInstanceId = ProviderInstanceId.make("codex");
 const gladosThreadId = ThreadId.make("glados-thread");
@@ -196,7 +198,7 @@ describe("work tools", () => {
     );
     const command = (input: PitbossCommand) =>
       toolkit.pipe(
-        Effect.flatMap((built) => built.handle("work_command", input)),
+        Effect.flatMap((built) => built.handle("work_command", encodeCommand(input))),
         Stream.unwrap,
         Stream.runLast,
         Effect.provide(dependencies),

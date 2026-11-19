@@ -50,11 +50,12 @@ export const makeHome = Effect.fn("GLaDOS.makeHome")(function* (stateDir: string
     })).filter((thread) => thread.id.startsWith(`glados-home:${home.project.id}`));
     // Reuse a live home thread so retries recover partial provisioning. A reset archives the
     // old conversation, so the next home gets a new, revision-stamped identity instead.
-    const live = homeThreads.findLast((thread) => thread.archivedAt == null);
+    const live = homeThreads.at(-1);
+    const originalId = ThreadId.make(`glados-home:${home.project.id}`);
     const threadId =
       live?.id ??
       ThreadId.make(
-        homeThreads.length === 0
+        !(yield* threads.getThreadShell(originalId))
           ? `glados-home:${home.project.id}`
           : `glados-home:${home.project.id}:${expectedRevision}`,
       );
@@ -106,10 +107,13 @@ export const makeHome = Effect.fn("GLaDOS.makeHome")(function* (stateDir: string
         const cleared = yield* work.command(input, { type: "user" });
         // Only a home thread is retired; a user thread elected as GLaDOS stays theirs.
         if (role.threadId.startsWith("glados-home:")) {
-          const previous = yield* threads.getProjectThread({
-            projectId: role.projectId,
-            threadId: role.threadId,
-          });
+          const previous = yield* threads.getProjectThreadRecords(
+            {
+              projectId: role.projectId,
+              threadId: role.threadId,
+            },
+            [],
+          );
           if (previous.thread.archivedAt === null)
             yield* threads.dispatch({
               type: "thread.archive",
@@ -126,10 +130,13 @@ export const makeHome = Effect.fn("GLaDOS.makeHome")(function* (stateDir: string
       if (input.action.type !== "activate-home")
         return yield* new PitbossError({ code: "invalid", message: "Expected a home request." });
       if (current.role) {
-        const elected = yield* threads.getProjectThread({
-          projectId: current.role.projectId,
-          threadId: current.role.threadId,
-        });
+        const elected = yield* threads.getProjectThreadRecords(
+          {
+            projectId: current.role.projectId,
+            threadId: current.role.threadId,
+          },
+          [],
+        );
         if (elected.thread.archivedAt !== null)
           yield* threads.dispatch({
             type: "thread.unarchive",

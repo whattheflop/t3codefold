@@ -29,6 +29,7 @@ export function useCodexVoiceComposerControl(input: {
     enabled: isCodexThread && input.connectionState === "connected" && !dictationBusy,
   });
   const codexVoiceActive = codexVoice.status !== "idle" && codexVoice.status !== "error";
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- shows a native alert when the voice session reports a new error
   useEffect(() => {
     if (codexVoice.error) Alert.alert("Codex voice", codexVoice.error);
   }, [codexVoice.error]);

@@ -1,21 +1,21 @@
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useNavigation } from "@react-navigation/native";
 import { AsyncResult } from "effect/reactivity";
-import { Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
 import { AppText as Text } from "../../components/ui/AppText";
-import { NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   DEFAULT_COMPOSER_ENTER_BEHAVIOR,
   type ComposerEnterBehavior,
 } from "../../lib/composerEnterBehavior";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
+import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
+import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 import { VimNavigationSettings } from "./FoldSettingsSections";
+
+const SEND_MODIFIER = Platform.OS === "android" ? "Ctrl" : "Command";
 
 const ENTER_BEHAVIOR_OPTIONS: ReadonlyArray<{
   readonly behavior: ComposerEnterBehavior;
@@ -30,15 +30,11 @@ const ENTER_BEHAVIOR_OPTIONS: ReadonlyArray<{
   {
     behavior: "newline",
     label: "Insert new line",
-    description:
-      Platform.OS === "android"
-        ? "Return inserts a new line. Ctrl-Return sends the message."
-        : "Return inserts a new line. Command-Return sends the message.",
+    description: `Return inserts a new line. ${SEND_MODIFIER}-Return sends the message.`,
   },
 ];
 
 export function SettingsKeyboardRouteScreen() {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
@@ -48,13 +44,7 @@ export function SettingsKeyboardRouteScreen() {
     : null;
 
   return (
-    <View collapsable={false} className="flex-1 bg-sheet">
-      {Platform.OS === "android" ? (
-        <>
-          <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Keyboard" onBack={() => navigation.goBack()} />
-        </>
-      ) : null}
+    <SettingsScreen title="Keyboard">
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
@@ -80,6 +70,6 @@ export function SettingsKeyboardRouteScreen() {
         </Text>
         <VimNavigationSettings />
       </ScrollView>
-    </View>
+    </SettingsScreen>
   );
 }

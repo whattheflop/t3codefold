@@ -1,6 +1,8 @@
 import type { RefObject } from "react";
-import { Pressable, TextInput, type TextInputInstance, View } from "react-native";
+import { type TextInputInstance, View } from "react-native";
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 
+import { ControllerTextInput } from "./ControllerTextInput";
 import { SymbolView } from "./AppSymbol";
 import { useAndroidControlSizing } from "./useAndroidControlSizing";
 
@@ -38,7 +40,8 @@ export function SearchField({
         size={mediumIconSize}
         tintColorClassName="accent-foreground-muted"
       />
-      <TextInput
+      <ControllerTextInput
+        containerStyle={{ flex: 1, minWidth: 0 }}
         ref={inputRef}
         accessibilityLabel={accessibilityLabel}
         autoFocus={autoFocus}
@@ -50,16 +53,20 @@ export function SearchField({
         selectionColorClassName="accent-focus/32"
         cursorColorClassName="accent-focus"
         selectionHandleColorClassName="accent-focus"
-        className="min-w-0 flex-1 font-sans text-base text-foreground"
+        className="min-h-0 w-full min-w-0 rounded-none border-0 bg-transparent px-0 font-sans text-base text-foreground"
         style={{ paddingVertical: 7 * scale }}
         value={value}
         onChangeText={onChangeText}
       />
       {value.length > 0 ? (
-        <Pressable
+        <ControllerPressable
           accessibilityLabel={clearAccessibilityLabel}
           accessibilityRole="button"
           hitSlop={10}
+          onActivate={() => {
+            onChangeText("");
+            inputRef.current?.focus();
+          }}
           onPress={() => {
             onChangeText("");
             inputRef.current?.focus();
@@ -70,7 +77,7 @@ export function SearchField({
             size={mediumIconSize}
             tintColorClassName="accent-foreground-muted"
           />
-        </Pressable>
+        </ControllerPressable>
       ) : null}
     </View>
   );

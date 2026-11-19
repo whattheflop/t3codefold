@@ -2,6 +2,24 @@ apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 group = 'com.t3tools.voiceaudio'
 version = '1.0.0'
+configurations {
+  moonshineRuntime
+  implementation.extendsFrom moonshineRuntime
+}
+rootProject.allprojects {
+  repositories {
+    exclusiveContent {
+      forRepository {
+        ivy {
+          url = providers.gradleProperty('t3MoonshineRepository').getOrElse('https://github.com/BreakTheBeta/T3codefold/releases/download/fold-native-dependencies')
+          patternLayout { artifact '[artifact]-[revision].[ext]' }
+          metadataSources { artifact() }
+        }
+      }
+      filter { includeModule 'com.breakthebeta', 'moonshine-voice' }
+    }
+  }
+}
 android {
   namespace 'expo.modules.t3voiceaudio'
   compileSdk rootProject.ext.compileSdkVersion
@@ -14,6 +32,27 @@ android {
 dependencies {
   implementation project(':expo-modules-core')
   implementation 'androidx.core:core-telecom:1.0.0'
-  implementation 'ai.moonshine:moonshine-voice:0.1.5'
+  // Moonshine's stock AAR pins SIGILL-affected ORT 1.23.2; both native libraries must be relinked.
+  moonshineRuntime 'com.breakthebeta:moonshine-voice:0.1.6-ort1.25.1@aar'
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+  implementation 'com.google.android.material:material:1.10.0'
+  implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+  implementation 'androidx.work:work-runtime:2.9.1'
+  implementation 'com.google.protobuf:protobuf-javalite:4.36.2'
   testImplementation 'junit:junit:4.13.2'
 }
+tasks.register('verifyMoonshineRuntime') {
+  inputs.files(configurations.moonshineRuntime)
+  doLast {
+    def digest = java.security.MessageDigest.getInstance('SHA-256')
+    configurations.moonshineRuntime.singleFile.withInputStream { stream ->
+      byte[] buffer = new byte[8192]
+      int length
+      while ((length = stream.read(buffer)) != -1) digest.update(buffer, 0, length)
+    }
+    if (digest.digest().encodeHex().toString() != 'f6756cf6d900b888f485791cacca6595b8d8ea55864db558f9bb998858ccb791') {
+      throw new GradleException('The Moonshine/ONNX runtime checksum does not match the verified native build.')
+    }
+  }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyMoonshineRuntime' }

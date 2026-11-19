@@ -6,12 +6,14 @@ import {
   type ExecutionEnvironmentDescriptor,
   type FleetExecuteInput,
   ProjectId,
+  type Project as ProjectRecord,
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
+import * as DocumentText from "../provider/DocumentText.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -40,6 +42,7 @@ function fixture() {
   const routed: Array<[unknown, FleetRemoteRequest]> = [];
   const dependencies = Layer.mergeAll(
     NodeCrypto.layer,
+    Layer.mock(DocumentText.DocumentText)({}),
     NodeServices.layer,
     ServerConfig.layerTest(process.cwd(), { prefix: "t3-fleet-executor-" }).pipe(
       Layer.provide(NodeServices.layer),
@@ -74,7 +77,11 @@ function fixture() {
           return { routed: "remote" };
         }),
     }),
-    Layer.mock(ThreadManagement.ThreadManagementService)({}),
+    // A launch with a clientRequestId first checks for one it already accepted.
+    Layer.mock(ThreadManagement.ThreadManagementService)({
+      getThreadShell: () => Effect.succeed(null),
+    }),
+    Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
     Layer.mock(ThreadLaunch.ThreadLaunchService)({
       launch: (input) =>
         Effect.sync(() => {
@@ -82,14 +89,26 @@ function fixture() {
           return {
             threadId: input.threadId,
             projection: {
-              thread: { id: input.threadId, projectId: input.projectId, modelSelection },
+              thread: {
+                id: input.threadId,
+                title: input.title,
+                projectId: input.projectId,
+                modelSelection,
+              },
               runs: [],
             },
             resumed: false,
           } as unknown as ThreadLaunch.ThreadLaunchResult;
         }),
     }),
-    Layer.mock(Project.ProjectService)({ getById: () => Effect.succeed(Option.none()) }),
+    Layer.mock(Project.ProjectService)({
+      getById: (id) =>
+        Effect.succeedSome({
+          id,
+          workspaceRoot: "/projects/test",
+          defaultModelSelection: modelSelection,
+        } as unknown as ProjectRecord),
+    }),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/projects" }),
     Layer.mock(GitVcsDriver.GitVcsDriver)({}),
     ServerSettings.layerTest(),

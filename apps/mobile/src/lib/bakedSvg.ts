@@ -100,6 +100,7 @@ export function useBakedSvg(svg: string | null, width: number, height: number): 
   );
   const [baked, setBaked] = useState(() => (target?.exists ? target.uri : null));
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- bakes the SVG to a cached file on disk and drops the result after unmount
   useEffect(() => {
     if (svg === null || target === null) return;
     let live = true;

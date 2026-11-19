@@ -1,3 +1,4 @@
+import { Factory } from "./factory/Factory.ts";
 import { expect, it } from "@effect/vitest";
 import {
   AuthSessionId,
@@ -45,11 +46,46 @@ const command = (action: PitbossCommand["action"]): PitbossCommand => ({
   action,
 });
 
+const unexpectedFactoryCall = () =>
+  Effect.die(new Error("Unexpected Factory call in voice handler test"));
+
 const services = (input: {
   readonly workCommands: Array<PitbossCommand>;
   readonly threads: Partial<ThreadManagementService["Service"]>;
 }) =>
   Layer.mergeAll(
+    Layer.mock(Factory, {
+      agents: {
+        ensureCommander: unexpectedFactoryCall,
+        spawn: unexpectedFactoryCall,
+        resume: unexpectedFactoryCall,
+        lifecycle: unexpectedFactoryCall,
+        update: unexpectedFactoryCall,
+      },
+      decisions: {
+        file: unexpectedFactoryCall,
+        answer: unexpectedFactoryCall,
+        withdraw: unexpectedFactoryCall,
+        payload: unexpectedFactoryCall,
+      },
+      actions: { execute: unexpectedFactoryCall, recover: unexpectedFactoryCall() },
+      triggers: {
+        upsert: unexpectedFactoryCall,
+        run: unexpectedFactoryCall,
+        runDue: unexpectedFactoryCall(),
+      },
+      wakes: {
+        drain: unexpectedFactoryCall(),
+        acknowledge: unexpectedFactoryCall,
+        defer: unexpectedFactoryCall,
+        retry: unexpectedFactoryCall,
+      },
+      lanes: {
+        enqueue: unexpectedFactoryCall,
+        cancel: unexpectedFactoryCall,
+        tick: unexpectedFactoryCall(),
+      },
+    }),
     Layer.mock(WorkStore, {
       command: (pitboss) => {
         input.workCommands.push(pitboss);

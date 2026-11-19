@@ -85,6 +85,8 @@ export function resolveProjectIconSymbol(
   return name ? { name, color: projectIcon.color } : null;
 }
 
+export type ProjectChipGlyph = ProjectIconGlyph;
+
 export type ProjectChipIcon = { readonly kind: "favicon"; readonly uri: string } | ProjectIconGlyph;
 
 export function resolveProjectChipIcon(

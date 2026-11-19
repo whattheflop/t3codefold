@@ -142,6 +142,7 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
       }),
     [dictationSession, nativeMedia, start, stop, list, context],
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores voice preferences from SecureStore on mount
   useEffect(() => {
     let mounted = true;
     void SecureStore.getItemAsync(preferenceKey)
@@ -158,6 +159,7 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
       mounted = false;
     };
   }, [workspace]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to native call audio events while mounted
   useEffect(() => {
     const end = voiceAudio.addListener("endCall", () => {
       void workspace.stop();
@@ -194,9 +196,11 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
   );
   const state = useSyncExternalStore(workspace.subscribe, workspace.getSnapshot);
   const callActive = state.voice.status !== "idle" && state.voice.status !== "error";
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the live call into the native audio session owner
   useEffect(() => {
     setLiveCallActive(callActive);
   }, [setLiveCallActive, callActive]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the native live-call flag on unmount
   useEffect(() => () => setLiveCallActive(false), [setLiveCallActive]);
   const shells = useThreadShells();
   const configs = useServerConfigs();
@@ -224,6 +228,7 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
         })),
     [shells, configs],
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- feeds available thread targets into the voice workspace controller
   useEffect(() => workspace.setTargets(targets), [workspace, targets]);
   const subscription = useAtomValue(
     state.target &&
@@ -237,7 +242,9 @@ export function VoiceWorkspaceProvider({ children }: { children: ReactNode }) {
       : emptyFeedAtom,
   );
   const feed = Option.getOrElse(AsyncResult.value(subscription), () => emptyVoiceFeed);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- forwards the server voice event feed into the voice workspace controller
   useEffect(() => workspace.receiveFeed(feed), [workspace, feed]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- stops the live voice call when the provider unmounts
   useEffect(
     () => () => {
       void workspace.stop();
@@ -709,6 +716,7 @@ function VoicePanel() {
 
 export function useVoiceViewContext(source: string, text: string | null) {
   const workspace = useContext(VoiceContext)?.workspace;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- shares this view context with the live voice call while mounted
   useEffect(() => {
     workspace?.setContext(source, text);
     return () => workspace?.setContext(source, null);

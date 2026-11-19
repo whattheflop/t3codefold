@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseStartupCrashRecords } from "./crash-log-model";
+import { parseStartupCrashRecords, readCrashRecords } from "./crash-log-model";
 
 const BUNDLE =
   "/Users/expo/workingdir/build/apps/mobile/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/T3Code/BuildProductsPath/Release-iphoneos/main.jsbundle";
@@ -43,5 +43,35 @@ describe("parseStartupCrashRecords", () => {
       { ...FATAL, timestamp: 20 },
     ]);
     expect(records.map((record) => record.timestamp)).toEqual([20, 10]);
+  });
+
+  it("reads native recording failures with OTA disabled and retains them when the OTA log fails", async () => {
+    const native = {
+      timestamp: 20,
+      description: "Native crash",
+      detail: "Recording; signal 11",
+      frames: [],
+    };
+    for (const updates of [
+      null,
+      async () => {
+        throw new Error("OTA disabled");
+      },
+    ]) {
+      expect(await readCrashRecords({ updates, native: async () => [native] }, 0)).toEqual([
+        native,
+      ]);
+    }
+    await expect(
+      readCrashRecords(
+        {
+          updates: null,
+          native: async () => {
+            throw new Error("native log failed");
+          },
+        },
+        0,
+      ),
+    ).rejects.toThrow("native log failed");
   });
 });

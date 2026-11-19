@@ -42,13 +42,7 @@ describe("Android local dictation permissions", () => {
     const { getLocalDictationBackend } = await import("./localDictation.android");
     const backend = getLocalDictationBackend()!;
     const session = new StreamingVoiceInputSession(backend, vi.fn());
-    const target = createVoiceInputTarget(
-      "draft",
-      () => "",
-      vi.fn(),
-      { start: 0, end: 0 },
-      () => () => {},
-    );
+    const target = createVoiceInputTarget("draft", () => "", vi.fn(), { start: 0, end: 0 });
     mocks.requestMultiple.mockImplementationOnce(async () => {
       expect(backend.isRequestingPermission?.()).toBe(true);
       mocks.appState.currentState = "background";

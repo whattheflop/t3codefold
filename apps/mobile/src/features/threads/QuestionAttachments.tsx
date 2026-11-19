@@ -1,21 +1,24 @@
+import { useQuestionDraftText } from "./useQuestionDraftText";
+import { ControllerPressable } from "../controller/ControllerPressable";
+import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import * as Dialog from "../../components/ui/Dialog";
 import { TextInputWrapper } from "expo-paste-input";
-import { AppTextInput as TextInput } from "../../components/ui/AppText";
+import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
 import { useNativePaste } from "../../lib/useNativePaste";
 import { convertPastedImagesToAttachments } from "../../lib/composerImages";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS, type UserInputQuestion } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { View } from "react-native";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { View, type TextInputInstance } from "react-native";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { ComposerAttachmentButton } from "./ComposerAttachmentButton";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
 import { pickComposerFiles, pickComposerMedia } from "../../lib/composerImages";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { useNavigation } from "@react-navigation/native";
-import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
-import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
+import { FilePreviewModal, type FilePreviewSource } from "../../components/ui/FilePreviewModal";
+import { VideoPreviewModal, type VideoPreviewSource } from "../../components/ui/VideoPreviewModal";
 import { useServerConfigs } from "../../state/entities";
 import { appAtomRegistry } from "../../state/atom-registry";
 import {
@@ -39,33 +42,52 @@ export function QuestionAttachments(props: {
   onChangeText: (value: string) => void;
   onInputFocusChange?: ((focused: boolean) => void) | undefined;
 }) {
+  const dictationInstance = useId();
   const { selectedThread } = useThreadSelection();
   const navigation = useNavigation();
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const configs = useServerConfigs();
   const drafts = useAtomValue(composerDraftsAtom);
-  const scopeKey = JSON.stringify([
-    selectedThread?.environmentId,
-    selectedThread?.id,
-    props.requestId,
-    props.question.id,
-  ]);
-  // Unmounted inputs never emit onBlur; explicitly release keyboard ownership.
   const focusedRef = useRef(false);
   const onInputFocusChange = props.onInputFocusChange;
-  const releaseFocus = useEffectEvent(() => {
-    if (focusedRef.current) onInputFocusChange?.(false);
-  });
-  useEffect(() => () => releaseFocus(), []);
-  const pickerScope = useRef<{ key: string; active: boolean } | null>(null);
+  // The caller keys this component by request and question, so unmounting ends any open
+  // picker's scope.
+  const pickerScope = useRef<{ active: boolean }>({ active: false });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens a scope that native picker and paste callbacks check, and closes it on unmount
   useEffect(() => {
-    const scope = { key: scopeKey, active: true };
+    const scope = { active: true };
     pickerScope.current = scope;
     return () => {
       scope.active = false;
     };
-  }, [scopeKey]);
+  }, []);
+  // Unmounted inputs never emit onBlur; explicitly release keyboard ownership.
+  const releaseFocus = useEffectEvent(() => {
+    if (focusedRef.current) onInputFocusChange?.(false);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases keyboard ownership on unmount, since an unmounted native input never emits blur
+  useEffect(() => () => releaseFocus(), []);
+  const inputRef = useRef<TextInputInstance>(null);
+  const { initialText, readNativeText, onNativeTextChange } = useQuestionDraftText(
+    props.value,
+    inputRef,
+  );
+  const [selection, setSelection] = useState({
+    start: props.value.length,
+    end: props.value.length,
+  });
+  const voice = useVoiceInputController({
+    ownerKey: selectedThread
+      ? `question:${selectedThread.environmentId}:${selectedThread.id}:${props.requestId}:${props.question.id}:${dictationInstance}`
+      : null,
+    label: props.question.header,
+    readDraftMessage: readNativeText,
+    selection,
+    disabled: props.disabled,
+    onChangeDraftMessage: props.onChangeText,
+    onChangeSelection: setSelection,
+  });
   const append = (
     key: string,
     attachments: Parameters<typeof appendComposerDraftAttachments>[1],
@@ -87,12 +109,7 @@ export function QuestionAttachments(props: {
   };
   const paste = useNativePaste((uris) => {
     const scope = pickerScope.current;
-    if (
-      !selectedThread ||
-      props.disabled ||
-      !configs.get(selectedThread.environmentId)?.environment.capabilities.questionAttachments
-    )
-      return;
+    if (!selectedThread || props.disabled || !configs.get(selectedThread.environmentId)) return;
     const key = questionAttachmentDraftKey(
       selectedThread.environmentId,
       selectedThread.id,
@@ -100,18 +117,18 @@ export function QuestionAttachments(props: {
       props.question.id,
     );
     changeQuestionAttachmentPreparation(key, 1);
-    void convertPastedImagesToAttachments({
-      uris,
-      existingCount: appAtomRegistry.get(composerDraftsAtom)[key]?.attachments.length ?? 0,
-    })
-      .then(async (images) => {
+    void convertPastedImagesToAttachments({ uris })
+      .then(async (result) => {
         if (
-          scope?.active &&
+          scope.active &&
           (appAtomRegistry.get(questionAttachmentPreparationAtom)[key] ?? 0) > 0
         ) {
-          if (append(key, images) > 0)
-            Dialog.alert("Could not paste image", "Too many attachments.");
-        } else await releaseUnusedComposerAttachmentFiles(images);
+          const problems = [
+            ...(result.error ? [result.error] : []),
+            ...(append(key, result.attachments) > 0 ? ["Too many attachments."] : []),
+          ];
+          if (problems.length) Dialog.alert("Could not paste image", problems.join("\n\n"));
+        } else await releaseUnusedComposerAttachmentFiles(result.attachments);
       })
       .catch((error) =>
         Dialog.alert(
@@ -124,7 +141,7 @@ export function QuestionAttachments(props: {
   if (!selectedThread || props.question.allowCustomAnswer === false) return null;
   const { environmentId, id: threadId } = selectedThread;
   const capabilities = configs.get(environmentId)?.environment.capabilities;
-  const canAttach = capabilities?.questionAttachments === true;
+  const canAttach = capabilities !== undefined;
   const key = questionAttachmentDraftKey(
     environmentId,
     threadId,
@@ -150,7 +167,7 @@ export function QuestionAttachments(props: {
       const picked = "files" in result ? result.files : result.attachments;
       // Resolution on another client clears the reservation while the picker is open.
       if (
-        !scope?.active ||
+        !scope.active ||
         (appAtomRegistry.get(questionAttachmentPreparationAtom)[key] ?? 0) === 0
       ) {
         await releaseUnusedComposerAttachmentFiles(picked);
@@ -171,7 +188,7 @@ export function QuestionAttachments(props: {
       {canAttach ? (
         <ComposerAttachmentButton
           disabled={props.disabled}
-          supportsFiles={Boolean(capabilities?.fileAttachments)}
+          supportsFiles
           onPickMedia={() => pick("media")}
           onPickFiles={() => pick("files")}
         />
@@ -200,25 +217,51 @@ export function QuestionAttachments(props: {
       />
       <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
       <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
-      <TextInputWrapper onPaste={paste}>
-        <TextInput
-          value={props.value}
-          multiline={props.question.initialAnswer !== undefined}
-          submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
-          editable={!props.disabled}
-          onChangeText={props.onChangeText}
-          onFocus={() => {
-            focusedRef.current = true;
-            onInputFocusChange?.(true);
-          }}
-          onBlur={() => {
-            focusedRef.current = false;
-            onInputFocusChange?.(false);
-          }}
-          placeholder="Or type a custom answer"
-          className="min-h-[54px] rounded-2xl border border-input-border bg-input px-3.5 py-3 font-sans text-base text-foreground"
-        />
-      </TextInputWrapper>
+      <ControllerPressable
+        controllerKey={`${props.requestId}:${props.question.id}`}
+        accessibilityLabel={`Edit ${props.question.header}. Square dictates`}
+        disabled={props.disabled}
+        onActivate={() => inputRef.current?.focus()}
+        onPress={() => inputRef.current?.focus()}
+        onDictate={() => {
+          if (voice.isBusy) voice.stop();
+          else if (voice.isAvailable) voice.start();
+        }}
+      >
+        <TextInputWrapper onPaste={paste}>
+          <TextInput
+            ref={inputRef}
+            defaultValue={initialText}
+            multiline={props.question.initialAnswer !== undefined}
+            submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
+            editable={!props.disabled && !voice.freezesEditor}
+            onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
+            onChangeText={(text) => {
+              onNativeTextChange(text);
+              props.onChangeText(text);
+            }}
+            onFocus={() => {
+              focusedRef.current = true;
+              onInputFocusChange?.(true);
+            }}
+            onBlur={() => {
+              focusedRef.current = false;
+              onInputFocusChange?.(false);
+            }}
+            placeholder="Or type a custom answer"
+            className="min-h-[54px] rounded-2xl border border-input-border bg-input px-3.5 py-3 font-sans text-base text-foreground"
+          />
+        </TextInputWrapper>
+      </ControllerPressable>
+      {voice.isBusy ? (
+        <Text accessibilityLiveRegion="polite" className="text-sm text-foreground-secondary">
+          Dictating {props.question.header} · Square finishes · Circle cancels
+        </Text>
+      ) : voice.state.phase === "error" ? (
+        <Text accessibilityLiveRegion="polite" className="text-sm text-danger-foreground">
+          {voice.state.error}
+        </Text>
+      ) : null}
     </View>
   );
 }

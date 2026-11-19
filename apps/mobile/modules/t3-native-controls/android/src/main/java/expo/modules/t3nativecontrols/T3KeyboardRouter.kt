@@ -209,7 +209,15 @@ private class T3KeyboardWindowCallback(
   private val root: View,
 ) : Window.Callback by delegate {
   override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-    T3KeyboardRouter.dispatch(event, root) || delegate.dispatchKeyEvent(event)
+    T3ControllerRouter.key(event, root) || T3KeyboardRouter.dispatch(event, root) || delegate.dispatchKeyEvent(event)
+
+  override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean =
+    T3ControllerRouter.motion(event, root) || delegate.dispatchGenericMotionEvent(event)
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    if (hasFocus) T3ControllerRouter.resume(root) else T3ControllerRouter.suspend(root)
+    delegate.onWindowFocusChanged(hasFocus)
+  }
 
   // Java default methods are not covered by Kotlin delegation.
   override fun onProvideKeyboardShortcuts(

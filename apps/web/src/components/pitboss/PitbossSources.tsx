@@ -33,6 +33,7 @@ export function PitbossSources({
   });
   const refreshSources = sources.refresh;
   const [open, setOpen] = useState(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Refresh remote state while this section is open.
   useEffect(() => {
     if (!open) return;
     refreshSources();
@@ -70,7 +71,7 @@ export function PitbossSources({
         <InboxIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">Task sources</span>
-          <span className="block text-[13px] text-muted-foreground/80">
+          <span className="block text-sm text-muted-foreground/80">
             Pull issues from Linear, Jira or Vikunja
           </span>
         </span>

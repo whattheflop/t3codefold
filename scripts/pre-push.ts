@@ -6,6 +6,8 @@
  *
  * Bypass once with `git push --no-verify`.
  */
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as Effect from "effect/Effect";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -60,6 +62,7 @@ export interface PrePushPlan {
   readonly typecheck: ReadonlyArray<string>;
   readonly tests: ReadonlyArray<string>;
   readonly lintFiles: ReadonlyArray<string>;
+  readonly androidController: boolean;
 }
 
 function owningWorkspace(file: string, workspaces: ReadonlyArray<Workspace>) {
@@ -102,6 +105,12 @@ export function planPrePush(input: {
 
   const names = [...affected].toSorted();
   return {
+    androidController: files.some(
+      (file) =>
+        file.startsWith("apps/mobile/modules/t3-native-controls/android/") ||
+        file.startsWith("apps/mobile/src/features/controller/") ||
+        file.startsWith("apps/mobile/src/native/T3KeyboardCommands."),
+    ),
     affected: names,
     typecheck: names.filter((name) => TYPECHECK_GATED.has(name)),
     tests: names.filter((name) => !TESTS_NOT_GATED.has(name)),
@@ -338,7 +347,7 @@ function main() {
     changedFiles: [...changedFiles],
     workspaces: readWorkspaces(repoRoot),
   });
-  if (plan.affected.length === 0 && plan.lintFiles.length === 0) {
+  if (plan.affected.length === 0 && plan.lintFiles.length === 0 && !plan.androidController) {
     console.log("pre-push: no workspace changes to check.");
     return;
   }
@@ -352,6 +361,29 @@ function main() {
       run(repoRoot, "format", ["fmt", "--check", "--no-error-on-unmatched-pattern", ...batch]);
     }
     lintAddedLines(repoRoot, base!, head, existingLintFiles);
+  }
+  if (plan.androidController) {
+    console.log("\npre-push: Android controller navigation contract");
+    const windows = Effect.runSync(HostProcess.Platform) === "win32";
+    const android = NodePath.join(repoRoot, "apps", "mobile", "android");
+    const gradle = NodePath.join(android, windows ? "gradlew.bat" : "gradlew");
+    if (!NodeFS.existsSync(gradle)) {
+      throw new Error(
+        "Android controller checks require the native project. Configure the Android SDK and JDK, then run vp run mobile:install android --prepare.",
+      );
+    }
+    const result = NodeChildProcess.spawnSync(
+      gradle,
+      [":t3-native-controls:testDebugUnitTest", "--tests", "*T3Controller*Test", "--console=plain"],
+      { cwd: android, stdio: "inherit", env: process.env, shell: windows },
+    );
+    if (result.error) console.error(result.error.message);
+    if (result.status !== 0) {
+      console.error(
+        "Android controller contract failed; check the test report and Android SDK/JDK configuration.",
+      );
+      process.exit(result.status ?? 1);
+    }
   }
   const filters = (names: ReadonlyArray<string>) => names.flatMap((name) => ["--filter", name]);
   if (plan.typecheck.length > 0) {

@@ -1,7 +1,22 @@
+import {
+  FactoryError,
+  FactoryStatus,
+  FactoryBoard,
+  FactoryAgent,
+  FactoryCard,
+  FactoryPayload,
+  FactoryTrigger,
+  FactoryTriggerRun,
+  FactoryEnsureCommanderInput,
+  FactoryAnswerInput,
+  FactoryLifecycleInput,
+  FactoryTriggerInput,
+  FactoryWakeInput,
+} from "./factory.ts";
 /**
- * Fold-only WebSocket RPCs: pitboss (GLaDOS work), fleet routing and realtime
- * voice. `rpc.ts` spreads `FOLD_WS_METHODS` into `WS_METHODS` and merges
- * `FoldRpcGroup` into `WsRpcGroup`, so upstream syncs touch only those lines there.
+ * Fold-only WebSocket RPCs: fleet routing and realtime voice. `rpc.ts` spreads
+ * `FOLD_WS_METHODS` into `WS_METHODS` and merges `FoldRpcGroup` into
+ * `WsRpcGroup`, so upstream syncs touch only those lines there.
  */
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
@@ -45,6 +60,19 @@ export const FOLD_WS_METHODS = {
   pitbossRead: "pitboss.read",
   pitbossSubscribe: "pitboss.subscribe",
   pitbossCommand: "pitboss.command",
+  factorySetEnabled: "factory.setEnabled",
+  factorySubscribeBoard: "factory.subscribeBoard",
+  factoryEnsureCommander: "factory.ensureCommander",
+  factoryAnswerCard: "factory.answerCard",
+  factoryWithdrawCard: "factory.withdrawCard",
+  factoryGetPayload: "factory.getPayload",
+  factorySetAgentLifecycle: "factory.setAgentLifecycle",
+  factoryUpsertTrigger: "factory.upsertTrigger",
+  factoryRunTrigger: "factory.runTrigger",
+  factorySetTriggerShadow: "factory.setTriggerShadow",
+  factoryRetryWake: "factory.retryWake",
+  factoryDeferWake: "factory.deferWake",
+  factoryCancelLaneJob: "factory.cancelLaneJob",
 
   // Fleet: orchestration across a client's connected environments
   fleetConnect: "fleet.connect",
@@ -156,6 +184,74 @@ const WsProviderRealtimeVoiceEventsRpc = Rpc.make(FOLD_WS_METHODS.providerRealti
   error: RealtimeVoiceRpcError,
 });
 
+const FactoryRpcError = Schema.Union([FactoryError, EnvironmentAuthorizationError]);
+const factorySubscribeBoardRpc = Rpc.make(FOLD_WS_METHODS.factorySubscribeBoard, {
+  payload: Schema.Struct({}),
+  success: FactoryBoard,
+  error: FactoryRpcError,
+  stream: true,
+});
+const factorySetEnabledRpc = Rpc.make(FOLD_WS_METHODS.factorySetEnabled, {
+  payload: Schema.Struct({ enabled: Schema.Boolean }),
+  success: FactoryStatus,
+  error: FactoryRpcError,
+});
+const factoryEnsureCommanderRpc = Rpc.make(FOLD_WS_METHODS.factoryEnsureCommander, {
+  payload: FactoryEnsureCommanderInput,
+  success: FactoryAgent,
+  error: FactoryRpcError,
+});
+const factoryAnswerCardRpc = Rpc.make(FOLD_WS_METHODS.factoryAnswerCard, {
+  payload: FactoryAnswerInput,
+  success: FactoryCard,
+  error: FactoryRpcError,
+});
+const factoryWithdrawCardRpc = Rpc.make(FOLD_WS_METHODS.factoryWithdrawCard, {
+  payload: Schema.Struct({ cardId: Schema.String }),
+  success: FactoryCard,
+  error: FactoryRpcError,
+});
+const factoryGetPayloadRpc = Rpc.make(FOLD_WS_METHODS.factoryGetPayload, {
+  payload: Schema.Struct({ sha256: Schema.String }),
+  success: FactoryPayload,
+  error: FactoryRpcError,
+});
+const factorySetAgentLifecycleRpc = Rpc.make(FOLD_WS_METHODS.factorySetAgentLifecycle, {
+  payload: FactoryLifecycleInput,
+  success: FactoryAgent,
+  error: FactoryRpcError,
+});
+const factoryUpsertTriggerRpc = Rpc.make(FOLD_WS_METHODS.factoryUpsertTrigger, {
+  payload: FactoryTriggerInput,
+  success: FactoryTrigger,
+  error: FactoryRpcError,
+});
+const factoryRunTriggerRpc = Rpc.make(FOLD_WS_METHODS.factoryRunTrigger, {
+  payload: Schema.Struct({ id: Schema.String }),
+  success: FactoryTriggerRun,
+  error: FactoryRpcError,
+});
+const factorySetTriggerShadowRpc = Rpc.make(FOLD_WS_METHODS.factorySetTriggerShadow, {
+  payload: Schema.Struct({ id: Schema.String, shadow: Schema.Boolean }),
+  success: FactoryTrigger,
+  error: FactoryRpcError,
+});
+const factoryRetryWakeRpc = Rpc.make(FOLD_WS_METHODS.factoryRetryWake, {
+  payload: FactoryWakeInput,
+  success: Schema.Void,
+  error: FactoryRpcError,
+});
+const factoryDeferWakeRpc = Rpc.make(FOLD_WS_METHODS.factoryDeferWake, {
+  payload: FactoryWakeInput,
+  success: Schema.Void,
+  error: FactoryRpcError,
+});
+const factoryCancelLaneJobRpc = Rpc.make(FOLD_WS_METHODS.factoryCancelLaneJob, {
+  payload: Schema.Struct({ id: Schema.String }),
+  success: Schema.Void,
+  error: FactoryRpcError,
+});
+
 export const FoldRpcGroup = RpcGroup.make(
   WsPitbossPeersRpc,
   WsPitbossPeerCommandRpc,
@@ -164,6 +260,20 @@ export const FoldRpcGroup = RpcGroup.make(
   WsPitbossReadRpc,
   WsPitbossSubscribeRpc,
   WsPitbossCommandRpc,
+  factorySubscribeBoardRpc,
+  factorySetEnabledRpc,
+  factoryEnsureCommanderRpc,
+  factoryAnswerCardRpc,
+  factoryWithdrawCardRpc,
+  factoryGetPayloadRpc,
+  factorySetAgentLifecycleRpc,
+  factoryUpsertTriggerRpc,
+  factoryRunTriggerRpc,
+  factorySetTriggerShadowRpc,
+  factoryRetryWakeRpc,
+  factoryDeferWakeRpc,
+  factoryCancelLaneJobRpc,
+
   WsFleetConnectRpc,
   WsFleetRespondRpc,
   WsFleetExecuteRpc,

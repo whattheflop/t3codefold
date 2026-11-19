@@ -7,7 +7,7 @@ import {
   type FleetResponse,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -53,7 +53,7 @@ const encodeLeaseKey = Schema.encodeSync(
   Schema.fromJsonString(Schema.Tuple([Schema.String, Schema.String])),
 );
 export const make = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const state = yield* SynchronizedRef.make<State>({ leases: new Map(), pending: new Map() });
   const disconnect = Effect.fn("FleetBroker.disconnect")(function* (lease: Lease) {
     const interrupted = yield* SynchronizedRef.modify(state, (current) => {
@@ -132,7 +132,7 @@ export const make = Effect.gen(function* () {
     }),
   );
   const invoke = Effect.fn("FleetBroker.invoke")(function* (request: FleetExecuteInput) {
-    const requestId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+    const requestId = yield* random.uuidV4();
     const result = yield* Deferred.make<unknown, OrchestratorMcpFailure>();
     const lease = yield* SynchronizedRef.modify(state, (current) => {
       const target =

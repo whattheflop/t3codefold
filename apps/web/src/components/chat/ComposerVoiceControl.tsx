@@ -22,7 +22,7 @@ function VoiceButtonTooltip(props: { readonly label: string; readonly children: 
   );
 }
 
-export const ComposerVoiceControl = memo(function ComposerVoiceControl(props: {
+const ComposerVoiceControl = memo(function ComposerVoiceControl(props: {
   readonly voice: CodexRealtimeVoiceController;
   readonly disabled: boolean;
   readonly disabledReason?: string;

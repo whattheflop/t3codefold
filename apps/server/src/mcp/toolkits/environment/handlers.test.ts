@@ -81,7 +81,7 @@ it.effect("updates preferences for a thread caller through the /mcp registration
   }).pipe(
     Effect.provide(
       McpHttpServer.layerEnvironmentToolkit.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getThreadShell: (id) => Effect.succeed(liveThreadShell(id)),

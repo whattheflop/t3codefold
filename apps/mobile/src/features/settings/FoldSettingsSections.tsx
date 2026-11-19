@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
+import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 

@@ -1,4 +1,5 @@
-import { Platform, Pressable, View, type StyleProp, type ViewStyle } from "react-native";
+import { ControllerPressable } from "../features/controller/ControllerPressable";
+import { Platform, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { cn } from "../lib/cn";
 import type { DraftComposerFileAttachment } from "../lib/composerImages";
@@ -43,12 +44,13 @@ export function VideoAttachmentTile(props: {
       }}
     >
       <MediaActionsMenu media={mediaActions}>
-        <Pressable
+        <ControllerPressable
           accessibilityRole="button"
           accessibilityLabel={`Play ${props.name}`}
           accessibilityHint={hasActions ? "Touch and hold for media actions" : undefined}
           accessibilityState={{ disabled: props.disabled ?? false }}
           disabled={props.disabled}
+          onActivate={() => props.onPress(props.sourceIdentifier)}
           onPress={() => props.onPress(props.sourceIdentifier)}
           className={cn("items-center justify-center overflow-hidden bg-black/80", props.className)}
           style={props.style}
@@ -74,7 +76,7 @@ export function VideoAttachmentTile(props: {
               </AppText>
             </View>
           ) : null}
-        </Pressable>
+        </ControllerPressable>
       </MediaActionsMenu>
     </PresentationSource>
   );

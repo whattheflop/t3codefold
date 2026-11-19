@@ -53,7 +53,7 @@ public final class T3KeyboardCommandsView: ExpoView {
         input: "c",
         modifiers: [.command, .shift],
         action: #selector(copyThreadReference),
-        title: "Copy PR Link or Thread ID"
+        title: "Copy PR Link or Thread"
       ),
       enabledCommand("voiceToggle", input: "v", modifiers: [.command, .alternate], action: #selector(toggleVoice), title: "Start or End Voice Call"),
       enabledCommand("voiceMute", input: "m", modifiers: [.command, .alternate], action: #selector(muteVoice), title: "Mute or Unmute Microphone"),

@@ -29,6 +29,7 @@ export class VerificationRunner extends Context.Service<
 export const layer = Layer.effect(
   VerificationRunner,
   Effect.gen(function* () {
+    const environment = yield* HostProcess.Environment;
     const platform = yield* HostProcess.Platform;
     const Fs = yield* FileSystem.FileSystem;
     const Path = yield* Paths.Path;
@@ -54,7 +55,9 @@ export const layer = Layer.effect(
           let subjectDigest: string | undefined;
           const checks: Array<PitbossVerificationReceipt["checks"][number]> = [];
           const artifacts: Array<PitbossVerificationReceipt["artifacts"][number]> = [];
-          const temporary = yield* Fs.makeTempDirectory({ prefix: "t3-verification-" });
+          const temporary = yield* Fs.makeTempDirectory({ prefix: "t3-verification-" }).pipe(
+            Effect.flatMap(Fs.realPath),
+          );
           const checkout =
             mode === "observation"
               ? yield* Fs.realPath(input.root)
@@ -68,7 +71,7 @@ export const layer = Layer.effect(
                   PATH: [
                     Path.join(checkout, "node_modules", ".bin"),
                     Path.join(sourceRoot, "node_modules", ".bin"),
-                    process.env.PATH,
+                    environment.PATH,
                   ]
                     .filter(Boolean)
                     .join(pathSeparator),
@@ -114,7 +117,7 @@ export const layer = Layer.effect(
               maxOutputBytes: 4096,
               outputMode: "truncate",
               env: {
-                ...process.env,
+                ...environment,
                 ...commitEnvironment,
                 T3_VERIFICATION_ID: input.verification.id,
                 T3_VERIFICATION_CANDIDATE: candidate,

@@ -1,8 +1,13 @@
-import { buildProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
+import {
+  buildProjectGroups,
+  pickableProjectGroups,
+  resolveScratchProjectScopeKey,
+} from "@t3tools/client-runtime/state/project-grouping";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import { isSubagentThread } from "@t3tools/client-runtime/state/thread-relationships";
 import {
   getThreadSortTimestamp,
   toSortableTimestamp,
@@ -27,6 +32,8 @@ export interface HomeProjectScope {
   readonly representative: EnvironmentProject;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly projectRefs: ReadonlyArray<ScopedProjectRef>;
+  readonly pinned: boolean;
+  readonly archived: boolean;
 }
 
 function getProjectSortTimestamp(
@@ -62,8 +69,28 @@ export function buildHomeProjectScopes(input: {
       representative: group.representative,
       projects: group.members.map((member) => member.project),
       projectRefs: group.memberProjectRefs,
+      pinned: group.pinned,
+      archived: group.archived,
     };
   });
+}
+
+/** The scope the thread list's project filter shows; an archived or unknown key shows all projects. */
+export function resolveHomeProjectFilterScope(
+  scopes: ReadonlyArray<HomeProjectScope>,
+  projects: ReadonlyArray<EnvironmentProject>,
+  options: {
+    readonly selectedProjectKey: string | null;
+    readonly projectGroupingMode: SidebarProjectGroupingMode;
+  },
+): HomeProjectScope | null {
+  // A legacy per-environment scratch key resolves here; the stored value is only
+  // rewritten when the user picks a filter.
+  const key = resolveScratchProjectScopeKey(options.selectedProjectKey, projects, {
+    sidebarProjectGroupingMode: options.projectGroupingMode,
+    sidebarProjectGroupingOverrides: {},
+  });
+  return pickableProjectGroups(scopes).find((scope) => scope.key === key) ?? null;
 }
 
 export function findHomeProjectScope(
@@ -108,8 +135,7 @@ export function sortHomeProjectScopes(input: {
   };
 
   for (const thread of input.threads) {
-    // Delegated subagent activity must not reorder projects (see threadListV2).
-    if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
+    if (thread.archivedAt !== null || isSubagentThread(thread)) continue;
     recordActivity(
       scopeKeyByProjectRef.get(scopedProjectKey(thread.environmentId, thread.projectId)),
       getThreadSortTimestamp(thread, input.projectSortOrder),

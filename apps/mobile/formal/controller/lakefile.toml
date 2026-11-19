@@ -1,0 +1,10 @@
+name = "controller"
+version = "0.1.0"
+defaultTargets = ["Controller", "controllerModel"]
+
+[[lean_lib]]
+name = "Controller"
+
+[[lean_exe]]
+name = "controllerModel"
+root = "Main"

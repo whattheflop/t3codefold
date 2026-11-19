@@ -9,6 +9,10 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 internal object T3ComposerClipboard {
+  // Pasted thread links become chips in JS; packages/shared/src/threadLinks.ts parses them.
+  fun hasThreadLink(text: String): Boolean =
+    text.contains("t3-thread://v2/") || text.contains("https://app.t3.codes/threads/")
+
   fun write(context: Context, text: String, fragment: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val payload = try {
@@ -62,6 +66,7 @@ internal object T3ComposerClipboard {
 }
 
 class T3ComposerEditorModule : Module() {
+  @Suppress("LongMethod") // A flat list of the view's props and events.
   override fun definition() = ModuleDefinition {
     Name("T3ComposerEditor")
 
@@ -104,6 +109,12 @@ class T3ComposerEditorModule : Module() {
       Prop("readOnly") { view: T3ComposerEditorView, readOnly: Boolean ->
         view.setReadOnly(readOnly)
       }
+      Prop("enterBehavior") { view: T3ComposerEditorView, behavior: String ->
+        view.setEnterBehavior(behavior)
+      }
+      Prop("submitEnabled") { view: T3ComposerEditorView, enabled: Boolean ->
+        view.setSubmitEnabled(enabled)
+      }
       Prop("scrollEnabled") { view: T3ComposerEditorView, scrollEnabled: Boolean ->
         view.setScrollEnabled(scrollEnabled)
       }
@@ -122,21 +133,18 @@ class T3ComposerEditorModule : Module() {
       Prop("maxInputChars") { view: T3ComposerEditorView, maxInputChars: Int ->
         view.setMaxInputChars(maxInputChars)
       }
-      Prop("enterBehavior") { view: T3ComposerEditorView, behavior: String ->
-        view.setEnterBehavior(behavior)
-      }
 
       Events(
         "onComposerChange",
         "onComposerSelectionChange",
         "onComposerFocus",
         "onComposerBlur",
+        "onComposerSubmit",
         "onComposerPasteImages",
         "onComposerContextPress",
         "onComposerPasteContext",
         "onComposerPasteText",
         "onComposerContentSizeChange",
-        "onComposerSubmit",
       )
 
       AsyncFunction("focus") { view: T3ComposerEditorView ->

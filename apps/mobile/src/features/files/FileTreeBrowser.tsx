@@ -1,3 +1,4 @@
+import { ControllerPressable } from "../controller/ControllerPressable";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { Button } from "../../components/ui/Button";
 import { LegendList } from "@legendapp/list/react-native";
@@ -5,13 +6,13 @@ import type { ProjectEntry } from "@t3tools/contracts";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, RefreshControl, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
+import { RefreshControl } from "../../components/ui/RefreshControl";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
 import { cn } from "../../lib/cn";
-import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
+import { useContentBottomInset, useContentTopInset } from "../../components/ui/useBarInset";
 import {
   buildFileTree,
   flattenFileTree,
@@ -32,15 +33,6 @@ function cachedFileTree(entries: ReadonlyArray<ProjectEntry>): ReadonlyArray<Fil
   return tree;
 }
 
-function ancestorPaths(path: string): ReadonlyArray<string> {
-  const parts = path.split("/").filter(Boolean);
-  const ancestors: string[] = [];
-  for (let index = 1; index < parts.length; index += 1) {
-    ancestors.push(parts.slice(0, index).join("/"));
-  }
-  return ancestors;
-}
-
 const FileTreeRow = function FileTreeRow(props: {
   readonly item: VisibleFileTreeNode;
   readonly selected: boolean;
@@ -51,9 +43,17 @@ const FileTreeRow = function FileTreeRow(props: {
   readonly onPressFile: (path: string) => void;
 }) {
   const { node, depth } = props.item;
+  const activate = () => {
+    if (node.kind === "directory") {
+      props.onPressDirectory(node.path, !props.expanded);
+      return;
+    }
+    props.onPressFile(node.path);
+  };
 
   return (
-    <Pressable
+    <ControllerPressable
+      controllerKey={node.path}
       accessibilityRole="button"
       accessibilityLabel={node.path}
       accessibilityState={{ selected: props.selected }}
@@ -62,13 +62,8 @@ const FileTreeRow = function FileTreeRow(props: {
           props.onPreviewFile?.(node.path);
         }
       }}
-      onPress={() => {
-        if (node.kind === "directory") {
-          props.onPressDirectory(node.path, !props.expanded);
-          return;
-        }
-        props.onPressFile(node.path);
-      }}
+      onActivate={activate}
+      onPress={activate}
       className={cn(
         "mx-2 min-h-[42px] flex-row items-center gap-2 rounded-[12px] px-2 active:bg-subtle",
         props.selected && "bg-thread-selected",
@@ -102,11 +97,16 @@ const FileTreeRow = function FileTreeRow(props: {
       {node.kind === "directory" && props.expanded && props.loading ? (
         <AppActivityIndicator size="small" accessibilityLabel={`Loading ${node.name}`} />
       ) : null}
-    </Pressable>
+    </ControllerPressable>
   );
 };
 
 export function FileTreeBrowser(props: {
+  readonly revealSelection: (path: string | null) => void;
+  readonly expandedPaths: ReadonlySet<string>;
+  readonly setExpandedPaths: (
+    update: (current: ReadonlySet<string>) => ReadonlySet<string>,
+  ) => void;
   readonly entries: ReadonlyArray<ProjectEntry>;
   readonly error: string | null;
   readonly isPending: boolean;
@@ -116,19 +116,18 @@ export function FileTreeBrowser(props: {
   readonly searchTruncated: boolean;
   readonly selectedPath: string | null;
   readonly loadingDirectories: ReadonlySet<string>;
-  readonly onLoadDirectory: (path: string) => void;
+  readonly onLoadDirectory: (path: string, retry?: boolean) => void;
   readonly onPreviewFile?: (path: string) => void;
   readonly onRefresh: () => void;
   readonly onSelectFile: (path: string) => void;
 }) {
-  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const { expandedPaths, setExpandedPaths } = props;
   const [pendingSelection, setPendingSelection] = useState<{
     readonly path: string;
     readonly selectedPathAtPress: string | null;
   } | null>(null);
-  const insets = useSafeAreaInsets();
-  const columnMetrics = useNativeColumnLayoutMetrics();
-  const headerInset = Platform.OS === "ios" ? (columnMetrics?.safeArea.top ?? insets.top) : 0;
+  const headerInset = useContentTopInset();
+  const bottomInset = useContentBottomInset();
   const {
     onLoadDirectory,
     onPreviewFile,
@@ -149,27 +148,25 @@ export function FileTreeBrowser(props: {
     searchResultPaths: props.searchResultPaths,
   });
 
+  const { revealSelection } = props;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- expands the controlled selection's ancestor directories in the file tree state
   useEffect(() => {
-    if (!controlledSelectedPath) {
-      return;
-    }
-    setExpandedPaths((current) => {
-      const ancestors = ancestorPaths(controlledSelectedPath);
-      if (ancestors.every((ancestor) => current.has(ancestor))) {
-        return current;
-      }
-      const next = new Set(current);
-      for (const ancestor of ancestors) {
-        next.add(ancestor);
-      }
-      return next;
-    });
-  }, [controlledSelectedPath]);
+    revealSelection(controlledSelectedPath);
+  }, [controlledSelectedPath, revealSelection]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- requests listings for expanded directories that are not yet loaded or pending
   useEffect(() => {
-    for (const path of expandedPaths) onLoadDirectory(path);
-  }, [expandedPaths, onLoadDirectory]);
+    const visit = (nodes: ReadonlyArray<FileTreeNode>) => {
+      for (const node of nodes) {
+        if (node.kind !== "directory" || !expandedPaths.has(node.path)) continue;
+        onLoadDirectory(node.path);
+        visit(node.children);
+      }
+    };
+    visit(tree);
+  }, [tree, expandedPaths, onLoadDirectory]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the pending selection timer on unmount
   useEffect(
     () => () => {
       if (pendingSelectionTimeoutRef.current !== null) {
@@ -180,7 +177,7 @@ export function FileTreeBrowser(props: {
   );
 
   const toggleDirectory = (path: string, expand: boolean) => {
-    if (expand) onLoadDirectory(path);
+    if (expand) onLoadDirectory(path, true);
     setExpandedPaths((current) => {
       const next = new Set(current);
       if (next.has(path)) {
@@ -222,14 +219,15 @@ export function FileTreeBrowser(props: {
   // Keep the list as direct screen content so UIKit can apply header insets.
   return (
     <LegendList
-      renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
-      contentInsetStartAdjustment={headerInset}
+      renderScrollComponent={NativeScrollView}
+      nestedScrollEnabled={false}
+      contentInset={{ top: headerInset, bottom: bottomInset }}
       alwaysBounceVertical
       className="flex-1"
       data={visibleNodes}
       keyExtractor={(item) => item.node.path}
-      contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
-      automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
+      contentInsetAdjustmentBehavior="never"
+      automaticallyAdjustsScrollIndicatorInsets
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       estimatedItemSize={42}

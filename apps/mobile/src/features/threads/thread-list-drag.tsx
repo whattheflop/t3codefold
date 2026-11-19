@@ -254,12 +254,14 @@ export function ThreadListDragSurface(props: {
   const [heldKey, setHeldKey] = useState<string | null>(null);
   const [undo, setUndo] = useState<DropUndo | null>(null);
   const undoGeneration = useRef(0);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- invalidates pending undo timers on unmount
   useEffect(
     () => () => {
       undoGeneration.current += 1;
     },
     [],
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-anchors the drop undo notice to the thread shell atom while it shows
   useEffect(() => {
     if (!undo) return;
     const refresh = () =>
@@ -562,6 +564,7 @@ export function ThreadListDragSurface(props: {
         : item.key,
     )
     .join("|");
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the in-flight drag and its animation frame when the list order or window size changes
   useEffect(() => {
     if (drag.current === null) return;
     drag.current = null;
@@ -571,6 +574,7 @@ export function ThreadListDragSurface(props: {
     setHeldKey(null);
     setPreview(null);
   }, [orderVersion, window.width, window.height, layout]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending autoscroll animation frame on unmount
   useEffect(
     () => () => {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -792,6 +796,7 @@ export function useThreadListDragTarget(input: {
     };
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- ends the native drag gesture when its row unmounts or changes key
   useEffect(() => () => callbacks.end(true), [input.itemKey, callbacks]);
   const onMenuOpen = useMemo(
     () => () => {

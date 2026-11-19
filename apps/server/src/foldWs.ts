@@ -1,5 +1,6 @@
 import {
   type AuthSessionId,
+  FactoryError,
   FoldRpcGroup,
   PitbossError,
   ProviderRealtimeVoiceError,
@@ -11,6 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
+import * as Factory from "./factory/Factory.ts";
 import * as ServerConfig from "./config.ts";
 import { FleetBroker } from "./mcp/FleetBroker.ts";
 import { FleetExecutor } from "./mcp/FleetExecutor.ts";
@@ -40,6 +42,7 @@ export const makeFoldWsHandlers = Effect.fn("ws.makeFoldWsHandlers")(function* (
   const work = yield* WorkStore;
   const workPeers = yield* PeerService;
   const workSources = yield* SourceService;
+  const factory = yield* Factory.Factory;
   const fleetBroker = yield* FleetBroker;
   const fleetRouter = yield* FleetRouter;
   const fleetExecutor = yield* FleetExecutor;
@@ -91,6 +94,26 @@ export const makeFoldWsHandlers = Effect.fn("ws.makeFoldWsHandlers")(function* (
       }
       return yield* work.command(command, { type: "user" });
     }),
+    [WS_METHODS.factorySetEnabled]: (input) => factory.setEnabled(input.enabled),
+    [WS_METHODS.factorySubscribeBoard]: () => factory.subscribe({ kind: "user" }),
+    [WS_METHODS.factoryEnsureCommander]: (input) => factory.ensureCommander(input.modelSelection),
+    [WS_METHODS.factoryAnswerCard]: (input) => factory.decisions.answer({ kind: "user" }, input),
+    [WS_METHODS.factoryWithdrawCard]: (input) =>
+      factory.decisions.withdraw({ kind: "user" }, input.cardId),
+    [WS_METHODS.factoryGetPayload]: (input) => factory.payload({ kind: "user" }, input.sha256),
+    [WS_METHODS.factorySetAgentLifecycle]: (input) =>
+      factory.agents.lifecycle({ kind: "user" }, input.agentId, input.state),
+    [WS_METHODS.factoryUpsertTrigger]: (input) => factory.triggers.upsert({ kind: "user" }, input),
+    [WS_METHODS.factoryRunTrigger]: (input) => factory.runTrigger({ kind: "user" }, input.id),
+    [WS_METHODS.factorySetTriggerShadow]: (input) =>
+      factory.shadowTrigger({ kind: "user" }, input.id, input.shadow),
+    [WS_METHODS.factoryRetryWake]: (input) => factory.wakes.retry(input.wakeId),
+    [WS_METHODS.factoryDeferWake]: (input) =>
+      input.until === undefined
+        ? Effect.fail(new FactoryError({ code: "invalid" }))
+        : factory.wakes.defer({ kind: "user" }, input.wakeId, input.until),
+    [WS_METHODS.factoryCancelLaneJob]: (input) => factory.lanes.cancel({ kind: "user" }, input.id),
+
     [WS_METHODS.fleetConnect]: (connect) =>
       Stream.unwrap(fleetBroker.connect(input.sessionId, connect)),
     [WS_METHODS.fleetRespond]: (response) => fleetBroker.respond(input.sessionId, response),
@@ -180,6 +203,7 @@ export const makeFoldWsHandlers = Effect.fn("ws.makeFoldWsHandlers")(function* (
  * the other sockets.
  */
 export const makeFoldWsRpcLayer = Effect.gen(function* () {
+  const factory = yield* Factory.Factory;
   const fleetBroker = yield* FleetBroker;
   const fleetRouter = yield* FleetRouter;
   const fleetExecutor = yield* FleetExecutor;
@@ -187,6 +211,7 @@ export const makeFoldWsRpcLayer = Effect.gen(function* () {
   const openGladosHome = yield* makeHome(config.stateDir);
   return (sessionId: AuthSessionId) =>
     ServerFoldWsRpcGroup.toLayer(makeFoldWsHandlers({ sessionId, openGladosHome })).pipe(
+      Layer.provide(Layer.succeed(Factory.Factory, factory)),
       Layer.provide(Layer.succeed(FleetBroker, fleetBroker)),
       Layer.provide(Layer.succeed(FleetRouter, fleetRouter)),
       Layer.provide(Layer.succeed(FleetExecutor, fleetExecutor)),

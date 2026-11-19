@@ -123,11 +123,8 @@ function emptyResultDetail(context: ProjectionCheckpointContext | null) {
   const turns = ready.filter((checkpoint) => checkpoint.fileCount > 0).length;
   if (files > 0)
     return `${base} It left ${files} file change${files === 1 ? "" : "s"} across ${turns} turn${turns === 1 ? "" : "s"} in its retained workspace, so the work may already be done. Inspect that workspace before settling.`;
-  // Capture runs after a turn ends, so a turn without a ready checkpoint left changes no later
-  // diff can see: its successor's baseline ref is missing and that capture records no files. Only
-  // a thread whose every started run was captured can claim an empty workspace, and run status
-  // alone cannot say that — one stopped run earlier in the thread says nothing about the rest. An
-  // unreadable projection is just a thread with no captures we can see.
+  // A missed checkpoint leaves the next capture without a baseline, so zero recorded changes
+  // establish an empty workspace only when every started run has a ready checkpoint.
   const captured = new Set(ready.map((checkpoint) => checkpoint.appRunOrdinal));
   const complete =
     ready.length > 0 &&
@@ -169,7 +166,7 @@ const OBLIGATIONS = {
     label: "Acceptance needed",
     changed: "the latest coordinator review passed for the current candidate and proof contract.",
     next: "explicitly accept it or record why more work is required.",
-    headline: "Review passed — ready to accept",
+    headline: "Review passed, ready to accept",
   },
   recover: {
     label: "Recovery needed",
@@ -180,7 +177,7 @@ const OBLIGATIONS = {
   "recover-empty": {
     label: "Recovery needed",
     changed: "the worker stopped without submitting any evidence.",
-    next: "settle this outcome yourself — close it with an honest reason if it is complete or superseded, or use revise-result with the information the worker was missing to continue it in the retained workspace.",
+    next: "settle this outcome yourself. Close it with an honest reason if it is complete or superseded, or use revise-result with the information the worker was missing to continue it in the retained workspace.",
     headline: "Worker finished with nothing",
   },
   "recover-exhausted": {
@@ -188,7 +185,7 @@ const OBLIGATIONS = {
     changed:
       "this task used its whole saved attempt allowance, so no further attempt can be started.",
     next: "close it with an honest reason, or cancel it as superseded. revise-result, rework and assign are refused until the user raises the saved attempt limit, so do not try them.",
-    headline: "Out of attempts — close it out",
+    headline: "Out of attempts. Close it out",
   },
   assign: {
     label: "Ready to assign",
@@ -224,7 +221,7 @@ const OBLIGATIONS = {
     label: "Task updated",
     changed: "the recorded update preserved the retained result.",
     next: "review the retained candidate against the current criteria before verification.",
-    headline: "Updated — retained result still stands",
+    headline: "Updated. The retained result still stands",
   },
 } as const;
 type ObligationKind = keyof typeof OBLIGATIONS;
@@ -255,13 +252,13 @@ function obligationText(
 /** The board and the chat show the obligation and the work's name, never its identifiers. */
 function obligationHeadline(kind: ObligationKind, title: string | undefined) {
   const { headline } = OBLIGATIONS[kind];
-  return title ? `${headline} — ${title}` : headline;
+  return title ? `${headline} · ${title}` : headline;
 }
 
 interface WakeRecipient {
   readonly id: string;
-  readonly projectId: typeof ProjectId.Type;
-  readonly threadId: typeof ThreadId.Type;
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId;
   readonly generation: number;
   readonly leadId?: string | undefined;
 }
@@ -583,10 +580,10 @@ export const layer = Layer.effectDiscard(
               question,
               options: [
                 exhausted
-                  ? "Keep going — raise the saved attempt limit so another attempt can start"
-                  : "Keep going — give the worker what it was missing",
-                "It is already complete — settle it as delivered",
-                "Drop it — stop spending attempts on this task",
+                  ? "Keep going. Raise the saved attempt limit so another attempt can start"
+                  : "Keep going. Give the worker what it was missing",
+                "It is already complete. Settle it as delivered",
+                "Drop it. Stop spending attempts on this task",
               ],
               recommendation: `Answer in your own words; the answer is handed to this task's manager. ${exhausted ? "It has used every attempt you allowed, so it cannot start another until you raise maxAttempts in the brief." : "Keep going if the outcome still matters and the worker only lacked information."} Settle or close it if the work landed elsewhere, is no longer worth an attempt, or the task was never well posed.`,
             },
@@ -722,9 +719,7 @@ export const layer = Layer.effectDiscard(
             (lead) =>
               runRecords(lead).pipe(
                 Effect.map((thread) => !!latestActiveRun(thread)),
-                Effect.catch((error) =>
-                  isMissingThread(error) ? Effect.succeed(false) : Effect.fail(error),
-                ),
+                Effect.catchIf(isMissingThread, () => Effect.succeed(false)),
               ),
           );
           if (busy.some(Boolean)) continue;
@@ -733,9 +728,7 @@ export const layer = Layer.effectDiscard(
           const lead = activeLeads(current).find((entry) => entry.id === leadStatusAction.leadId);
           if (lead) {
             const thread = yield* runRecords(lead).pipe(
-              Effect.catch((error) =>
-                isMissingThread(error) ? Effect.succeed(undefined) : Effect.fail(error),
-              ),
+              Effect.catchIf(isMissingThread, () => Effect.undefined),
             );
             if (thread && latestActiveRun(thread)) continue;
           }
@@ -771,7 +764,7 @@ export const layer = Layer.effectDiscard(
                     }),
                   );
                   if (interrupted._tag === "Failure" && !isMissingThread(interrupted.failure))
-                    return yield* Effect.fail(interrupted.failure);
+                    return yield* interrupted.failure;
                   if (
                     interrupted._tag === "Success" &&
                     interrupted.success.type === "interrupt_requested"
@@ -799,8 +792,7 @@ export const layer = Layer.effectDiscard(
               for (const lead of (state.leads ?? []).filter((lead) => leadIds.has(lead.id))) {
                 const existing = yield* Effect.result(runRecords(lead));
                 if (existing._tag === "Failure") {
-                  if (!isMissingThread(existing.failure))
-                    return yield* Effect.fail(existing.failure);
+                  if (!isMissingThread(existing.failure)) return yield* existing.failure;
                   continue;
                 }
                 const run = latestActiveRun(existing.success);
@@ -924,9 +916,7 @@ export const layer = Layer.effectDiscard(
               const existing =
                 action.type === "lead-status"
                   ? yield* runRecords(lead).pipe(
-                      Effect.catch((error) =>
-                        isMissingThread(error) ? Effect.succeed(undefined) : Effect.fail(error),
-                      ),
+                      Effect.catchIf(isMissingThread, () => Effect.undefined),
                     )
                   : undefined;
               if (action.type === "lead-status" && action.status === "dormant") {
@@ -1231,7 +1221,7 @@ export const layer = Layer.effectDiscard(
           const observed = yield* Effect.result(readShell(attempt.threadId, task.projectId));
           if (observed._tag === "Failure") {
             if (isMissingThread(observed.failure)) continue;
-            return yield* Effect.fail(observed.failure);
+            return yield* observed.failure;
           }
           const projection = observed.success;
           if (projection.settledOverride !== null) {
@@ -1267,10 +1257,8 @@ export const layer = Layer.effectDiscard(
       const leadRuns = yield* Effect.forEach(leads, (lead) =>
         readShell(lead.threadId, lead.projectId).pipe(
           Effect.map((thread) => ({ lead, active: hasActiveShellRun(thread), available: true })),
-          Effect.catch((error) =>
-            isMissingThread(error)
-              ? Effect.succeed({ lead, active: false, available: false })
-              : Effect.fail(error),
+          Effect.catchIf(isMissingThread, () =>
+            Effect.succeed({ lead, active: false, available: false }),
           ),
         ),
       );

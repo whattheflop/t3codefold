@@ -1,13 +1,17 @@
 import type { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
+import {
+  isAttachmentOnlyBootstrapPrompt,
+  replaceComposerContextReferences,
+} from "@t3tools/shared/composerContextReferences";
 
 export const REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL = "Remove queued message";
 
 export interface ThreadQueueRowControls {
   readonly canDismiss: boolean;
   readonly canEdit: boolean;
-  readonly canMoveDown: boolean;
   readonly canMoveUp: boolean;
+  readonly canMoveDown: boolean;
   readonly canSend: boolean;
   readonly dismissAccessibilityLabel: string;
   readonly displayText: string;
@@ -20,10 +24,12 @@ export function resolveThreadQueueRowControls(input: {
   readonly canSendNow: boolean;
   readonly canReorder: boolean;
   readonly index: number;
+  readonly queuedCount: number;
+  /** Something else holds the composer, such as an open question. */
+  readonly editBlocked?: boolean;
   readonly isEditing?: boolean;
   /** A guest's message keeps the guest's words; the owner can cancel it, not rewrite it. */
   readonly isGuestMessage?: boolean;
-  readonly queuedCount: number;
   readonly text: string;
 }): ThreadQueueRowControls {
   const mutationEnabled = !input.busy;
@@ -33,13 +39,18 @@ export function resolveThreadQueueRowControls(input: {
     canDismiss: !input.busy,
     // Re-opening the row already in the composer would reload it and throw
     // away whatever has been typed since.
-    canEdit: mutationEnabled && !isEditing && input.isGuestMessage !== true,
+    canEdit:
+      mutationEnabled && !isEditing && input.isGuestMessage !== true && input.editBlocked !== true,
     canMoveDown: mutationEnabled && input.canReorder && input.index < input.queuedCount - 1,
     canMoveUp: mutationEnabled && input.canReorder && input.index > 0,
     canSend: mutationEnabled && (input.canPromoteToSteer || input.canSendNow) && !isEditing,
     dismissAccessibilityLabel: REMOVE_QUEUED_MESSAGE_ACCESSIBILITY_LABEL,
     // Editing and sending keep the original text so quoted citations stay linked.
-    displayText: assistantCitationsToPlainText(input.text),
+    displayText: isAttachmentOnlyBootstrapPrompt(input.text)
+      ? ""
+      : assistantCitationsToPlainText(
+          replaceComposerContextReferences(input.text, (reference) => reference.label),
+        ).trim(),
     isEditing,
   };
 }

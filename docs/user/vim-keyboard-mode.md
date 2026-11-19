@@ -1,9 +1,9 @@
 # Vim keyboard mode
 
-Vim keyboard mode turns the web and desktop conversation workspace into a modal,
+Vim keyboard mode turns the web and desktop workspace into a modal,
 keyboard-first interface. It combines Vim editing in the composer with Zed-style
-focus movement between the thread sidebar, conversation, composer, and right
-panel.
+focus movement between the thread sidebar, conversation, composer, right panel,
+and the areas of every other page, such as Factory, Settings, and Usage.
 
 Enable it in **Settings → General → Vim keyboard mode**. The composer's mode
 badge appears beside the attachment control. Press `?` from the conversation for
@@ -31,7 +31,7 @@ Start with this sequence. It covers the interaction you will repeat most often:
 `Ctrl+w h` and similar commands are sequences: hold Control while pressing `w`,
 release it, then press the direction. The layout is spatial: threads are left of
 the conversation, the composer is below it, and the right panel is to its right.
-`Ctrl+w w` cycles through all four regions.
+`Ctrl+w w` cycles through every region on screen.
 
 Enable **Settings → General → Preview threads while navigating** to open threads
 as you pause on them with sidebar `j`/`k`, keeping keyboard focus in the sidebar.
@@ -40,7 +40,7 @@ to move the selection without opening threads.
 
 ## Understand the focus zones
 
-T3 Code has four keyboard contexts:
+T3 Code has five keyboard contexts:
 
 - **Conversation Normal mode** controls scrolling, message jumps, assistant-text
   selection, marks, panels, and application actions.
@@ -50,10 +50,14 @@ T3 Code has four keyboard contexts:
   Normal and Visual modes interpret keys as commands.
 - **Right-panel focus** navigates files, linked pull requests, diffs, agents, and
   other panel controls with a consistent set of motions.
+- **Page areas** cover everything else, such as the Factory fleet and decisions,
+  Settings, Usage, and Pull requests. See [Navigate other pages](#navigate-other-pages).
 
 The composer mode badge shows how prompt keys will be interpreted. Outside the
-composer, focus determines whether unmodified keys control the sidebar or the
-conversation. Existing Command and Control shortcuts continue to work.
+composer, focus determines which region unmodified keys control. Existing
+Command and Control shortcuts continue to work. While T3 is waiting for the rest
+of a command, such as after `g` or `Ctrl+w`, or while it passes keys through, a
+small badge in the bottom-right corner says so.
 Terminals, browser previews, dialogs, and open menus keep their native keyboard
 behavior.
 
@@ -107,6 +111,29 @@ Terminal and browser-preview tabs keep their native keyboard input after you
 enter them. Their web content and shells need unmodified keys, so T3 does not
 intercept those keystrokes as panel motions. `Ctrl+w` pane movement remains
 available when the host can observe the keystroke.
+
+## Navigate other pages
+
+Pages without a conversation, such as Factory, Settings, Usage, Pull requests,
+and Home, are split into areas. In Factory, for example, the fleet list, the
+open conversation, and the details panel are each an area. Use `Ctrl+w h/j/k/l`
+to move between them, as in the main workspace.
+
+| Keys              | Result                                                         |
+| ----------------- | -------------------------------------------------------------- |
+| `j` / `k`         | Focus the next or previous row, or scroll an area with no rows |
+| `Enter` / `o`     | Open or activate the focused row                               |
+| `gg` / `G`        | Move to the first or last row, or scroll to the area's edge    |
+| `Ctrl+d`/`Ctrl+u` | Scroll the area down or up by half a page                      |
+| `/`               | Focus the area's search field, or the page's own search        |
+| `i`               | Focus the area's message field, such as the Factory composer   |
+| `f` / `F`         | Label visible controls for activation or focus                 |
+
+Other letters belong to the page, so its own shortcuts keep working. In Settings
+and Usage, `Esc` closes the page when T3 has nothing of its own to cancel.
+
+Factory terminal panes take every key, like other terminals. Use `Ctrl+w` to
+move out of one.
 
 ## Read and move through a conversation
 
@@ -237,13 +264,14 @@ action.
 ## Troubleshooting
 
 - If letters type instead of moving, focus is in an input or the composer is in
-  Insert mode. Press `Esc` before using motions.
+  Insert mode. Press `Esc`: it leaves any text field and returns to its region.
 - If conversation motions do nothing, press `Ctrl+w l` to restore conversation
   focus.
 - If the sidebar is closed, `Ctrl+w h` opens and focuses it.
 - If T3 is passing keys through, press `Esc` to leave PASS mode.
 - If a terminal, preview, dialog, or menu is focused, use that surface's native
-  keys or press `Esc` to close it before returning to Vim navigation.
+  keys or press `Esc` to close it before returning to Vim navigation. In a dialog,
+  `f` and `F` still label its controls.
 - If you forget a command, focus the conversation and press `?`.
 
 ## Android

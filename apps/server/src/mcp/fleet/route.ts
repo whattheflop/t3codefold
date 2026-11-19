@@ -4,6 +4,7 @@ import {
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { FleetRouter } from "../FleetRouter.ts";
@@ -24,14 +25,9 @@ const invalidResult = (error: Schema.SchemaError) =>
   });
 
 /**
- * Runs a fleet-routable MCP tool on another environment when its input names
- * one, and otherwise runs the local handler untouched. Only an explicit
- * `environmentId` different from the caller's environment routes; a
- * `projectId` alone always means a local project. Use it data-last at the end
- * of a handler: `Effect.gen(...).pipe(routeIfRemote("t3_thread_read", input, Result))`.
- *
- * The destination enforces the caller's limits: a thread caller sends its own
- * thread's modes, a client caller its approved ceiling.
+ * Runs a fleet tool on the environment its explicit `environmentId` names, else the local
+ * handler untouched; a `projectId` alone is always local. Use it data-last at a handler's end.
+ * The destination enforces the caller's limits: a thread's own modes, a client's ceiling.
  */
 export const routeIfRemote =
   <S extends Schema.Top>(
@@ -47,7 +43,16 @@ export const routeIfRemote =
       const caller = yield* readCaller();
       if (MUTATIONS.has(operation)) yield* assertLiveCaller(caller);
       const { limits } = caller;
-      const router = yield* FleetRouter;
-      const value = yield* router.invoke({ scope, limits }, { environmentId, operation, input });
+      // Optional so toolkits register without fleet; server.ts provides it (fleet/layer.ts).
+      const router = yield* Effect.serviceOption(FleetRouter);
+      if (Option.isNone(router))
+        return yield* new OrchestratorMcpFailure({
+          code: "orchestration_error",
+          message: "This environment cannot reach other environments through connected clients.",
+        });
+      const value = yield* router.value.invoke(
+        { scope, limits },
+        { environmentId, operation, input },
+      );
       return yield* Schema.decodeUnknownEffect(success)(value).pipe(Effect.mapError(invalidResult));
     }).pipe(Effect.withSpan("mcp.fleet.routeIfRemote", { attributes: { operation } }));

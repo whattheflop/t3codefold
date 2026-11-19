@@ -1,14 +1,18 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { EnvironmentId, ThreadId, type FleetExecuteInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
 import * as Fiber from "effect/Fiber";
 import * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
 import * as Stream from "effect/Stream";
 import { expect } from "vite-plus/test";
 import { make } from "./FleetBroker.ts";
+
+const NodeLayer = Layer.mergeAll(NodeServices.layer, NodeCrypto.layer);
 
 const source = EnvironmentId.make("source");
 const target = EnvironmentId.make("target");
@@ -56,7 +60,7 @@ it.effect("routes an exact destination and rejects unavailable hosts without fal
       result: { ok: true, value: { threadId: "created" } },
     });
     expect(yield* Fiber.join(pending)).toEqual({ threadId: "created" });
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(NodeLayer)),
 );
 
 it.effect("rejects replies from another session without completing the legitimate request", () =>
@@ -75,7 +79,7 @@ it.effect("rejects replies from another session without completing the legitimat
     );
     yield* broker.respond("session", reply);
     expect(yield* Fiber.join(pending)).toBe("correct");
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(NodeLayer)),
 );
 
 it.effect("disconnect fails pending work, removes route, and ignores late responses", () =>
@@ -94,7 +98,7 @@ it.effect("disconnect fails pending work, removes route, and ignores late respon
     });
     const retry = yield* Effect.result(broker.invoke(request));
     expect(retry._tag).toBe("Failure");
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(NodeLayer)),
 );
 
 it.effect(
@@ -127,7 +131,7 @@ it.effect(
         result: { ok: true, value: "retried" },
       });
       expect(yield* Fiber.join(newPending)).toBe("retried");
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(NodeLayer)),
 );
 
 it.effect("times out enqueueing behind stale queued requests instead of hanging forever", () =>
@@ -148,5 +152,5 @@ it.effect("times out enqueueing behind stale queued requests instead of hanging 
     yield* TestClock.adjust("125 seconds");
     const result = yield* Fiber.join(queued);
     expect(result._tag === "Failure" && result.failure.message).toContain("timed out");
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(NodeLayer)),
 );

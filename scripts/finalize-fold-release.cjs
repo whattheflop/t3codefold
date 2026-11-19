@@ -13,9 +13,10 @@ const feeds = new Set([
   "fold-desktop-nightly",
   "mobile-ota",
   "android-nightly",
+  "fold-native-dependencies",
 ]);
 
-/** Complete one Linux/Android release, retaining the URLs installed clients use. */
+/** Complete a Fold release, retaining the URLs installed clients use. */
 function finalize(version, apk, { dryRun = false, deleteOldReleases = false, gh = runGh } = {}) {
   if (!/^\d+\.\d+\.\d+$/.test(version ?? "") || !apk?.endsWith(".apk")) {
     throw new Error(
@@ -34,6 +35,7 @@ function finalize(version, apk, { dryRun = false, deleteOldReleases = false, gh 
   }
   const linux = release.assets.find((asset) => asset.name.endsWith(".AppImage"));
   const deb = release.assets.find((asset) => asset.name.endsWith(".deb"));
+  const mac = release.assets.find((asset) => asset.name.endsWith(".dmg"));
   if (!linux || !deb)
     throw new Error("Both Linux AppImage and Debian package must be published first.");
   const pages = JSON.parse(
@@ -69,6 +71,7 @@ function finalize(version, apk, { dryRun = false, deleteOldReleases = false, gh 
     `Download T3 Code Fold ${version}:`,
     "",
     `- **Linux:** [AppImage](${base}/${linux.name}) · [Debian / Ubuntu](${base}/${deb.name})`,
+    ...(mac ? [`- **macOS:** [Universal DMG](${base}/${mac.name})`] : []),
     `- **Android:** [APK](${base}/${apkName})`,
     "",
     "Install the APK over your existing Fold app; keep the same signing certificate.",
@@ -95,7 +98,7 @@ function finalize(version, apk, { dryRun = false, deleteOldReleases = false, gh 
     "edit",
     tag,
     "--title",
-    `T3 Code Fold ${version} — Linux & Android`,
+    `T3 Code Fold ${version} — ${mac ? "macOS, Linux & Android" : "Linux & Android"}`,
     "--notes-file",
     notesPath,
     "--draft=false",

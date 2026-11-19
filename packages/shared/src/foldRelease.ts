@@ -6,6 +6,8 @@ declare const process: {
 export const FOLD_REPOSITORY =
   process.env.EXPO_PUBLIC_T3CODE_RELEASE_REPOSITORY || "whattheflop/T3codefold";
 const FOLD_RELEASES_URL = `https://github.com/${FOLD_REPOSITORY}/releases`;
+/** Fold's `scripts/install.sh`; upstream's t3.codes installer installs upstream T3. */
+export const FOLD_INSTALL_SCRIPT_URL = `https://raw.githubusercontent.com/${FOLD_REPOSITORY}/main/scripts/install.sh`;
 
 const EXACT_VERSION =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;

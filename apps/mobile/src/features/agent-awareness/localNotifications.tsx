@@ -60,12 +60,14 @@ export function LocalAgentNotificationsCoordinator() {
   const preferences = useAtomValue(mobilePreferencesAtom);
   const previousThreads = useRef(indexNotificationThreads(threads));
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- creates the Android notification channel once
   useEffect(() => {
     void ensureAndroidAgentNotificationChannel().catch((error: unknown) => {
       console.warn("Could not create the Android agent notification channel.", error);
     });
   }, []);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- posts local Android notifications for thread transitions from the shell atom
   useEffect(() => {
     const events = localAgentNotificationEvents({
       previous: previousThreads.current,

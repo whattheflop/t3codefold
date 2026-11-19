@@ -1,3 +1,4 @@
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import type { ComponentProps, ReactNode } from "react";
 import { Platform, Pressable, View } from "react-native";
 
@@ -17,8 +18,9 @@ export function NavigationRow({
   trailing,
   className,
   ...props
-}: Omit<ComponentProps<typeof Pressable>, "children"> & {
+}: Omit<ComponentProps<typeof Pressable>, "children" | "onPress"> & {
   readonly title: string;
+  readonly onPress?: () => void;
   readonly titleClassName?: string;
   readonly subtitle?: string | null;
   readonly subtitleNumberOfLines?: ComponentProps<typeof AppText>["numberOfLines"];
@@ -29,7 +31,8 @@ export function NavigationRow({
   const { themeVariables } = useAppearancePreferences();
   const { smallIconSize } = useAndroidControlSizing();
   return (
-    <Pressable
+    <ControllerPressable
+      onActivate={() => props.onPress?.()}
       accessibilityRole="button"
       accessibilityLabel={[title, subtitle].filter(Boolean).join(", ")}
       android_ripple={{ color: themeVariables["--color-subtle-strong"] }}
@@ -62,6 +65,6 @@ export function NavigationRow({
       ) : !props.disabled ? (
         <SymbolView name="chevron.right" size={smallIconSize} tintColorClassName="accent-chevron" />
       ) : null}
-    </Pressable>
+    </ControllerPressable>
   );
 }

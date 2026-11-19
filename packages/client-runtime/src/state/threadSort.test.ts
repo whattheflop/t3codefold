@@ -2,9 +2,9 @@ import { RunId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  nextThreadNeedingAttention,
   generateSpreadPinOrderKeys,
   pinOrderKeyBetween,
-  planPinnedMove,
   planPinnedReorder,
   resolveSettledThreadTimestamp,
   sortActiveThreadsByOrderKey,
@@ -173,6 +173,26 @@ describe("sortThreads", () => {
 
     expect(sorted.map((thread) => thread.id)).toEqual(["thread-1", "thread-2"]);
   });
+
+  it("orders last user message by what the user wrote, not agent messages in the user role", () => {
+    const sorted = sortThreads(
+      [
+        makeThread({
+          id: "agent-posted",
+          latestUserAuthoredMessageAt: "2026-03-09T10:00:00.000Z",
+          latestUserMessageAt: "2026-03-09T10:30:00.000Z",
+        }),
+        makeThread({
+          id: "user-wrote",
+          latestUserAuthoredMessageAt: "2026-03-09T10:10:00.000Z",
+          latestUserMessageAt: "2026-03-09T10:10:00.000Z",
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["user-wrote", "agent-posted"]);
+  });
 });
 
 describe("planPinnedReorder with hidden rows", () => {
@@ -286,24 +306,6 @@ describe("sortActiveThreadsByOrderKey", () => {
     }
   });
 
-  it("moves a keyless thread into the arranged run with one write", () => {
-    const assignments = planPinnedMove({
-      orderedIds: ["new", "reopened", "first", "last"],
-      keysById: new Map([
-        ["new", null],
-        ["reopened", null],
-        ["first", "f"],
-        ["last", "t"],
-      ]),
-      movedId: "reopened",
-      direction: "down",
-    });
-    expect(assignments).toHaveLength(1);
-    expect(assignments![0]!.id).toBe("reopened");
-    expect(assignments![0]!.orderKey > "f").toBe(true);
-    expect(assignments![0]!.orderKey < "t").toBe(true);
-  });
-
   it("materializes a large active list without changing the requested order", () => {
     const threads = Array.from({ length: 1_200 }, (_, index) => ({
       id: String(index),
@@ -319,5 +321,33 @@ describe("sortActiveThreadsByOrderKey", () => {
     const keys = new Map(assignments.map((assignment) => [assignment.id, assignment.orderKey]));
     const updated = threads.map((thread) => ({ ...thread, activeOrderKey: keys.get(thread.id) }));
     expect(sortActiveThreadsByOrderKey(updated).map((thread) => thread.id)).toEqual(orderedIds);
+  });
+});
+
+describe("nextThreadNeedingAttention", () => {
+  it("walks the supplied order, wraps, and only returns the current thread when no other needs attention", () => {
+    const threads = [
+      { id: "question", attention: true },
+      { id: "working", attention: false },
+      { id: "approval", attention: true },
+      { id: "failed", attention: true },
+      { id: "unread", attention: true },
+    ];
+    const next = (currentId: string | null, candidates = threads) =>
+      nextThreadNeedingAttention(
+        candidates,
+        currentId,
+        (thread) => thread.id,
+        (thread) => thread.attention,
+      )?.id ?? null;
+    expect(next("question")).toBe("approval");
+    expect(next("failed")).toBe("unread");
+    expect(next("unread")).toBe("question");
+    expect(next("working")).toBe("approval");
+    expect(next(null)).toBe("question");
+    expect(next("missing")).toBe("question");
+    expect(next("question", [threads[0]!])).toBe("question");
+    expect(next("working", [threads[1]!])).toBeNull();
+    expect(next(null, [])).toBeNull();
   });
 });

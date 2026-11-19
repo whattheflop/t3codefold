@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { AppBar } from "../../components/ui/AppBar";
-import { WorkspaceTabsProvider } from "../workspace/WorkspaceTabsContext";
+import { WorkspaceTabsProvider } from "../layout/workspace/WorkspaceTabsContext";
 import { PullRequestsScreen } from "./PullRequestsScreen";
 
 /**

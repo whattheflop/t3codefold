@@ -76,7 +76,7 @@ type VoiceMethods = Pick<
  * `hasPendingBackgroundWork` can keep a live call's process; `methods` binds the
  * session runtime's voice methods once the client is open.
  */
-export const makeCodexSessionVoices = () => {
+const makeCodexSessionVoices = () => {
   const controllers = new Map<string, CodexRealtimeVoice>();
   const isActive = Effect.gen(function* () {
     for (const voice of controllers.values()) {
@@ -200,7 +200,15 @@ export const openCodexSessionClient = Effect.fn("CodexAdapterV2.openSessionClien
     ) {
       if (resolveRuntime === undefined) return undefined;
       const failure = classifyCodexManagedError(value);
-      if (failure?.revoke && onConnectionRevoked) yield* onConnectionRevoked;
+      // Upstream dropped the per-code `revoke` flag (every code was false); a code that
+      // carries one again still revokes.
+      if (
+        failure !== undefined &&
+        "revoke" in failure &&
+        failure.revoke === true &&
+        onConnectionRevoked
+      )
+        yield* onConnectionRevoked;
       return failure;
     });
     return { client, voices, classifyManagedError };

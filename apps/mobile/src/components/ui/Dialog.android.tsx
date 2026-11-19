@@ -1,22 +1,10 @@
 import { androidKeyboardFirst } from "../../lib/android-back";
-import { NativeThemeHost } from "./NativeThemeHost.android";
-import {
-  AlertDialog,
-  Button,
-  OutlinedButton,
-  Icon,
-  FlowRow,
-  Column,
-  OutlinedTextField,
-  Text,
-  useNativeState,
-} from "@expo/ui/jetpack-compose";
-
-import { useAppearancePreferences } from "../../features/settings/appearance/AppearancePreferencesProvider";
-import { useScaledTextRole } from "../../features/settings/appearance/useScaledTextRole";
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import { themeColorWithContrast } from "../../lib/mobileTheme";
+import { useState, useSyncExternalStore } from "react";
+import { Modal, Pressable, ScrollView, View } from "react-native";
+import { ControllerConsole } from "../../features/controller/ControllerConsole";
+import { ControllerTextInput } from "./ControllerTextInput";
+import { AppText } from "./AppText";
+import { Button as AppButton } from "./Button";
 import type { Alert, AlertButton } from "react-native";
 import type { ConfirmDialogRequest, TextInputDialogRequest } from "./Dialog.types";
 
@@ -34,63 +22,81 @@ type DialogRequest =
   | { readonly kind: "confirm"; readonly request: ConfirmDialogRequest }
   | { readonly kind: "text-input"; readonly request: TextInputDialogRequest };
 
-let presentRequest: ((request: DialogRequest) => void) | null = null;
+type PresentedDialog = DialogRequest & { readonly id: number };
+
+// App services raise dialogs before the root mounts, so the request lives in
+// the module and the Host renders whatever is current. One dialog shows at a
+// time: a new request replaces the presented one.
+let presented: PresentedDialog | null = null;
+let nextPresentationId = 0;
+const listeners = new Set<() => void>();
+
+function setPresented(next: PresentedDialog | null) {
+  presented = next;
+  for (const listener of listeners) listener();
+}
+
+function submitRequest(dialog: DialogRequest) {
+  const replaced = presented;
+  setPresented({ ...dialog, id: ++nextPresentationId });
+  // A replaced alert closed without an answer, which its owner hears as a dismissal.
+  if (replaced?.kind === "alert") replaced.request.options?.onDismiss?.();
+}
+
+/** Closes the dialog only if it is still the one the action came from. */
+function dismiss(id: number) {
+  if (presented?.id === id) setPresented(null);
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getPresented() {
+  return presented;
+}
 
 export function alert(...[title, message, buttons, options]: Parameters<typeof Alert.alert>): void {
   const actions = buttons?.length ? buttons.slice(0, 3) : [{ text: "OK" }];
   const normalized = actions.map((action, index) =>
     index === actions.length - 1 ? { ...action, text: action.text || "OK" } : action,
   );
-  presentRequest?.({
+  submitRequest({
     kind: "alert",
     request: { title, message, buttons: normalized, options },
   });
 }
 
 export function confirm(request: ConfirmDialogRequest): void {
-  presentRequest?.({ kind: "confirm", request });
+  submitRequest({ kind: "confirm", request });
 }
 
 export function prompt(request: TextInputDialogRequest): void {
-  presentRequest?.({ kind: "text-input", request });
+  submitRequest({ kind: "text-input", request });
 }
 
 export function Host() {
-  const [presented, setPresented] = useState<(DialogRequest & { readonly id: number }) | null>(
-    null,
-  );
-  const [inputValue, setInputValue] = useState("");
-  const nextPresentationId = useRef(0);
-  useEffect(() => {
-    const present = (request: DialogRequest) => {
-      setInputValue(request.kind === "text-input" ? request.request.initialValue : "");
-      setPresented({ ...request, id: ++nextPresentationId.current });
-    };
-    presentRequest = present;
-    return () => {
-      // When Android replaces the activity, the new root's Host registers before the old root
-      // unmounts. Clearing unconditionally would leave the live Host without dialogs.
-      if (presentRequest === present) presentRequest = null;
-    };
-  }, []);
+  const presented = useSyncExternalStore(subscribe, getPresented, getPresented);
 
-  const handleCancel = useCallback(() => {
-    setPresented(null);
-    if (presented?.kind === "alert") presented.request.options?.onDismiss?.();
-    else presented?.request.onCancel?.();
-  }, [presented]);
+  const handleCancel = () => {
+    if (!presented) return;
+    dismiss(presented.id);
+    if (presented.kind === "alert") presented.request.options?.onDismiss?.();
+    else presented.request.onCancel?.();
+  };
 
-  const handleConfirm = useCallback(
-    (nativeInputValue?: string) => {
-      setPresented(null);
-      if (presented?.kind === "confirm") {
-        presented.request.onConfirm();
-      } else if (presented?.kind === "text-input") {
-        presented.request.onConfirm(nativeInputValue ?? inputValue);
-      }
-    },
-    [inputValue, presented],
-  );
+  const handleConfirm = (nativeInputValue?: string) => {
+    if (!presented) return;
+    dismiss(presented.id);
+    if (presented.kind === "confirm") {
+      presented.request.onConfirm();
+    } else if (presented.kind === "text-input") {
+      presented.request.onConfirm(nativeInputValue ?? presented.request.initialValue);
+    }
+  };
 
   if (presented?.kind === "alert") {
     return (
@@ -104,7 +110,7 @@ export function Host() {
         alertActions={presented.request.buttons ?? [{ text: "OK" }]}
         dismissable={presented.request.options?.cancelable ?? false}
         onAlertAction={(action) => {
-          setPresented(null);
+          dismiss(presented.id);
           action.onPress?.();
         }}
         onCancel={handleCancel}
@@ -113,148 +119,119 @@ export function Host() {
     );
   }
 
+  if (presented?.kind === "text-input") {
+    return (
+      <PromptPresentation
+        key={presented.id}
+        request={presented.request}
+        onCancel={handleCancel}
+        onConfirm={handleConfirm}
+      />
+    );
+  }
   return presented ? (
     <DialogPresentation
       key={presented.id}
       request={presented.request}
-      inputInitialValue={
-        presented.kind === "text-input" ? presented.request.initialValue : undefined
-      }
-      inputPlaceholder={presented.kind === "text-input" ? presented.request.placeholder : undefined}
-      onInputChange={setInputValue}
       onCancel={handleCancel}
       onConfirm={handleConfirm}
     />
   ) : null;
 }
 
+function PromptPresentation(props: {
+  readonly request: TextInputDialogRequest;
+  readonly onCancel: () => void;
+  readonly onConfirm: (value: string) => void;
+}) {
+  const [value, setValue] = useState(props.request.initialValue);
+  return (
+    <Modal transparent visible onRequestClose={androidKeyboardFirst(props.onCancel)}>
+      <ControllerConsole scopeKey="text-input-dialog" onBack={androidKeyboardFirst(props.onCancel)}>
+        <View className="flex-1 justify-center bg-black/40 px-6">
+          <View className="gap-4 rounded-[28px] bg-card p-6">
+            <AppText className="text-xl font-t3-medium">{props.request.title}</AppText>
+            {props.request.message ? <AppText>{props.request.message}</AppText> : null}
+            <ControllerTextInput
+              autoFocus
+              accessibilityLabel={props.request.title}
+              placeholder={props.request.placeholder}
+              value={value}
+              onChangeText={setValue}
+              returnKeyType="done"
+              onSubmitEditing={() => props.onConfirm(value)}
+              selectTextOnFocus
+            />
+            <View className="flex-row justify-end gap-3">
+              <AppButton label={props.request.cancelText ?? "Cancel"} onPress={props.onCancel} />
+              <AppButton
+                controllerFooter
+                label={props.request.confirmText}
+                tone="primary"
+                onPress={() => props.onConfirm(value)}
+              />
+            </View>
+          </View>
+        </View>
+      </ControllerConsole>
+    </Modal>
+  );
+}
+
 function DialogPresentation(props: DialogPresentationProps) {
-  const { themeVariables: colors } = useAppearancePreferences();
-  const titleTypography = useScaledTextRole("title");
-  const bodyTypography = useScaledTextRole("footnote");
-  const inputTypography = useScaledTextRole("body");
-  const inputState = useNativeState(props.inputInitialValue ?? "");
-  const inputSelection = useNativeState({ start: 0, end: props.inputInitialValue?.length ?? 0 });
-  const confirm = () => {
-    const value = props.inputInitialValue === undefined ? undefined : inputState.get();
-    props.onConfirm(value);
-  };
+  const cancel = androidKeyboardFirst(() => {
+    if (props.dismissable ?? true) props.onCancel();
+  });
   const actions = props.alertActions ?? [
     { text: props.request.cancelText ?? "Cancel", onPress: props.onCancel },
     {
       text: props.request.confirmText,
       style: props.request.destructive ? ("destructive" as const) : ("default" as const),
-      onPress: confirm,
+      onPress: () => props.onConfirm(),
     },
   ];
-  const destructive = actions.some((action) => action.style === "destructive");
-  // Error text colors can be pastel in dark themes. Filled actions need a white-label contrast pair.
-  const destructiveFill = themeColorWithContrast(colors["--color-danger-foreground"], "#ffffff");
-  const renderAction = (action: AlertButton, index: number) => {
-    const isDestructive = action.style === "destructive";
-    const isPrimary = isDestructive || index === actions.length - 1;
-    const Component = isPrimary ? Button : OutlinedButton;
-    return (
-      <Component
-        key={index}
-        onClick={() => (props.alertActions ? props.onAlertAction?.(action) : action.onPress?.())}
-        colors={{
-          containerColor: isDestructive
-            ? destructiveFill
-            : isPrimary
-              ? colors["--color-prominent-action"]
-              : "#00000000",
-          contentColor: isDestructive
-            ? "#ffffff"
-            : isPrimary
-              ? colors["--color-prominent-action-foreground"]
-              : colors["--color-foreground"],
-        }}
-      >
-        <Text style={bodyTypography}>{action.text ?? ""}</Text>
-      </Component>
-    );
-  };
   return (
-    <NativeThemeHost ignoreSafeAreaKeyboardInsets style={{ height: 0, width: 0 }}>
-      <AlertDialog
-        onDismissRequest={androidKeyboardFirst(props.onCancel)}
-        properties={{
-          dismissOnBackPress: props.dismissable ?? true,
-          dismissOnClickOutside: props.dismissable ?? true,
-        }}
-        tonalElevation={0}
-        colors={{
-          containerColor: colors["--color-card"],
-          titleContentColor: colors["--color-foreground"],
-          textContentColor: colors["--color-foreground-secondary"],
-        }}
-      >
-        <AlertDialog.Title>
-          <Column verticalArrangement={{ spacedBy: 16 }}>
-            {destructive ? (
-              <Icon
-                source={require("../../../assets/icons/delete.xml")}
-                tint={colors["--color-danger-foreground"]}
-                size={24}
-              />
+    <Modal transparent visible onRequestClose={cancel}>
+      <ControllerConsole scopeKey="confirmation-dialog" onBack={cancel}>
+        <View className="flex-1 justify-center bg-black/40 px-6">
+          <Pressable
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            className="absolute inset-0"
+            onPress={cancel}
+          />
+          <View accessibilityViewIsModal className="max-h-[80%] gap-4 rounded-[28px] bg-card p-6">
+            <AppText accessibilityRole="header" className="text-xl font-t3-medium">
+              {props.request.title}
+            </AppText>
+            {props.request.message ? (
+              <ScrollView className="shrink" keyboardShouldPersistTaps="handled">
+                <AppText>{props.request.message}</AppText>
+              </ScrollView>
             ) : null}
-            <Text style={titleTypography}>{props.request.title}</Text>
-          </Column>
-        </AlertDialog.Title>
-        {props.inputInitialValue !== undefined ? (
-          <AlertDialog.Text>
-            <Column verticalArrangement={{ spacedBy: 16 }}>
-              {props.request.message ? (
-                <Text style={bodyTypography}>{props.request.message}</Text>
-              ) : null}
-              <OutlinedTextField
-                autoFocus
-                singleLine
-                value={inputState}
-                selection={inputSelection}
-                onValueChange={props.onInputChange}
-                textStyle={inputTypography}
-                keyboardOptions={{ imeAction: "done" }}
-                keyboardActions={{
-                  onDone: confirm,
-                }}
-                colors={{
-                  focusedTextColor: colors["--color-foreground"],
-                  unfocusedTextColor: colors["--color-foreground"],
-                  focusedIndicatorColor: colors["--color-focus"],
-                  unfocusedIndicatorColor: colors["--color-border"],
-                  cursorColor: colors["--color-focus"],
-                }}
-              >
-                <OutlinedTextField.Label>
-                  <Text style={bodyTypography}>{props.request.title}</Text>
-                </OutlinedTextField.Label>
-                {props.inputPlaceholder ? (
-                  <OutlinedTextField.Placeholder>
-                    <Text style={bodyTypography}>{props.inputPlaceholder}</Text>
-                  </OutlinedTextField.Placeholder>
-                ) : null}
-              </OutlinedTextField>
-            </Column>
-          </AlertDialog.Text>
-        ) : props.request.message ? (
-          <AlertDialog.Text>
-            <Text style={bodyTypography}>{props.request.message}</Text>
-          </AlertDialog.Text>
-        ) : null}
-        {actions.length > 1 ? (
-          <AlertDialog.DismissButton>
-            <FlowRow>{actions.slice(0, -1).map(renderAction)}</FlowRow>
-          </AlertDialog.DismissButton>
-        ) : null}
-        {actions.length > 0 ? (
-          <AlertDialog.ConfirmButton>
-            {renderAction(actions[actions.length - 1]!, actions.length - 1)}
-          </AlertDialog.ConfirmButton>
-        ) : null}
-      </AlertDialog>
-    </NativeThemeHost>
+            <View className="flex-row flex-wrap justify-end gap-3">
+              {actions.map((action, index) => (
+                <AppButton
+                  key={`${action.text}:${action.style ?? "default"}`}
+                  label={action.text ?? ""}
+                  controllerFooter={index === actions.length - 1}
+                  tone={
+                    action.style === "destructive"
+                      ? "danger"
+                      : index === actions.length - 1
+                        ? "primary"
+                        : "secondary"
+                  }
+                  onPress={() =>
+                    props.alertActions ? props.onAlertAction?.(action) : action.onPress?.()
+                  }
+                />
+              ))}
+            </View>
+          </View>
+        </View>
+      </ControllerConsole>
+    </Modal>
   );
 }
 
@@ -266,9 +243,6 @@ interface DialogPresentationProps {
     ConfirmDialogRequest,
     "title" | "message" | "cancelText" | "confirmText" | "destructive"
   >;
-  readonly inputInitialValue?: string;
-  readonly inputPlaceholder?: string;
-  readonly onInputChange?: (value: string) => void;
   readonly onCancel: () => void;
   readonly onConfirm: (inputValue?: string) => void;
 }

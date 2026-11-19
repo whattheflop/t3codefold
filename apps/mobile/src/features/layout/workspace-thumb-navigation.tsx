@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "./workspace/useSelectWorkspaceDetail";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -13,6 +13,14 @@ import {
 } from "../../lib/workspace-thumb-navigation";
 export type { WorkspaceThumbAction } from "../../lib/workspace-thumb-navigation";
 
+function createThumbGesture(dispatch: (x: number, y: number) => void) {
+  return Gesture.Pan()
+    .minDistance(12)
+    .onEnd((event, success) => {
+      if (success) runOnJS(dispatch)(event.translationX, event.translationY);
+    });
+}
+
 export function WorkspaceThumbNavigation(props: {
   readonly onAction: (action: WorkspaceThumbAction) => void;
 }) {
@@ -25,15 +33,7 @@ export function WorkspaceThumbNavigation(props: {
     },
     [onAction],
   );
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(12)
-        .onEnd((event, success) => {
-          if (success) runOnJS(dispatch)(event.translationX, event.translationY);
-        }),
-    [dispatch],
-  );
+  const gesture = useMemo(() => createThumbGesture(dispatch), [dispatch]);
   return (
     <View
       className="border-t border-header-border bg-header"
@@ -115,6 +115,7 @@ export function useWorkspaceThumbActions(input: {
     threads: Array<{ environmentId: string; threadId: string }>;
     index: number;
   }>({ threads: [], index: -1 });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records the active thread in the thumb-gesture back/forward history
   useEffect(() => {
     if (!activeThread) return;
     const history = recentThreads.current;

@@ -2,19 +2,20 @@ import { ProjectLucideSvg } from "../components/ProjectLucideGlyph";
 import { isMobileLucideIconName } from "../lib/projectLucideIcons";
 import type { ProjectIconColor } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
 import { useRef, useSyncExternalStore } from "react";
 import { Platform, View } from "react-native";
 import Svg, { G, Rect, Text } from "react-native-svg";
 import { useResolveClassNames } from "uniwind";
 
-import { countGlyphs, projectIconColorClassNames, type ProjectIconGlyph } from "../lib/projectIcon";
+import { countGlyphs, projectIconColorClassNames, type ProjectChipGlyph } from "../lib/projectIcon";
 
 const TILE_SIZE = 48;
 
 interface PendingTile {
   readonly key: string;
-  readonly glyph: ProjectIconGlyph;
+  readonly glyph: ProjectChipGlyph;
   readonly promise: Promise<string>;
   readonly resolve: (uri: string) => void;
   readonly reject: () => void;
@@ -24,7 +25,7 @@ const tiles = new Map<string, PendingTile>();
 let pendingTiles: ReadonlyArray<PendingTile> = [];
 const listeners = new Set<() => void>();
 
-export function projectGlyphKey(glyph: ProjectIconGlyph): string {
+export function projectGlyphKey(glyph: ProjectChipGlyph): string {
   return JSON.stringify(
     glyph.kind === "emoji"
       ? ["emoji", glyph.emoji]
@@ -34,7 +35,7 @@ export function projectGlyphKey(glyph: ProjectIconGlyph): string {
   );
 }
 
-function decodeGlyphKey(key: string): ProjectIconGlyph {
+function decodeGlyphKey(key: string): ProjectChipGlyph {
   const [kind, text, color] = JSON.parse(key) as [string, string, ProjectIconColor];
   if (kind === "lucide" && isMobileLucideIconName(text))
     return { kind: "lucide", name: text, color };
@@ -76,11 +77,22 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+class ProjectGlyphRasterizeError extends Schema.TaggedError<ProjectGlyphRasterizeError>()(
+  "ProjectGlyphRasterizeError",
+  { key: Schema.String, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `Could not rasterize the project glyph ${this.key}.`;
+  }
+}
+
 export const projectGlyphImageAtom = Atom.family((key: string) =>
-  Atom.make(Effect.tryPromise(() => rasterize(key))).pipe(
-    Atom.keepAlive,
-    Atom.withLabel(`mobile-project-glyph-image:${key}`),
-  ),
+  Atom.make(
+    Effect.tryPromise({
+      try: () => rasterize(key),
+      catch: (cause) => new ProjectGlyphRasterizeError({ key, cause }),
+    }),
+  ).pipe(Atom.keepAlive, Atom.withLabel(`mobile-project-glyph-image:${key}`)),
 );
 
 export function ProjectChipIconRasterizer() {

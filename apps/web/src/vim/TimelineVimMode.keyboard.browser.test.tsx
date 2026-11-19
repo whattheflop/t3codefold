@@ -1,13 +1,13 @@
 import { expect, it, vi } from "vite-plus/test";
+
 import { act, fakeTimers, render } from "../../test/render";
 import { TimelineVimMode } from "./TimelineVimMode";
+import { registerVimConversation, type VimConversation } from "./vimConversation";
 
-async function setup(previewThreads = false) {
-  await using stack = new AsyncDisposableStack();
-  const targets = document.createElement("div");
-  document.body.append(targets);
-  stack.defer(() => targets.remove());
-  const focusTarget = (selector: string, region: HTMLElement = targets) => {
+/** Elements the test builds outside React, removed when the test ends. */
+function fixture() {
+  const elements: HTMLElement[] = [];
+  const add = (selector: string, region?: HTMLElement) => {
     const target = document.createElement(selector.startsWith("input") ? "input" : "div");
     if (selector.includes("type=")) target.setAttribute("type", "search");
     for (const match of selector.matchAll(/\[([^=\]]+)(?:=["']?([^"'\]]+)["']?)?\]/g)) {
@@ -15,71 +15,74 @@ async function setup(previewThreads = false) {
     }
     target.tabIndex = 0;
     target.style.cssText = "width:100px;height:30px";
-    region.append(target);
+    (region ?? document.body).append(target);
+    elements.push(target);
     return target;
   };
-  const conversation = focusTarget("conversation");
-  stack.use(
-    await render(
-      <TimelineVimMode
-        routeKey="test"
-        previewThreads={previewThreads}
-        getScrollNode={() => conversation}
-        focusComposer={vi.fn()}
-        onUserNavigation={vi.fn()}
-        onScrollToEnd={vi.fn()}
-      />,
-    ),
-  );
-  const environment = stack.move();
   return {
-    conversation,
-    focusTarget,
-    async press(key: string, properties = {}) {
-      const event = Object.assign(new Event("keydown", { cancelable: true }), {
-        key,
-        ...properties,
-      });
-      await act(() => window.dispatchEvent(event));
-      return event;
+    add,
+    [Symbol.dispose]: () => {
+      for (const element of elements.splice(0)) element.remove();
     },
-    [Symbol.asyncDispose]: () => environment.disposeAsync(),
   };
 }
 
-it.each(['input[type="search"]', '[role="searchbox"]'])(
+function conversationFor(
+  scrollNode: HTMLElement | null,
+  overrides: Partial<VimConversation> = {},
+): Disposable {
+  const unregister = registerVimConversation({
+    routeKey: "test",
+    getScrollNode: () => scrollNode,
+    focusComposer: vi.fn(),
+    onUserNavigation: vi.fn(),
+    onScrollToEnd: vi.fn(),
+    ...overrides,
+  });
+  return { [Symbol.dispose]: unregister };
+}
+
+// The controller listens on window and renders only overlays, so it needs no router.
+const renderMode = (previewThreads = false) =>
+  render(<TimelineVimMode previewThreads={previewThreads} />, { router: false });
+
+async function press(key: string, properties = {}) {
+  const event = Object.assign(new Event("keydown", { cancelable: true }), {
+    key,
+    ...properties,
+  });
+  await act(() => window.dispatchEvent(event));
+  return event;
+}
+
+it.each(['input[type="search"]', '[role="searchbox"]', "input"])(
   "Escape leaves %s and returns focus to navigation",
   async (selector) => {
-    await using fixture = await setup();
-    const { focusTarget, press } = fixture;
-    focusTarget(selector).focus();
+    using dom = fixture();
+    const conversation = dom.add("conversation");
+    using _conversation = conversationFor(conversation);
+    await using _screen = await renderMode();
+    dom.add(selector).focus();
     await press("Escape");
-    expect(document.activeElement === fixture.conversation).toBe(true);
+    expect(document.activeElement === conversation).toBe(true);
   },
 );
 
-it("leaves ordinary input editing alone", async () => {
-  await using fixture = await setup();
-  const { focusTarget, press } = fixture;
-  const input = focusTarget("input");
-  input.focus();
-  expect((await press("Escape")).defaultPrevented).toBe(false);
-  expect(document.activeElement).toBe(input);
-});
-
 it("does not leave search during composition", async () => {
-  await using fixture = await setup();
-  const { focusTarget, press } = fixture;
-  const input = focusTarget('input[type="search"]');
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  await using _screen = await renderMode();
+  const input = dom.add('input[type="search"]');
   input.focus();
   await press("Escape", { isComposing: true });
   expect(document.activeElement).toBe(input);
 });
 
 it("keeps typing in the search field", async () => {
-  await using fixture = await setup();
-  const { focusTarget, press } = fixture;
-  const input = focusTarget('input[type="search"]');
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  await using _screen = await renderMode();
+  const input = dom.add('input[type="search"]');
   input.focus();
   expect((await press("j")).defaultPrevented).toBe(false);
   expect(document.activeElement).toBe(input);
@@ -88,10 +91,11 @@ it("keeps typing in the search field", async () => {
 it.each(["[data-app-sidebar]", "[data-right-panel-surface-content]"])(
   "returns search focus to its %s region and preserves local Escape handling",
   async (selector) => {
-    await using fixture = await setup();
-    const { focusTarget, press } = fixture;
-    const region = focusTarget(selector);
-    focusTarget('input[type="search"]', region).focus();
+    using dom = fixture();
+    using _conversation = conversationFor(dom.add("conversation"));
+    await using _screen = await renderMode();
+    const region = dom.add(selector);
+    dom.add('input[type="search"]', region).focus();
     const localEscape = vi.fn();
     using listener = new DisposableStack();
     window.addEventListener("keydown", localEscape, { once: true });
@@ -103,45 +107,112 @@ it.each(["[data-app-sidebar]", "[data-right-panel-surface-content]"])(
 );
 
 it("leaves modified Escape to the field", async () => {
-  await using fixture = await setup();
-  const { focusTarget, press } = fixture;
-  const input = focusTarget('input[type="search"]');
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  await using _screen = await renderMode();
+  const input = dom.add('input[type="search"]');
   input.focus();
   await press("Escape", { ctrlKey: true });
   expect(document.activeElement).toBe(input);
 });
 
 it("lets an open dialog own Escape", async () => {
-  await using fixture = await setup();
-  const { focusTarget, press } = fixture;
-  const input = focusTarget('input[type="search"]');
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  await using _screen = await renderMode();
+  const input = dom.add('input[type="search"]');
   input.focus();
-  const dialog = focusTarget('[role="dialog"]');
+  const dialog = dom.add('[role="dialog"]');
   dialog.style.cssText = "position:fixed;top:0;left:0;width:100px;height:100px";
   expect((await press("Escape")).defaultPrevented).toBe(false);
   expect(document.activeElement).toBe(input);
 });
 
-function setupSidebar(fixture: Awaited<ReturnType<typeof setup>>) {
-  using stack = new DisposableStack();
-  const sidebar = fixture.focusTarget("[data-app-sidebar]");
-  const rows = Array.from({ length: 3 }, () => {
-    const thread = fixture.focusTarget("[data-thread-item]", sidebar);
-    const row = fixture.focusTarget("[role=button]", thread);
-    stack.use(vi.spyOn(row, "click"));
+it("lets Escape reach other listeners when Vim has nothing to cancel", async () => {
+  using dom = fixture();
+  const conversation = dom.add("conversation");
+  using _conversation = conversationFor(conversation);
+  await using _screen = await renderMode();
+  conversation.focus();
+  expect((await press("Escape")).defaultPrevented).toBe(false);
+});
+
+it("steps through a page area's list when no conversation is shown", async () => {
+  using dom = fixture();
+  const area = dom.add('[data-workspace-area="factory-fleet"][data-workspace-order="1"]');
+  area.style.cssText = "width:200px;height:200px";
+  const rows = Array.from({ length: 3 }, () => dom.add("[data-vim-list-item]", area));
+  await using _screen = await renderMode();
+  await press("j");
+  expect(document.activeElement).toBe(rows[0]);
+  await press("j");
+  expect(document.activeElement).toBe(rows[1]);
+  await press("G");
+  expect(document.activeElement).toBe(rows[2]);
+  await press("g");
+  await press("g");
+  expect(document.activeElement).toBe(rows[0]);
+  // Keys the area does not use stay with the page.
+  expect((await press("x")).defaultPrevented).toBe(false);
+});
+
+it("sends keys to the shown conversation, not a page area, when nothing is focused", async () => {
+  using dom = fixture();
+  const area = dom.add('[data-workspace-area="details"][data-workspace-order="3"]');
+  dom.add("[data-vim-list-item]", area);
+  const focusComposer = vi.fn();
+  using _conversation = conversationFor(dom.add("conversation"), { focusComposer });
+  await using _screen = await renderMode();
+  await press("i");
+  expect(focusComposer).toHaveBeenCalledOnce();
+});
+
+it("treats an empty thread as the conversation even before it has a message list", async () => {
+  using dom = fixture();
+  const area = dom.add('[data-workspace-area="details"][data-workspace-order="3"]');
+  dom.add("[data-vim-list-item]", area);
+  const focusComposer = vi.fn();
+  using _conversation = conversationFor(null, { focusComposer });
+  await using _screen = await renderMode();
+  await press("i");
+  expect(focusComposer).toHaveBeenCalledOnce();
+});
+
+it("labels a dialog's controls with f and activates the chosen one", async () => {
+  using dom = fixture();
+  await using _screen = await renderMode();
+  const dialog = dom.add('[role="dialog"]');
+  dialog.style.cssText = "position:fixed;top:0;left:0;width:200px;height:200px";
+  const clicks = Array.from({ length: 2 }, () => {
+    const button = document.createElement("button");
+    button.style.cssText = "display:block;width:80px;height:30px";
+    dialog.append(button);
+    return vi.spyOn(button, "click");
+  });
+  expect((await press("f")).defaultPrevented).toBe(true);
+  await press("s");
+  expect(clicks[0]).not.toHaveBeenCalled();
+  expect(clicks[1]).toHaveBeenCalledOnce();
+});
+
+function sidebarRows(dom: ReturnType<typeof fixture>) {
+  const sidebar = dom.add("[data-app-sidebar]");
+  return Array.from({ length: 3 }, () => {
+    const thread = dom.add("[data-thread-item]", sidebar);
+    const row = dom.add("[role=button]", thread);
+    vi.spyOn(row, "click");
     return row;
   });
-  rows[0]!.focus();
-  const environment = stack.move();
-  return { rows, [Symbol.dispose]: () => environment.dispose() };
 }
 
 it("keeps sidebar navigation focus-only when preview is disabled, and i opens the selection", async () => {
-  await using fixture = await setup(false);
+  using dom = fixture();
+  const conversation = dom.add("conversation");
+  using _conversation = conversationFor(conversation);
+  const rows = sidebarRows(dom);
+  await using _screen = await renderMode(false);
   using _timers = fakeTimers();
-  using sidebar = setupSidebar(fixture);
-  const { rows } = sidebar;
-  const { press } = fixture;
+  rows[0]!.focus();
   await press("j");
   await act(() => vi.runAllTimers());
   expect(document.activeElement).toBe(rows[1]);
@@ -151,11 +222,12 @@ it("keeps sidebar navigation focus-only when preview is disabled, and i opens th
 });
 
 it("previews only the final thread after rapid sidebar navigation, preserving focus", async () => {
-  await using fixture = await setup(true);
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  const rows = sidebarRows(dom);
+  await using _screen = await renderMode(true);
   using _timers = fakeTimers();
-  using sidebar = setupSidebar(fixture);
-  const { rows } = sidebar;
-  const { press } = fixture;
+  rows[0]!.focus();
   await press("j");
   expect(document.activeElement).toBe(rows[1]);
   await press("j");
@@ -168,23 +240,26 @@ it("previews only the final thread after rapid sidebar navigation, preserving fo
 });
 
 it("cancels a preview when focus leaves the selected thread", async () => {
-  await using fixture = await setup(true);
+  using dom = fixture();
+  const conversation = dom.add("conversation");
+  using _conversation = conversationFor(conversation);
+  const rows = sidebarRows(dom);
+  await using _screen = await renderMode(true);
   using _timers = fakeTimers();
-  using sidebar = setupSidebar(fixture);
-  const { rows } = sidebar;
-  const { press } = fixture;
+  rows[0]!.focus();
   await press("j");
-  fixture.conversation.focus();
+  conversation.focus();
   await act(() => vi.runAllTimers());
   expect(rows[1]!.click).not.toHaveBeenCalled();
 });
 
 it("does not preview project headers", async () => {
-  await using fixture = await setup(true);
+  using dom = fixture();
+  using _conversation = conversationFor(dom.add("conversation"));
+  const rows = sidebarRows(dom);
+  await using _screen = await renderMode(true);
   using _timers = fakeTimers();
-  using sidebar = setupSidebar(fixture);
-  const { rows } = sidebar;
-  const { press } = fixture;
+  rows[0]!.focus();
   using _closest = vi.spyOn(rows[1]!, "closest").mockReturnValue(null);
   await press("j");
   await act(() => vi.runAllTimers());

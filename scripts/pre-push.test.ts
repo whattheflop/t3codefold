@@ -32,6 +32,24 @@ describe("planPrePush", () => {
     assert.deepStrictEqual(plan.lintFiles, ["packages/shared/src/git.ts"]);
   });
 
+  it("requires native controller tests for either side of the Android controller bridge", () => {
+    for (const file of [
+      "apps/mobile/modules/t3-native-controls/android/src/main/java/expo/modules/t3nativecontrols/T3ControllerRouter.kt",
+      "apps/mobile/modules/t3-native-controls/android/src/test/java/expo/modules/t3nativecontrols/T3ControllerFocusTest.kt",
+      "apps/mobile/src/features/controller/ControllerConsole.tsx",
+      "apps/mobile/src/native/T3KeyboardCommands.tsx",
+    ]) {
+      assert.isTrue(planPrePush({ changedFiles: [file], workspaces }).androidController, file);
+    }
+    for (const file of [
+      "apps/mobile/src/lib/layout.ts",
+      "apps/web/src/controller/domController.ts",
+      "docs/internals/controller-navigation.md",
+    ]) {
+      assert.isFalse(planPrePush({ changedFiles: [file], workspaces }).androidController, file);
+    }
+  });
+
   it("assigns a nested package's files to that package", () => {
     const plan = planPrePush({
       changedFiles: ["apps/mobile/modules/t3-markdown-text/src/index.ts"],

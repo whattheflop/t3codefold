@@ -1,11 +1,32 @@
-import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ScopedProjectRef,
+  SidebarProjectGroupingMode,
+} from "@t3tools/contracts";
 import {
   buildProjectGroups,
   derivePhysicalProjectKey,
+  resolveScratchProjectScopeKey,
   type ProjectGroupingSettings,
-} from "./logicalProject";
-import { resolveScratchProjectScopeKey } from "@t3tools/client-runtime/state/project-grouping";
+} from "@t3tools/client-runtime/state/project-grouping";
 import type { Project } from "./types";
+
+export const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
+  repository: "Group by repository",
+  repository_path: "Group by repository path",
+  separate: "Keep separate",
+};
+
+export function withProjectGroupingOverride(
+  overrides: Readonly<Record<string, SidebarProjectGroupingMode>> | undefined,
+  overrideKey: string,
+  selection: SidebarProjectGroupingMode | "inherit",
+): Record<string, SidebarProjectGroupingMode> {
+  const next = { ...overrides };
+  if (selection === "inherit") delete next[overrideKey];
+  else next[overrideKey] = selection;
+  return next;
+}
 
 export type EnvironmentPresence = "local-only" | "remote-only" | "mixed";
 
@@ -24,6 +45,8 @@ export interface SidebarProjectSnapshot extends Project {
   memberProjects: readonly SidebarProjectGroupMember[];
   memberProjectRefs: readonly ScopedProjectRef[];
   remoteEnvironmentLabels: readonly string[];
+  pinned: boolean;
+  archived: boolean;
 }
 
 export function projectGroupsSpanEnvironments(
@@ -66,13 +89,43 @@ export function getSidebarProjectSettingsKey(
   );
 }
 
+export function sidebarMachineScopeKey(environmentId: EnvironmentId): string {
+  return `machine:${environmentId}`;
+}
+
+export function getSidebarScopeProjectKeys(input: {
+  readonly key: string | null;
+  readonly groups: ReadonlyArray<Pick<SidebarProjectSnapshot, "projectKey" | "memberProjectRefs">>;
+  readonly projects: ReadonlyArray<Pick<Project, "environmentId" | "id">>;
+}) {
+  if (input.key === null) return null;
+  if (input.key.startsWith("machine:")) {
+    return new Set(
+      input.projects
+        .filter((project) => sidebarMachineScopeKey(project.environmentId) === input.key)
+        .map((project) => `${project.environmentId}:${project.id}`),
+    );
+  }
+  const group = input.groups.find((candidate) => candidate.projectKey === input.key);
+  return group
+    ? new Set(group.memberProjectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
+    : null;
+}
+
 export function resolveSidebarProjectScopeKey(input: {
   readonly groups: ReadonlyArray<SidebarProjectSnapshot>;
   readonly key: string | null;
   readonly settings?: ProjectGroupingSettings;
   readonly canClearMissingScope?: boolean;
+  readonly environments?: ReadonlyArray<{ readonly environmentId: EnvironmentId }>;
 }): string | null {
   if (input.key === null) return null;
+  if (
+    input.environments?.some(
+      (environment) => sidebarMachineScopeKey(environment.environmentId) === input.key,
+    )
+  )
+    return input.key;
   const group =
     input.groups.find((candidate) => candidate.projectKey === input.key) ??
     input.groups.find(
@@ -82,6 +135,18 @@ export function resolveSidebarProjectScopeKey(input: {
           candidate.projectKey,
     );
   return group?.projectKey ?? (input.canClearMissingScope ? null : input.key);
+}
+
+export function resolveSidebarProjectScopeKeys(input: {
+  readonly groups: ReadonlyArray<SidebarProjectSnapshot>;
+  readonly keys: ReadonlyArray<string>;
+  readonly settings?: ProjectGroupingSettings;
+  readonly canClearMissingScope?: boolean;
+  readonly environments?: ReadonlyArray<{ readonly environmentId: EnvironmentId }>;
+}): string[] {
+  return [
+    ...new Set(input.keys.flatMap((key) => resolveSidebarProjectScopeKey({ ...input, key }) ?? [])),
+  ];
 }
 
 export function buildPhysicalToLogicalProjectKeyMap(input: {
@@ -166,6 +231,8 @@ export function buildSidebarProjectSnapshots(input: {
       memberProjects: members,
       memberProjectRefs: group.memberProjectRefs,
       remoteEnvironmentLabels,
+      pinned: group.pinned,
+      archived: group.archived,
     };
   });
 }
@@ -203,12 +270,8 @@ export function buildSidebarProjectPickerEntries(input: {
 
     return [{ group, targetProject, isPreferred }];
   });
-  const preferredIndex = entries.findIndex((entry) => entry.isPreferred);
-  if (preferredIndex <= 0) return entries;
-
-  return [
-    entries[preferredIndex]!,
-    ...entries.slice(0, preferredIndex),
-    ...entries.slice(preferredIndex + 1),
-  ];
+  // The current project leads, even ahead of pinned projects.
+  const preferred = entries.find((entry) => entry.isPreferred);
+  if (!preferred) return entries;
+  return [preferred, ...entries.filter((entry) => entry !== preferred)];
 }

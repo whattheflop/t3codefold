@@ -1,4 +1,5 @@
 import * as NodeOS from "node:os";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -13,7 +14,9 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as DesktopUpdatePolicy from "./DesktopUpdatePolicy.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 
 export const flushCallbacks = Effect.yieldNow;
@@ -26,7 +29,7 @@ export interface UpdatesHarnessOptions {
   readonly beforeSetUpdateChannel?: Effect.Effect<void>;
   readonly setUpdateChannelError?: DesktopAppSettings.DesktopSettingsWriteError;
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
-  readonly downloadUpdate?: Effect.Effect<void>;
+  readonly downloadUpdate?: Effect.Effect<void, ElectronUpdater.ElectronUpdaterDownloadUpdateError>;
   readonly quitAndInstall?: Effect.Effect<void, ElectronUpdater.ElectronUpdaterQuitAndInstallError>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly startBackend?: Effect.Effect<void>;
@@ -38,6 +41,12 @@ export interface UpdatesHarnessOptions {
   /** Contents of the packaged resources/app-update.yml feed config. */
   readonly appUpdateYml?: string | undefined;
   readonly installRecord?: string | undefined;
+  readonly policy?: DesktopUpdatePolicy.UpdatePolicy;
+  readonly appVersion?: string;
+  /** Starts from in-memory settings with this track saved, as after a restart. */
+  readonly savedChannel?: DesktopAppSettings.DesktopSettings["updateChannel"];
+  /** Adds a WSL backend beside the primary, as on a Windows host with WSL enabled. */
+  readonly wslBackend?: boolean;
 }
 
 export function makeHarness(options: UpdatesHarnessOptions = {}) {
@@ -45,6 +54,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   let quitAndInstallCount = 0;
   let downloadCount = 0;
   let allowDowngrade = false;
+  const checkAllowedDowngrade: boolean[] = [];
   let fullChangelog = false;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
@@ -89,6 +99,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     setDisableDifferentialDownload: () => options.setDisableDifferentialDownload ?? Effect.void,
     checkForUpdates: Effect.sync(() => {
       checkCount += 1;
+      checkAllowedDowngrade.push(allowDowngrade);
     }).pipe(Effect.andThen(options.checkForUpdates ?? Effect.void)),
     downloadUpdate: Effect.sync(() => {
       downloadCount += 1;
@@ -129,6 +140,12 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     syncAllAppearance: () => Effect.void,
   } satisfies ElectronWindow.ElectronWindow["Service"]);
 
+  const layerSshEnvironment = Layer.mock(DesktopSshEnvironment.DesktopSshEnvironment, {
+    closeAllTunnels: Effect.sync(() => {
+      installSteps.push("closeSshTunnels");
+    }),
+  });
+
   let backendDesiredRunning = options.backendDesiredRunning ?? true;
   const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
     id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
@@ -152,7 +169,17 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     waitForReady: () => Effect.succeed(true),
   };
   const layerBackend = DesktopBackendPool.layerTest(
-    options.backendInstances ?? [stubBackendInstance],
+    options.backendInstances ??
+      (options.wslBackend
+        ? [
+            stubBackendInstance,
+            {
+              ...stubBackendInstance,
+              id: DesktopBackendPool.BackendInstanceId("wsl:Ubuntu"),
+              label: Effect.succeed("Ubuntu"),
+            },
+          ]
+        : [stubBackendInstance]),
   );
 
   const layerEnvironment = DesktopEnvironment.layer({
@@ -160,7 +187,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     homeDirectory: `${NodeOS.tmpdir()}/t3-desktop-updates-home-${process.pid}`,
     platform: options.platform ?? "darwin",
     processArch: "x64",
-    appVersion: "1.2.3",
+    appVersion: options.appVersion ?? "1.2.3",
     appPath: "/repo",
     isPackaged: true,
     resourcesPath: "/missing/resources",
@@ -181,10 +208,13 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   let testSettings: DesktopAppSettings.DesktopSettings = {
     ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+    ...(options.savedChannel === undefined
+      ? {}
+      : { updateChannel: options.savedChannel, updateChannelConfiguredByUser: true }),
   };
   const setUpdateChannelError = options.setUpdateChannelError;
   const layerSettings =
-    setUpdateChannelError || options.beforeSetUpdateChannel
+    setUpdateChannelError || options.beforeSetUpdateChannel || options.savedChannel
       ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
           get: Effect.sync(() => testSettings),
           load: Effect.sync(() => testSettings),
@@ -217,6 +247,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       : DesktopAppSettings.layer;
 
   const updateRestartMarkers = new Set<string>();
+  const updateMarkerContents = new Map<string, string>();
   const installRecords = new Map<string, string>();
   let previousInstallRecord = options.installRecord;
   const isInstallRecord = (path: string) =>
@@ -244,11 +275,21 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     writeFileString: (path, data) =>
       Effect.sync(() => {
         if (isInstallRecord(path)) installRecords.set(path, data);
-        else updateRestartMarkers.add(path);
+        else {
+          if (path.endsWith("/desktop-update-restart")) updateRestartMarkers.add(path);
+          updateMarkerContents.set(path, data);
+        }
+      }),
+    rename: (from, to) =>
+      Effect.sync(() => {
+        const contents = updateMarkerContents.get(from);
+        if (contents !== undefined) updateMarkerContents.set(to, contents);
+        updateMarkerContents.delete(from);
       }),
     remove: (path) =>
       Effect.sync(() => {
         updateRestartMarkers.delete(path);
+        updateMarkerContents.delete(path);
         installRecords.delete(path);
         if (isInstallRecord(path)) previousInstallRecord = undefined;
       }),
@@ -256,9 +297,11 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   const layer = DesktopUpdates.layer.pipe(
     Layer.provide(layerFileSystem),
+    Layer.provide(DesktopUpdatePolicy.layerTest(options.policy)),
     Layer.provideMerge(layerUpdater),
     Layer.provideMerge(layerWindow),
     Layer.provideMerge(layerBackend),
+    Layer.provideMerge(layerSshEnvironment),
     Layer.provideMerge(DesktopState.layer),
     Layer.provideMerge(layerSettings),
     Layer.provideMerge(
@@ -270,7 +313,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       }),
     ),
     Layer.provideMerge(layerEnvironment),
-    Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
 
   return {
@@ -279,11 +322,16 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     quitAndInstalls: () => quitAndInstallCount,
     installSteps,
     updateRestartMarkers,
+    updateInProgressMarker: () =>
+      [...updateMarkerContents].find(([path]) => path.endsWith("/desktop-update-in-progress"))?.[1],
     installRecords,
     previousInstallRecord: () => previousInstallRecord,
     downloadCount: () => downloadCount,
     feedUrls: (): ElectronUpdater.ElectronUpdaterFeedUrl[] => feedUrls,
     fullChangelog: () => fullChangelog,
+    /** Whether each feed check could offer an older release, and the flag now. */
+    checkAllowedDowngrade,
+    allowDowngrade: () => allowDowngrade,
     listenerCount: () =>
       Array.from(listeners.values()).reduce(
         (total, eventListeners) => total + eventListeners.size,

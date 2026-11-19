@@ -1,3 +1,4 @@
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import type { IconButtonProps } from "./IconButton.types";
 import { NativeThemeHost } from "./NativeThemeHost.android";
 import {
@@ -38,7 +39,10 @@ export function IconButton(props: IconButtonProps) {
           ? "accent-secondary-foreground"
           : (props.tintColorClassName ?? "accent-foreground");
   return (
-    <View
+    <ControllerPressable
+      touchPassthrough
+      onActivate={() => props.onPress?.()}
+      disabled={props.disabled || !props.onPress}
       accessible
       accessibilityLabel={props.accessibilityLabel}
       accessibilityRole="button"
@@ -77,6 +81,6 @@ export function IconButton(props: IconButtonProps) {
           type="monochrome"
         />
       </View>
-    </View>
+    </ControllerPressable>
   );
 }

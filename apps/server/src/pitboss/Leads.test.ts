@@ -195,6 +195,7 @@ it("lets a lead coordinate only work already assigned to an approved remote task
         tenantId: "team",
         itemId: "issue-1",
         scope: "shared-ui",
+        ownership: { viewerId: "lead-viewer", assigneeId: null, delegateId: null },
         key: "UI-1",
         url: "https://tracker.invalid/UI-1",
         status: "Open",

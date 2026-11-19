@@ -46,6 +46,7 @@ export function useWorkspaceVimNavigation(input: {
   latest.current = { ...input, regions };
 
   // A pane that closes hands focus back to the chat.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the global Vim focus store off a pane that closed
   useEffect(() => {
     stateRef.current = reconcileVimRegion(stateRef.current, { regions });
     if (getVimFocus().region !== null) setVimFocus({ region: stateRef.current.region });

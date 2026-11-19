@@ -34,7 +34,7 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
 export type MobileThemeVariable = keyof ReturnType<typeof createMobileThemeVariables>;
 export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>;
 
-export function normalizeMobileThemeId(value: unknown): MobileThemeId {
+function normalizeMobileThemeId(value: unknown): MobileThemeId {
   return typeof value === "string" && (MOBILE_THEME_IDS as readonly string[]).includes(value)
     ? (value as MobileThemeId)
     : DEFAULT_MOBILE_THEME_ID;
@@ -209,6 +209,12 @@ function contrastRatio(
   );
 }
 
+export function themeColorContrastRatio(first: string, second: string): number {
+  const firstChannels = rgbChannels(first);
+  const secondChannels = rgbChannels(second);
+  return firstChannels && secondChannels ? contrastRatio(firstChannels, secondChannels) : 1;
+}
+
 export function themeColorWithContrast(
   accent: string,
   surface: string | ReadonlyArray<string>,
@@ -317,14 +323,8 @@ export function themeColorWithAlpha(color: string, alpha: number): string {
   return rgb ? `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})` : color;
 }
 
-/**
- * Clerk's native profile keeps one build-time palette per appearance so a custom theme cannot
- * restyle its chrome. Runtime palettes retain these values for native APIs that cannot consume a
- * class name, and the theme generator writes the same values into every Uniwind theme.
- *
- * Derived from the default theme's own roles rather than the active one, and from the palette
- * without the Clerk layer so the derivation cannot recur.
- */
+// Clerk uses a build-time palette; derive it from the default theme without the Clerk
+// layer so native APIs and generated Uniwind themes agree without recursive derivation.
 function clerkThemeVariables(appearance: MobileThemeAppearance) {
   const variables = mobileThemeRoleVariables(
     getMobileThemeColors(DEFAULT_MOBILE_THEME_ID, appearance),
@@ -475,10 +475,6 @@ function mobileThemeRoleVariables(
     "--color-chevron": withAlpha(c.textMuted, 0.42),
   };
 }
-
-export const MOBILE_THEME_VARIABLE_NAMES = Object.keys(
-  createMobileThemeVariables(T3_CHAT_THEME.colors, "light"),
-) as ReadonlyArray<MobileThemeVariable>;
 
 export function getMobileThemeColors(
   themeId: SharedMobileThemeId,

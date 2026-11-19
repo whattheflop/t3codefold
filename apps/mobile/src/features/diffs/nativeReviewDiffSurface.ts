@@ -48,6 +48,12 @@ export interface NativeReviewDiffRow {
   readonly commentText?: string;
   readonly commentRangeLabel?: string;
   readonly commentSectionTitle?: string;
+  /** A notice drawn in the warning colors. */
+  readonly tone?: "warning";
+  /** A notice that reports taps through `onPressNotice`. */
+  readonly actionable?: boolean;
+  /** Where a cut line's note starts in `content`. */
+  readonly noteStart?: number;
 }
 
 export interface NativeReviewDiffWordDiffRange {
@@ -75,6 +81,8 @@ export interface NativeReviewDiffTheme {
   readonly deleteBar: string;
   readonly addText: string;
   readonly deleteText: string;
+  readonly warningText: string;
+  readonly warningBackground: string;
 }
 
 export interface NativeReviewDiffStyle {
@@ -160,6 +168,9 @@ export interface NativeReviewDiffViewProps extends ViewProps {
     }>,
   ) => void;
   readonly onToggleComment?: (event: NativeSyntheticEvent<{ readonly commentId?: string }>) => void;
+  readonly onPressNotice?: (
+    event: NativeSyntheticEvent<{ readonly rowId?: string; readonly fileId?: string }>,
+  ) => void;
 }
 
 export interface NativeReviewDiffViewHandle {
@@ -172,7 +183,7 @@ export function isNativeReviewDiffDrawEvent(payload: Readonly<Record<string, unk
 }
 
 interface NativeReviewDiffViewRef {
-  readonly setRowsJson: (rowsJson: string) => Promise<void>;
+  readonly setRowsJson: (rowsJson: string, contentResetKey: string) => Promise<void>;
   readonly setTokensJson: (tokensJson: string) => Promise<void>;
   readonly setTokensPatchJson: (tokensPatchJson: string) => Promise<boolean>;
   readonly scrollToFile: (fileId: string, animated: boolean) => Promise<void>;
@@ -209,6 +220,7 @@ function useNativeReviewDiffPayload(
   onFailure?: () => void,
   onDelivered?: (payload: string) => void,
 ) {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sends the payload to the native diff view's imperative method, retrying per frame until it mounts
   useEffect(() => {
     if (payload === undefined) {
       return;
@@ -224,8 +236,7 @@ function useNativeReviewDiffPayload(
       }
 
       const view = nativeRef.current;
-      const command: ((payload: string) => Promise<void | boolean>) | undefined = view?.[method];
-      if (!view || !command) {
+      if (!view?.[method]) {
         if (attempts < NATIVE_REVIEW_DIFF_PAYLOAD_RETRY_FRAMES) {
           attempts += 1;
           frame = requestAnimationFrame(dispatch);
@@ -237,8 +248,12 @@ function useNativeReviewDiffPayload(
       }
 
       void Promise.resolve()
-        .then(() => {
-          if (!cancelled) return command.call(view, payload);
+        .then((): Promise<void | boolean> | undefined => {
+          if (cancelled) return;
+          // Fabric can apply the contentResetKey prop after this call, so rows carry the key.
+          return method === "setRowsJson"
+            ? view.setRowsJson(payload, resetKey ?? "")
+            : view[method](payload);
         })
         .then((accepted) => {
           if (cancelled) return;
@@ -338,10 +353,12 @@ function NativeReviewDiffContent(
   );
   useNativeReviewDiffPayload(nativeRef, "setTokensJson", tokensJson);
   const onDebugRef = useRef(onDebug);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest onDebug for callbacks the native diff view fires outside render
   useEffect(() => {
     onDebugRef.current = onDebug;
   }, [onDebug]);
   const reportedMountRef = useRef(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reports the native surface mount to the debug callback once per mount
   useEffect(() => {
     // Effect replay keeps the same native content; only a new mount loses tokens.
     if (reportedMountRef.current) return;
@@ -396,6 +413,7 @@ function NativeReviewDiffContent(
     return null;
   }
 
+  /* oxlint-disable react/refs -- The native view receives this ref; only event callbacks access its current value. */
   return createElement(RawNativeView, {
     ...nativeProps,
     refreshEnabled: props.onPullToRefresh !== undefined,
@@ -408,6 +426,7 @@ function NativeReviewDiffContent(
     },
     ref: nativeRef,
   });
+  /* oxlint-enable react/refs */
 }
 
 export function resolveNativeReviewDiffView(): ComponentType<NativeReviewDiffViewProps> | null {

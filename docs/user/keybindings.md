@@ -5,7 +5,12 @@ also lists the command IDs and defaults available in your version.
 
 ## Composer controls
 
-In **Settings → General → Send shortcut**, choose whether Enter sends, requires
+`mod+shift+d` starts dictation in the focused editor, or the composer, and finishes it on the next press;
+`Esc` discards the recording. Change the chord under **Composer: Start or Finish
+Dictation**, and the hold or toggle behavior in **Settings → Voice**. See
+[Voice input](./voice-input.md).
+
+In **Settings → Chat → Send shortcut**, choose whether Enter sends, requires
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.
 
@@ -18,13 +23,14 @@ does the same. Change these shortcuts in **Settings → Keybindings** under
 or **Composer: Send and Start New Thread**. These bindings take priority over the
 send shortcut. Click the send button to use the configured follow-up behavior.
 
-When an active turn has queued messages, `mod+Shift+Enter` sends the first as a
-steer. Change it under **Queue: Send First Queued Message as Steer** in Keybindings.
+When a thread has queued messages, `mod+Shift+Enter` sends the first one as a steer
+while a turn is running, or as a new turn when the thread is stopped. Change it under
+**Queue: Send First Queued Message** in Keybindings.
 
 Use `mod+shift+m` to choose a model and `mod+shift+h` to choose a host.
 To step a new thread to the next machine instead of opening the menu, bind
 **Composer: Cycle Host** in Keybindings. It has no default shortcut.
-Use `mod+shift+e` for effort, `mod+shift+a` for access mode, `mod+shift+x` for the
+Use `mod+shift+e` for effort, `mod+shift+a` for permissions, `mod+shift+x` for the
 workspace, and `mod+shift+g` for the Git branch. The workspace menu includes the
 current checkout, a new worktree, and the previous worktree when available.
 Use `mod+shift+l` to reuse the previous worktree directly.
@@ -36,7 +42,8 @@ lowest, and decrease wraps from the lowest level to the highest.
 
 In the model picker, press Left in an empty search field or Shift+Tab to reach
 the provider list. Use Up/Down to move and Enter to choose. Right returns to
-model search. `mod+shift+up` and `mod+shift+down` switch providers directly and clear the
+model search. Right at the end of the search moves to the highlighted model's effort
+levels, and Left comes back. Choosing a model keeps the picker open on its effort. `mod+shift+up` and `mod+shift+down` switch providers directly and clear the
 search. These provider shortcuts can also be changed in Settings.
 
 These shortcuts run inside the focused web or desktop client. `mod` uses Command
@@ -46,10 +53,12 @@ in Settings.
 
 ## Copy pull request references
 
-With a PR open in the right panel or on the Pull Requests page, use `mod+shift+c`
+With a PR open in the right panel or on the Pull requests page, use `mod+shift+c`
 to copy its URL and `mod+shift+k` to copy its number with a `#` prefix.
-Both shortcuts can be changed in Settings. Search for “Copy Link or Thread ID”
+Both shortcuts can be changed in Settings. Search for “Copy Link or Thread”
 or “Copy Number”. They copy the selected PR and leave terminal input alone.
+Without a PR, `mod+shift+c` copies the thread itself, which pastes into a
+composer as a thread chip.
 
 ## Find in a diff
 
@@ -77,9 +86,16 @@ Android also matches the web defaults for `Ctrl+B` (toggle the sidebar) and
 
 In a new thread, `Cmd+Shift+H` moves the draft to the next machine.
 
-In the composer, Return sends and `Shift+Return` inserts a new line. `Cmd+Return`
-also sends. To make Return insert a new line instead, change the Return key
-behavior in Settings → Keyboard. On Android, Escape leaves the composer.
+In the composer, Return sends and `Shift+Return` inserts a new line. While a
+turn is running, `Cmd+Return` sends with the other follow-up action. To make
+Return insert a new line instead, change the Return key behavior in Settings →
+Keyboard; `Cmd+Return` then sends.
+
+## Android
+
+With a hardware keyboard, the composer handles Return as on iPad, with `Ctrl` in
+place of `Cmd`, and Escape leaves the composer. The on-screen keyboard's Return
+always inserts a new line.
 
 ## Edit the configuration file
 
@@ -115,8 +131,11 @@ Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
 ## When conditions
 
 Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
-`previewOpen`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`, `composerDraft`,
-`turnRunning`, `editableFocus`, `isWeb`, and `isDesktop`.
+`previewOpen`, `rightPanelOpen`, `modelPickerOpen`, `usagePageOpen`, `composerFocus`,
+`draftThreadRoute`, `turnRunning`, `editableFocus`, `isWeb`, and `isDesktop`.
+In a thread, `rightPanelOpen` is true while its right panel is open; the default
+`mod+t` uses it to open the panel's new-tab menu.
+`draftThreadRoute` is true on a draft thread, including a restored draft, until it is first sent.
 `editableFocus` is true while a text field, the composer, or another editor has
 the keyboard. `isWeb` is true in a browser tab. `isDesktop` is true in the
 desktop app. Unknown keys evaluate to `false`.
@@ -141,6 +160,13 @@ update an older server to enable it. Select **Retry** if a search fails. It defa
 `mod+f` outside terminals and previews. Press **Enter** or **Shift+Enter** to move between matches,
 and **Escape** to close find.
 
+## Find on a browser page
+
+`preview.find` (`mod+f` while a browser has focus) searches the open page in the desktop app. It
+is also in the browser's **⋮** menu and the command palette. A page that handles `mod+f` itself,
+such as a code editor, keeps its own find. Use the **⋮** menu to reach the browser's find there.
+Streamed browser tabs and T3 Code in a web browser do not support it.
+
 ## Precedence
 
 The last rule whose key and condition both match wins, even if it belongs to a
@@ -151,6 +177,9 @@ a shortcut.
 
 `thread.stop` interrupts the running turn in the focused thread. It has no default
 shortcut; assign one in **Settings → Keybindings**.
+
+`thread.regenerateTitle` generates a new title for the focused thread, like
+**Regenerate title** in the thread menu. It has no default shortcut.
 
 `thread.undo` (`mod+z` by default) reverses the actions shown in the notice at the
 bottom of the sidebar, such as unpin, settle, snooze, archive, or discarding a
@@ -171,7 +200,7 @@ through the pages you have visited, like a browser's back and forward buttons.
 ## Reserved shortcuts
 
 In the desktop app, `mod+w` closes the focused terminal or the active right-panel
-tab. When nothing remains to close, it closes the window. In a browser, `mod+w`
+tab. When nothing remains to close, it does nothing; it never closes the window. In a browser, `mod+w`
 closes the browser tab; rebind `rightPanel.close` and `terminal.close` to an available
 shortcut such as `alt+w`.
 
@@ -194,3 +223,55 @@ keyboard repeat; if repeat is disabled, use two presses or the application menu.
 Change **Settings → General → Confirmations → Quit shortcut** to **Direct** for a
 single press or **Double press** for two presses only. Choosing **Quit** from the
 application menu always quits immediately.
+
+## Controller console
+
+On desktop (including macOS) and web, enable **Controller console** in
+**Settings → Keybindings**, or search for it in the command palette. It works
+with controllers exposed by Chromium's standard Gamepad mapping, including
+supported DualSense and DualShock connections. Press a controller button if the
+browser has not detected it, then release all controls to begin.
+
+Use the D-pad or left stick to focus, **Cross (×)** to activate, and **Circle (○)**
+to leave editing, close a popup, or go back. **Triangle (△)** focuses the enabled
+send or decision action; **Cross** then confirms it. **L1/R1** switch threads,
+**L2/R2** move between panes (page within a popup), and the right stick scrolls.
+**Options** opens commands; **Share/Create** opens the thread chooser.
+Click the left stick (**L3**) to enter the conversation without changing its reading
+position, or the right stick (**R3**) to focus the reply. Opening a thread from the
+sidebar enters its conversation; expanding a sidebar group keeps focus in the sidebar.
+
+**Square (□)** starts or finishes dictation into a focused supported text field,
+using your Voice settings and selected microphone. Review the transcript before
+sending. From a non-text action in a chat, Square goes straight to that chat's reply
+and starts dictation. Circle cancels recording. Fields without voice support show a hint;
+use a keyboard for those fields, terminals, and embedded editors. Controller
+input stays in the focused app window and pauses when the app loses focus.
+Keyboard, touch, and Vim navigation remain available.
+
+### Android controller console
+
+Press **Start / Options** to enable controller mode. To leave it, open commands
+and choose **Disable controller**.
+Controller input pauses while the app is in the background. Disconnecting the
+controller disables it. Press Options again to enable it, and release held controls after changing
+threads or requests before choosing another action.
+
+Use the D-pad or left stick to focus actions, **A / Cross** to select, and **B / Circle**
+to leave reply editing, then go back. Leaving reply editing hides the keyboard
+and returns focus to the conversation so directions navigate again.
+**X / Square** starts or finishes dictation in a focused composer, custom question
+answer, or palette search; Circle cancels recording. **Triangle** focuses
+Submit or Send for review, and Cross activates it. **L1/R1** switch threads,
+**L2/R2** page the focused content, and the right stick scrolls. While enabled,
+Options opens commands and **Share/Create** opens the searchable thread chooser.
+Selecting a thread enters its conversation. **Right** from a thread enters the chat;
+from the conversation, **Left** returns to the selected thread and **Right** focuses
+the reply. **L3** enters the conversation and **R3** focuses the reply. X / Square can start reply
+dictation directly from a non-text action in the current screen. The right stick
+continues to scroll the conversation while its reply is focused.
+
+On both clients, search commands for **Next thread needing attention** to jump to a
+thread with a pending request, failure, or unread completion. **Discard composed reply**
+asks before clearing the current reply. On Android, each thread's **Thread actions**
+control opens its management menu without a long press.

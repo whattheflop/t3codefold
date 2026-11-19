@@ -1,6 +1,5 @@
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceColumns";
 import Constants from "expo-constants";
-import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 
@@ -10,6 +9,8 @@ import { T3Wordmark } from "./T3Wordmark";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
+
+const BRAND_MAX_FONT_SCALE = 1.4;
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
@@ -48,11 +49,13 @@ export function CompactBrandTitle(
       style={{ marginLeft: titleOffset, minWidth: 0, flexShrink: 1, overflow: "hidden" }}
     >
       <T3Wordmark colorClassName="accent-icon" height={Math.round(15 * scale)} />
+      {/* A logo beside a fixed-size wordmark: it may grow with Dynamic Type, not crowd the bar. */}
       <Text
         allowFontScaling={props.allowFontScaling}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.75}
+        maxFontSizeMultiplier={BRAND_MAX_FONT_SCALE}
         className="font-t3-medium text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale, flexShrink: 1 }}
       >
@@ -62,6 +65,7 @@ export function CompactBrandTitle(
         <View className="rounded-full bg-subtle px-1.5 py-0.5">
           <Text
             allowFontScaling={props.allowFontScaling}
+            maxFontSizeMultiplier={BRAND_MAX_FONT_SCALE}
             className="font-t3-bold text-foreground-muted uppercase"
             style={{ fontSize: 9 * scale, letterSpacing: 0.9 * scale }}
           >
@@ -82,19 +86,4 @@ export function CompactBrandTitle(
   ) : (
     title
   );
-}
-
-export function renderCompactBrandTitle() {
-  return <CompactBrandTitle allowFontScaling={Platform.OS === "ios"} />;
-}
-
-export function getCompactBrandHeaderOptions(
-  fallbackTitleStyle?: NativeStackNavigationOptions["headerTitleStyle"],
-): NativeStackNavigationOptions {
-  return {
-    headerTitle: renderCompactBrandTitle,
-    headerTitleStyle: fallbackTitleStyle,
-    title: "Threads",
-    unstable_headerLeftItems: undefined,
-  };
 }

@@ -26,7 +26,8 @@ import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { FleetRouter } from "./FleetRouter.ts";
 import { McpInvocationContext, type McpInvocationScope } from "./McpInvocationContext.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
-import { OrchestratorMcpService, resolveInteractionMode } from "./OrchestratorMcpService.ts";
+import { resolveInteractionMode } from "./delegatedTaskModes.ts";
+import { OrchestratorMcpService } from "./OrchestratorMcpService.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { ProjectToolkit } from "./toolkits/project/tools.ts";
 
@@ -57,10 +58,16 @@ const encodeResult =
     );
 
 const decodeLaunchParams = decodeInput(
-  Schema.toEncoded(ProjectToolkit.tools.t3_thread_launch.parametersSchema),
+  Schema.toCodecJson(ProjectToolkit.tools.t3_thread_launch.parametersSchema),
+);
+const encodeLaunchParams = encodeResult(
+  Schema.toCodecJson(ProjectToolkit.tools.t3_thread_launch.parametersSchema),
 );
 const decodeProjectListParams = decodeInput(
-  Schema.toEncoded(ProjectToolkit.tools.t3_project_list.parametersSchema),
+  Schema.toCodecJson(ProjectToolkit.tools.t3_project_list.parametersSchema),
+);
+const encodeProjectListParams = encodeResult(
+  Schema.toCodecJson(ProjectToolkit.tools.t3_project_list.parametersSchema),
 );
 const decodeThreadStart = decodeInput(OrchestratorMcpThreadStartInput);
 const decodeThreadList = decodeInput(OrchestratorMcpThreadListInput);
@@ -92,35 +99,36 @@ const toolInput = (request: FleetExecuteInput): unknown =>
  * fully named target (provider instance plus model) translates to a model
  * selection; anything else needs t3_thread_launch's modelSelection.
  */
-export const threadStartAsLaunch = (input: OrchestratorMcpThreadStartInput) =>
-  Effect.gen(function* () {
-    const target = input.target;
-    if (
-      target !== undefined &&
-      (target.driverKind !== undefined ||
-        target.options !== undefined ||
-        (target.providerInstanceId === undefined) !== (target.model === undefined))
-    )
-      return yield* invalid(
-        "t3_thread_start accepts only target.providerInstanceId with target.model. Use t3_thread_launch with modelSelection for other targets.",
-      );
-    return {
-      ...(input.environmentId === undefined ? {} : { environmentId: input.environmentId }),
-      ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
-      title: input.title ?? "New thread",
-      message: input.prompt,
-      ...(target?.providerInstanceId !== undefined && target.model !== undefined
-        ? { modelSelection: { instanceId: target.providerInstanceId, model: target.model } }
-        : {}),
-      ...(input.runtimeMode === undefined || input.runtimeMode === "inherit"
-        ? {}
-        : { runtimeMode: input.runtimeMode }),
-      ...(input.interactionMode === undefined || input.interactionMode === "inherit"
-        ? {}
-        : { interactionMode: input.interactionMode }),
-      ...(input.clientRequestId === undefined ? {} : { clientRequestId: input.clientRequestId }),
-    };
-  });
+export const threadStartAsLaunch = Effect.fn("threadStartAsLaunch")(function* (
+  input: OrchestratorMcpThreadStartInput,
+) {
+  const target = input.target;
+  if (
+    target !== undefined &&
+    (target.driverKind !== undefined ||
+      target.options !== undefined ||
+      (target.providerInstanceId === undefined) !== (target.model === undefined))
+  )
+    return yield* invalid(
+      "t3_thread_start accepts only target.providerInstanceId with target.model. Use t3_thread_launch with modelSelection for other targets.",
+    );
+  return {
+    ...(input.environmentId === undefined ? {} : { environmentId: input.environmentId }),
+    ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+    title: input.title ?? "New thread",
+    message: input.prompt,
+    ...(target?.providerInstanceId !== undefined && target.model !== undefined
+      ? { modelSelection: { instanceId: target.providerInstanceId, model: target.model } }
+      : {}),
+    ...(input.runtimeMode === undefined || input.runtimeMode === "inherit"
+      ? {}
+      : { runtimeMode: input.runtimeMode }),
+    ...(input.interactionMode === undefined || input.interactionMode === "inherit"
+      ? {}
+      : { interactionMode: input.interactionMode }),
+    ...(input.clientRequestId === undefined ? {} : { clientRequestId: input.clientRequestId }),
+  };
+});
 
 /**
  * Runs fleet requests on this (the destination) environment. A request runs
@@ -140,7 +148,7 @@ export class FleetExecutor extends Context.Service<
   }
 >()("t3/mcp/FleetExecutor") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment;
   const orchestrator = yield* OrchestratorMcpService;
   const router = yield* FleetRouter;
@@ -218,10 +226,13 @@ export const make = Effect.gen(function* () {
         : yield* resolveInteractionMode(request.source.interactionMode, params.interactionMode);
     const result = yield* runProjectTool(
       scope,
-      projectTools.handle("t3_thread_launch", {
-        ...params,
-        ...(interactionMode === undefined ? {} : { interactionMode }),
-      }),
+      projectTools.handle(
+        "t3_thread_launch",
+        yield* encodeLaunchParams({
+          ...params,
+          ...(interactionMode === undefined ? {} : { interactionMode }),
+        }),
+      ),
     );
     return isRecord(result) ? { ...result, environmentId: localId } : result;
   });
@@ -239,7 +250,10 @@ export const make = Effect.gen(function* () {
         });
       case "t3_project_list": {
         const params = yield* decodeProjectListParams(input);
-        const result = yield* runProjectTool(scope, projectTools.handle("t3_project_list", params));
+        const result = yield* runProjectTool(
+          scope,
+          projectTools.handle("t3_project_list", yield* encodeProjectListParams(params)),
+        );
         return isRecord(result) ? { ...result, environmentId: localId } : result;
       }
       case "t3_thread_launch":

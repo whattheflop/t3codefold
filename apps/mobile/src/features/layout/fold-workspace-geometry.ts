@@ -2,8 +2,11 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, useWindowDimensions, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { deriveHingeSnapWidths, deriveWorkspaceFoldRegions } from "../../lib/foldable-pane-layout";
-import { deriveLayout } from "../../lib/layout";
+import {
+  deriveFoldLayout,
+  deriveHingeSnapWidths,
+  deriveWorkspaceFoldRegions,
+} from "../../lib/foldable-pane-layout";
 import { useNativeLayoutMetrics } from "../../native/native-layout-metrics";
 import { useWindowPosture } from "../../native/T3WindowPosture";
 
@@ -18,21 +21,26 @@ export function useFoldWorkspaceGeometry() {
   const nativeMetrics = useNativeLayoutMetrics();
   const window = nativeMetrics ?? windowDimensions;
   const safeAreaInsets = useSafeAreaInsets();
-  const layout = useMemo(
-    () =>
-      deriveLayout({
-        width: window.width - safeAreaInsets.left - safeAreaInsets.right,
-        height: window.height,
-        platform: Platform.OS,
-        nativeMetrics,
-      }),
-    [nativeMetrics, safeAreaInsets.left, safeAreaInsets.right, window.height, window.width],
-  );
+  const layout = useMemo(() => {
+    return deriveFoldLayout({
+      width: window.width - safeAreaInsets.left - safeAreaInsets.right,
+      height: window.height,
+      platform: Platform.OS,
+      nativeMetrics,
+    });
+  }, [nativeMetrics, safeAreaInsets.left, safeAreaInsets.right, window.height, window.width]);
   // A landscape navigation bar or display cutout sits beside the panes, not under them.
   const leadingInset = layout.usesSplitView ? safeAreaInsets.left : 0;
   const trailingInset = layout.usesSplitView ? safeAreaInsets.right : 0;
   const width = Math.max(0, window.width - leadingInset - trailingInset);
   const posture = useWindowPosture();
+  const verticalHinge = posture.hinges.find(
+    (hinge) =>
+      hinge.orientation === "vertical" && (hinge.separating || hinge.state === "halfOpened"),
+  );
+  const windowHinge = verticalHinge
+    ? { x: verticalHinge.left, width: verticalHinge.right - verticalHinge.left }
+    : null;
   const foldRegions = useMemo(
     () =>
       deriveWorkspaceFoldRegions({
@@ -62,14 +70,6 @@ export function useFoldWorkspaceGeometry() {
     () => workspaceView.current?.measureInWindow((_x, y) => setWorkspaceTop(y)),
     [],
   );
-  const windowHinge = useMemo(() => {
-    const hinge = posture.hinges.find(
-      (candidate) =>
-        candidate.orientation === "vertical" &&
-        (candidate.separating || candidate.state === "halfOpened"),
-    );
-    return hinge ? { x: hinge.left, width: hinge.right - hinge.left } : null;
-  }, [posture.hinges]);
   return {
     layout,
     width,

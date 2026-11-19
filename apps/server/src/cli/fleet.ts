@@ -11,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -160,7 +161,7 @@ const withLiveFleet = Effect.fn("withLiveFleet")(function* (
           const url = new URL("/ws", origin);
           url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
           const ticket = yield* auth.issueWebSocketTicket(session);
-          url.searchParams.set("wsTicket", ticket.ticket);
+          url.searchParams.set("wsTicket", Redacted.value(ticket.ticket));
           url.searchParams.set("orchestrationProtocol", String(ORCHESTRATION_PROTOCOL_VERSION));
           const socket = Socket.layerWebSocket(url.toString(), { openTimeout: "5 seconds" }).pipe(
             Layer.provide(NodeSocket.layerWebSocketConstructor),

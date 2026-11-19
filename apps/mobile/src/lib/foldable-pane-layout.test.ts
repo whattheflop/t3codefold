@@ -2,12 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   constrainFoldablePaneWidth,
+  deriveFoldLayout,
   deriveFoldWorkspacePaneLayout,
   deriveHingeSnapWidths,
   deriveWorkspaceFoldRegions,
   resolvePaneDividerRelease,
 } from "./foldable-pane-layout";
-import { deriveLayout } from "./layout";
 
 describe("constrainFoldablePaneWidth", () => {
   it("lets either pane become compact in an unfolded workspace", () => {
@@ -143,29 +143,33 @@ describe("fold workspace regions", () => {
   });
 });
 
-describe("Fold-class deriveLayout", () => {
+describe("Fold-class deriveFoldLayout", () => {
   it.each([
     { posture: "folded portrait", width: 384, height: 832, expected: "compact" },
-    { posture: "unfolded portrait", width: 768, height: 900, expected: "split" },
-    { posture: "unfolded landscape", width: 900, height: 768, expected: "split" },
+    { posture: "unfolded portrait", width: 768, height: 900, expected: "expanded" },
+    { posture: "unfolded landscape", width: 900, height: 768, expected: "expanded" },
     { posture: "half-width multi-window", width: 600, height: 900, expected: "compact" },
     { posture: "short landscape or tabletop", width: 900, height: 450, expected: "compact" },
   ])(
     "uses the $expected workspace for a Fold-class $posture window",
     ({ width, height, expected }) => {
-      expect(deriveLayout({ width, height }).variant).toBe(expected);
+      expect(deriveFoldLayout({ width, height }).variant).toBe(expected);
     },
   );
 });
 
 describe("Android adaptive windows", () => {
   it("supports a wide short Android window without changing iPhone landscape", () => {
-    expect(deriveLayout({ width: 840, height: 360, platform: "android" }).usesSplitView).toBe(true);
-    expect(deriveLayout({ width: 840, height: 360, platform: "ios" }).usesSplitView).toBe(false);
-    expect(deriveLayout({ width: 600, height: 900, platform: "android" }).usesSplitView).toBe(
+    expect(deriveFoldLayout({ width: 840, height: 360, platform: "android" }).usesSplitView).toBe(
+      true,
+    );
+    expect(deriveFoldLayout({ width: 840, height: 360, platform: "ios" }).usesSplitView).toBe(
       false,
     );
-    expect(deriveLayout({ width: 840, height: 280, platform: "android" }).usesSplitView).toBe(
+    expect(deriveFoldLayout({ width: 600, height: 900, platform: "android" }).usesSplitView).toBe(
+      false,
+    );
+    expect(deriveFoldLayout({ width: 840, height: 280, platform: "android" }).usesSplitView).toBe(
       false,
     );
   });
@@ -173,8 +177,8 @@ describe("Android adaptive windows", () => {
 
 describe("deriveFoldWorkspacePaneLayout", () => {
   // Galaxy Z Fold-class inner display, landscape.
-  const foldLayout = deriveLayout({ width: 900, height: 700 });
-  const tabletLayout = deriveLayout({ width: 1_366, height: 1_024 });
+  const foldLayout = deriveFoldLayout({ width: 900, height: 700 });
+  const tabletLayout = deriveFoldLayout({ width: 1_366, height: 1_024 });
   const base = {
     primarySidebarPreferredVisible: true,
     auxiliaryPanePreferredVisible: true,
@@ -185,7 +189,7 @@ describe("deriveFoldWorkspacePaneLayout", () => {
     expect(
       deriveFoldWorkspacePaneLayout({
         ...base,
-        layout: deriveLayout({ width: 384, height: 832 }),
+        layout: deriveFoldLayout({ width: 384, height: 832 }),
         viewportWidth: 384,
         primarySidebarPreferredVisible: visible,
       }),
@@ -282,7 +286,7 @@ describe("deriveFoldWorkspacePaneLayout", () => {
     expect(
       deriveFoldWorkspacePaneLayout({
         ...base,
-        layout: deriveLayout({ width: 390, height: 844 }),
+        layout: deriveFoldLayout({ width: 390, height: 844 }),
         viewportWidth: 390,
       }),
     ).toMatchObject({
@@ -292,4 +296,26 @@ describe("deriveFoldWorkspacePaneLayout", () => {
       contentPaneWidth: 390,
     });
   });
+});
+
+it("aligns panes on a zero-width separating book crease", () => {
+  expect(
+    deriveWorkspaceFoldRegions({
+      width: 840,
+      height: 900,
+      leadingInset: 0,
+      trailingInset: 0,
+      hinges: [
+        {
+          left: 420,
+          right: 420,
+          top: 0,
+          bottom: 900,
+          orientation: "vertical",
+          state: "halfOpened",
+          separating: true,
+        },
+      ],
+    }).vertical,
+  ).toEqual({ leadingWidth: 420, gap: 0, trailingWidth: 420 });
 });

@@ -69,7 +69,7 @@ export function gladosReceiptStatus(task: PitbossTask, state: PitbossSnapshot, n
   if (!run) return task.evidence.length ? "Reported evidence" : "Evidence not ready yet";
   if (run.state !== "completed") return `Verification ${run.state}`;
   if (run.receipt?.expiresAt && Date.parse(run.receipt.expiresAt) <= now)
-    return "Evidence expired — check again";
+    return "Evidence expired. Check again";
   if (run.receipt?.verdict !== "pass")
     return run.receipt?.verdict === "fail" ? "Checks failed" : "Verification inconclusive";
   return hasCurrentVerification(
@@ -79,13 +79,14 @@ export function gladosReceiptStatus(task: PitbossTask, state: PitbossSnapshot, n
     now,
   )
     ? "Captured checks passed"
-    : "Evidence changed — check again";
+    : "Evidence changed. Check again";
 }
 
 /** A modal measures its own surface: a folded cover screen must never inherit a wide parent pane. */
 export function gladosInboxLayout(width: number, height: number) {
-  const split = deriveLayout({ width, height }).usesSplitView;
-  return { split, listWidth: split ? Math.min(340, Math.max(280, width * 0.38)) : width };
+  const listWidth = Math.min(340, Math.max(280, width * 0.38));
+  const split = deriveLayout({ width, height }).usesSplitView && width - listWidth >= 428;
+  return { split, listWidth: split ? listWidth : width };
 }
 
 /** Setting up asks the server for an environment home with the brief every client starts from. */

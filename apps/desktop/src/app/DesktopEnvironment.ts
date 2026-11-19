@@ -75,7 +75,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly displayName: string;
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
-    readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly desktopLauncherPath: Option.Option<string>;
     readonly appImagePath: Option.Option<string>;
@@ -149,7 +148,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
-  const appDataDirectory =
+  const platformAppDataDirectory =
     input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
           path.join(homeDirectory, "AppData", "Roaming"),
@@ -162,6 +161,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+  const appDataDirectory =
+    isDevelopment && Option.isSome(config.t3Home)
+      ? path.join(baseDir, "desktop-app-data")
+      : platformAppDataDirectory;
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
   const serverRoot =
@@ -232,7 +235,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
     linuxApplicationsDir,
     desktopLauncherPath: config.desktopLauncherPath,
     appImagePath: config.appImagePath,

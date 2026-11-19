@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { openCommandPalette } from "~/commandPaletteBus";
 import { redirectDropdownNavigationKey } from "~/lib/dropdownNavigationKey";
 import { isPreviewFocused } from "~/lib/previewFocus";
 import { isTerminalFocused } from "~/lib/terminalFocus";
+import { focusWorkspaceArea } from "~/lib/workspaceFocus";
+import { subscribeVimConversation, vimConversation } from "./vimConversation";
 import { createVimScrollController } from "./vimScroll";
 import { currentLineRange, moveTextCursor, type VimMotion } from "./vimText";
 
@@ -18,6 +20,20 @@ const HINT_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 const EDITABLE_SELECTOR = "input, textarea, select, [contenteditable=true]";
+const COMPOSER_SELECTOR = '[data-chat-composer-form="true"], [data-testid="composer-editor"]';
+// Terminals need every unmodified key, Escape included.
+const TERMINAL_SELECTOR = "[data-terminal-owner], [data-herdr-terminal]";
+const AREA_SELECTOR = "[data-workspace-area]";
+// Areas with dedicated Vim handling; every other workspace area gets the generic list model.
+const SPECIAL_AREAS = new Set(["sidebar", "conversation", "composer"]);
+// Rows j/k step through in a generic area. Without any, j/k scroll the area instead.
+const LIST_ITEM_SELECTOR = [
+  "[data-vim-list-item]",
+  "[data-sidebar='menu-button']",
+  "[data-sidebar='menu-sub-button']",
+].join(",");
+const ACTIVE_ITEM_SELECTOR =
+  "[aria-current]:not([aria-current=false]), [aria-selected=true], [aria-pressed=true], [data-active=true], [data-vim-active=true]";
 const FLOATING_SELECTOR = [
   '[role="dialog"]',
   '[data-slot="menu-popup"]',
@@ -51,7 +67,8 @@ type TimelineVimModeName = "NORMAL" | "PASS" | "CARET" | "VISUAL" | "HINT" | "TE
 type CaretRect = { left: number; top: number; height: number };
 type Mark = { rowId: string | null; rowOffset: number; scrollTop: number };
 export type VimFocusDirection = "h" | "j" | "k" | "l";
-export type VimFocusRegionId = "sidebar" | "conversation" | "composer" | "right-panel";
+/** `sidebar`, `conversation`, `composer`, `right-panel`, or `area:<name>` for any other workspace area. */
+export type VimFocusRegionId = string;
 export type VimFocusRect = {
   left: number;
   right: number;
@@ -140,6 +157,118 @@ function visible(element: HTMLElement): boolean {
   );
 }
 
+/** Whether a scrolling or clipping ancestor hides the element, as in a long sidebar list. */
+function clippedAway(element: HTMLElement, clips: Map<HTMLElement, DOMRect | null>): boolean {
+  const rect = element.getBoundingClientRect();
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    let box = clips.get(parent);
+    if (box === undefined) {
+      const style = window.getComputedStyle(parent);
+      box =
+        style.overflowX === "visible" && style.overflowY === "visible"
+          ? null
+          : parent.getBoundingClientRect();
+      clips.set(parent, box);
+    }
+    if (
+      box &&
+      (rect.bottom <= box.top ||
+        rect.top >= box.bottom ||
+        rect.right <= box.left ||
+        rect.left >= box.right)
+    )
+      return true;
+  }
+  return false;
+}
+
+/** The open dialog or popup that owns the keyboard. Settings and Usage pages are not one. */
+function floatingLayer(): HTMLElement | null {
+  return (
+    [...document.querySelectorAll<HTMLElement>(FLOATING_SELECTOR)]
+      .filter((element) => !element.closest("[data-app-modal]") && visible(element))
+      .at(-1) ?? null
+  );
+}
+
+/** Settings and Usage open over the workspace; their areas replace the workspace's. */
+function appModal(): HTMLElement | null {
+  const modal = document.querySelector<HTMLElement>("[data-app-modal]");
+  return modal && visible(modal) ? modal : null;
+}
+
+function liveAreas(): HTMLElement[] {
+  const areas = [...(appModal() ?? document).querySelectorAll<HTMLElement>(AREA_SELECTOR)].filter(
+    (area) =>
+      !SPECIAL_AREAS.has(area.dataset.workspaceArea ?? "") &&
+      !area.closest("[inert]") &&
+      area.querySelector("[data-right-panel-surface-content]") === null &&
+      area.closest("[data-right-panel-surface-content]") === null &&
+      visible(area),
+  );
+  // A page area that holds smaller ones (Factory around its decision list) yields to them.
+  return areas.filter((area) => !areas.some((other) => other !== area && area.contains(other)));
+}
+
+/** The generic area holding `element`, if it is not a sidebar, conversation, or panel. */
+function genericAreaOf(element: Element | null): HTMLElement | null {
+  if (!(element instanceof HTMLElement)) return null;
+  const area = element.closest<HTMLElement>(AREA_SELECTOR);
+  return area && liveAreas().includes(area) ? area : null;
+}
+
+/**
+ * Where keys go when nothing in particular is focused and no conversation is shown: the page's
+ * main content, which is its largest area (Factory's conversation, not its fleet list).
+ */
+function primaryArea(): HTMLElement | null {
+  let best: HTMLElement | null = null;
+  let bestSize = 0;
+  for (const area of liveAreas()) {
+    const rect = area.getBoundingClientRect();
+    const size = rect.width * rect.height;
+    if (size > bestSize) {
+      best = area;
+      bestSize = size;
+    }
+  }
+  return best;
+}
+
+function listItems(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(LIST_ITEM_SELECTOR)].filter(
+    (element) => rendered(element) && !element.matches(":disabled, [aria-disabled=true]"),
+  );
+}
+
+function focusArea(area: HTMLElement): void {
+  const items = listItems(area);
+  const item = items.find((element) => element.matches(ACTIVE_ITEM_SELECTOR)) ?? items[0];
+  if (item) {
+    item.focus({ preventScroll: false });
+    return;
+  }
+  const name = area.dataset.workspaceArea;
+  if (name && focusWorkspaceArea(name) && area.contains(document.activeElement)) return;
+  area.tabIndex = -1;
+  area.focus({ preventScroll: true });
+}
+
+/** The area's own scroller: the tallest overflowing element inside it, or the area itself. */
+function areaScrollNode(area: HTMLElement): HTMLElement {
+  let best: HTMLElement = area;
+  let bestHeight = area.scrollHeight > area.clientHeight ? area.clientHeight : 0;
+  for (const element of area.querySelectorAll<HTMLElement>("*")) {
+    if (element.scrollHeight <= element.clientHeight || element.clientHeight <= bestHeight)
+      continue;
+    const { overflowY } = window.getComputedStyle(element);
+    if (overflowY !== "auto" && overflowY !== "scroll") continue;
+    best = element;
+    bestHeight = element.clientHeight;
+  }
+  return best;
+}
+
 function rendered(element: HTMLElement): boolean {
   return (
     element.getClientRects().length > 0 && element.closest("[hidden], [aria-hidden=true]") === null
@@ -150,10 +279,15 @@ function vimScrollBehavior(): ScrollBehavior {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 }
 
-function collectHints(scope: ParentNode = document): Hint[] {
+function collectHints(scope: ParentNode): Hint[] {
+  const clips = new Map<HTMLElement, DOMRect | null>();
   const elements = [...scope.querySelectorAll<HTMLElement>(HINT_SELECTOR)].filter(
     (element) =>
-      visible(element) && !element.closest("[data-vim-hint-ignore], [data-terminal-root], webview"),
+      visible(element) &&
+      !element.closest(
+        `[data-vim-hint-ignore], ${TERMINAL_SELECTOR}, webview, [inert], [aria-hidden=true]`,
+      ) &&
+      !clippedAway(element, clips),
   );
   const labels = buildVimHintLabels(elements.length);
   return elements.map((element, index) => {
@@ -422,42 +556,62 @@ function activateAdjacentRightPanelTab(direction: -1 | 1): void {
 
 function vimFocusRegions(scrollNode: HTMLElement | null): VimFocusRegion[] {
   const regions: VimFocusRegion[] = [];
-  const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
-  const composer = document.querySelector<HTMLElement>('[data-testid="composer-editor"]');
-  const composerRect = composer && visible(composer) ? composer.getBoundingClientRect() : null;
+  if (!appModal()) {
+    const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
+    const composer = document.querySelector<HTMLElement>('[data-testid="composer-editor"]');
+    const composerRect = composer && visible(composer) ? composer.getBoundingClientRect() : null;
 
-  if (sidebar && visible(sidebar))
-    regions.push({ id: "sidebar", rect: sidebar.getBoundingClientRect() });
-  if (scrollNode && visible(scrollNode)) {
-    const rect = scrollNode.getBoundingClientRect();
-    const bottom = composerRect ? Math.min(rect.bottom, composerRect.top) : rect.bottom;
-    regions.push({
-      id: "conversation",
-      rect:
-        bottom > rect.top ? { left: rect.left, right: rect.right, top: rect.top, bottom } : rect,
-    });
+    if (sidebar && visible(sidebar))
+      regions.push({ id: "sidebar", rect: sidebar.getBoundingClientRect() });
+    if (scrollNode && visible(scrollNode)) {
+      const rect = scrollNode.getBoundingClientRect();
+      const bottom = composerRect ? Math.min(rect.bottom, composerRect.top) : rect.bottom;
+      regions.push({
+        id: "conversation",
+        rect:
+          bottom > rect.top ? { left: rect.left, right: rect.right, top: rect.top, bottom } : rect,
+      });
+    }
+    if (composerRect) regions.push({ id: "composer", rect: composerRect });
+    const rightPanel = rightPanelRoot();
+    if (rightPanel) regions.push({ id: "right-panel", rect: rightPanel.getBoundingClientRect() });
   }
-  if (composerRect) regions.push({ id: "composer", rect: composerRect });
-  const rightPanel = rightPanelRoot();
-  if (rightPanel) regions.push({ id: "right-panel", rect: rightPanel.getBoundingClientRect() });
+  for (const area of liveAreas())
+    regions.push({ id: `area:${area.dataset.workspaceArea}`, rect: area.getBoundingClientRect() });
   return regions;
+}
+
+const REGION_ORDER: Record<string, number> = {
+  sidebar: 0,
+  conversation: 1,
+  composer: 2,
+  "right-panel": 4,
+};
+
+function regionOrder(id: VimFocusRegionId): number {
+  if (id in REGION_ORDER) return REGION_ORDER[id]!;
+  const area = areaForRegion(id);
+  return Number(area?.dataset.workspaceOrder ?? 3);
+}
+
+function areaForRegion(id: VimFocusRegionId): HTMLElement | null {
+  if (!id.startsWith("area:")) return null;
+  const name = id.slice("area:".length);
+  return liveAreas().find((area) => area.dataset.workspaceArea === name) ?? null;
 }
 
 function activeVimFocusRegion(
   active: Element | null,
   scrollNode: HTMLElement | null,
 ): VimFocusRegionId {
-  if (active instanceof HTMLElement && active.closest("[data-app-sidebar]")) return "sidebar";
-  if (
-    active instanceof HTMLElement &&
-    active.closest('[data-chat-composer-form="true"], [data-testid="composer-editor"]')
-  ) {
-    return "composer";
+  if (active instanceof HTMLElement && !appModal()) {
+    if (active.closest("[data-app-sidebar]")) return "sidebar";
+    if (active.closest(COMPOSER_SELECTOR)) return "composer";
+    if (active.closest("[data-right-panel-surface-content]")) return "right-panel";
+    if (scrollNode?.contains(active)) return "conversation";
   }
-  if (active instanceof HTMLElement && active.closest("[data-right-panel-surface-content]"))
-    return "right-panel";
-  if (scrollNode?.contains(active)) return "conversation";
-  return "conversation";
+  const area = genericAreaOf(active) ?? (scrollNode && !appModal() ? null : primaryArea());
+  return area ? `area:${area.dataset.workspaceArea}` : "conversation";
 }
 
 function focusSidebarSearch(): void {
@@ -493,21 +647,11 @@ export function activateSidebarThreadLifecycleAction(active: HTMLElement, key: "
   return true;
 }
 
-export function TimelineVimMode({
-  routeKey,
-  previewThreads = false,
-  getScrollNode,
-  focusComposer,
-  onUserNavigation,
-  onScrollToEnd,
-}: {
-  routeKey: string;
-  previewThreads?: boolean;
-  getScrollNode: () => HTMLElement | null;
-  focusComposer: () => void;
-  onUserNavigation: () => void;
-  onScrollToEnd: () => void;
-}) {
+/**
+ * Workspace-wide Vim keys. The shown conversation registers through `registerVimConversation`;
+ * every other page and panel is driven through its workspace areas.
+ */
+export function TimelineVimMode({ previewThreads = false }: { previewThreads?: boolean }) {
   const [view, setView] = useState({
     mode: "NORMAL" as TimelineVimModeName,
     count: "",
@@ -530,7 +674,7 @@ export function TimelineVimMode({
     marks: new Map<string, Mark>(),
     previousJump: null as Mark | null,
   });
-  const update = useCallback(() => {
+  const update = () => {
     const state = stateRef.current;
     setView({
       mode: state.mode,
@@ -541,8 +685,8 @@ export function TimelineVimMode({
       helpOpen: state.helpOpen,
       caretRect: state.caretRect,
     });
-  }, []);
-  const clear = useCallback(() => {
+  };
+  const clear = () => {
     const state = stateRef.current;
     state.count = "";
     state.pending = "";
@@ -553,10 +697,29 @@ export function TimelineVimMode({
     state.caretRect = null;
     if (state.mode !== "PASS") state.mode = "NORMAL";
     update();
-  }, [update]);
+  };
 
+  // A different thread, or none, starts from Normal mode like a fresh view.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the externally registered conversation
+  useEffect(() => subscribeVimConversation(clear), [clear]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- window key listeners that drive Vim mode across the workspace
   useEffect(() => {
     const vimScroller = timelineVimScroller;
+    // An empty thread has no message list yet; its area still stands in for the conversation.
+    const getScrollNode = () => {
+      const conversation = vimConversation();
+      if (!conversation) return null;
+      return (
+        conversation.getScrollNode() ??
+        document.querySelector<HTMLElement>('[data-workspace-area="conversation"]')
+      );
+    };
+    const focusComposer = () => vimConversation()?.focusComposer();
+    const onUserNavigation = () => vimConversation()?.onUserNavigation();
+    const onScrollToEnd = () => vimConversation()?.onScrollToEnd();
+    const markKey = (letter: string) =>
+      `${vimConversation()?.routeKey ?? window.location.pathname}:${letter}`;
     let previewTimer: ReturnType<typeof setTimeout> | undefined;
     const currentMark = (): Mark | null => {
       const scrollNode = getScrollNode();
@@ -667,7 +830,8 @@ export function TimelineVimMode({
       clear();
     };
     const openHints = (focusOnly: boolean, scope?: ParentNode) => {
-      const hints = collectHints(scope);
+      const hints = collectHints(scope ?? appModal() ?? document);
+      if (hints.length === 0) return;
       stateRef.current.mode = "HINT";
       stateRef.current.hints = hints;
       stateRef.current.hintInput = "";
@@ -685,7 +849,9 @@ export function TimelineVimMode({
       update();
     };
     const focusRegion = (region: VimFocusRegionId) => {
-      if (region === "sidebar") focusSidebar();
+      const area = areaForRegion(region);
+      if (area) focusArea(area);
+      else if (region === "sidebar") focusSidebar();
       else if (region === "composer") focusComposerRegion(focusComposer);
       else if (region === "right-panel") focusRightPanel();
       else focusConversation(getScrollNode());
@@ -693,7 +859,7 @@ export function TimelineVimMode({
     const moveWindowFocus = (direction: VimFocusDirection, active: Element | null) => {
       const scrollNode = getScrollNode();
       const current = activeVimFocusRegion(active, scrollNode);
-      if (direction === "h" && current !== "sidebar") {
+      if (direction === "h" && current !== "sidebar" && !appModal()) {
         const sidebar = document.querySelector<HTMLElement>("[data-app-sidebar]");
         if (!sidebar || !visible(sidebar)) {
           focusSidebar();
@@ -703,7 +869,8 @@ export function TimelineVimMode({
       if (
         direction === "l" &&
         (current === "conversation" || current === "composer") &&
-        !rightPanelRoot()
+        !rightPanelRoot() &&
+        document.querySelector('[aria-label^="Toggle right panel"]:not(:disabled)')
       ) {
         focusRightPanel();
         return;
@@ -711,15 +878,22 @@ export function TimelineVimMode({
       const regions = vimFocusRegions(scrollNode);
       const currentRect = regions.find((region) => region.id === current)?.rect;
       const activeRect =
-        active instanceof HTMLElement && current !== "conversation" && rendered(active)
+        active instanceof HTMLElement &&
+        current !== "conversation" &&
+        active !== document.body &&
+        rendered(active)
           ? active.getBoundingClientRect()
           : currentRect;
       const next = nextDirectionalVimRegion(regions, current, direction, activeRect);
       if (next) focusRegion(next);
     };
     const cycleWindowFocus = (active: Element | null) => {
-      const order: VimFocusRegionId[] = ["sidebar", "conversation", "composer", "right-panel"];
-      const current = activeVimFocusRegion(active, getScrollNode());
+      const scrollNode = getScrollNode();
+      const order = vimFocusRegions(scrollNode)
+        .map((region) => region.id)
+        .sort((left, right) => regionOrder(left) - regionOrder(right));
+      if (order.length === 0) return;
+      const current = activeVimFocusRegion(active, scrollNode);
       focusRegion(order[(order.indexOf(current) + 1) % order.length]!);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -740,10 +914,24 @@ export function TimelineVimMode({
       }
       const active = document.activeElement;
       const activeRightPanel =
-        active instanceof HTMLElement
+        active instanceof HTMLElement && !appModal()
           ? active.closest<HTMLElement>("[data-right-panel-surface-content]")
           : null;
-      if ([...document.querySelectorAll<HTMLElement>(FLOATING_SELECTOR)].some(visible)) {
+      const floating = floatingLayer();
+      if (floating && state.mode !== "HINT") {
+        // Dialogs keep their native keys, but f still labels their controls. Menus and lists
+        // are left alone: a typed letter jumps to a matching item there.
+        if (
+          (event.key === "f" || event.key === "F") &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          floating.matches('[role="dialog"], [role="alertdialog"]') &&
+          !active?.closest(`${EDITABLE_SELECTOR}, [role="menu"], [role="listbox"]`)
+        ) {
+          consume();
+          openHints(event.key === "F", floating);
+        }
         return;
       }
       const sidebarSearch =
@@ -765,22 +953,24 @@ export function TimelineVimMode({
         update();
         return;
       }
-      if (isTerminalFocused() || isPreviewFocused()) return;
+      if (isTerminalFocused() || isPreviewFocused() || active?.closest(TERMINAL_SELECTOR)) return;
       if (
         event.key === "Escape" &&
         !event.ctrlKey &&
         !event.metaKey &&
         !event.altKey &&
         active instanceof HTMLElement &&
-        active.matches('input[type="search"], [role="searchbox"]')
+        active.closest(`${EDITABLE_SELECTOR}, [role="searchbox"]`) &&
+        !active.closest(COMPOSER_SELECTOR)
       ) {
+        // Any field hands the keyboard back to its region, so a stray focus never traps Vim keys.
         const region = active.closest<HTMLElement>(
-          "[data-app-sidebar], [data-right-panel-surface-content]",
+          `[data-app-sidebar], [data-right-panel-surface-content], ${AREA_SELECTOR}`,
         );
         active.blur();
         focusConversation(region ?? getScrollNode());
         clear();
-        // Keep propagating so the search field can still clear its query or close.
+        // Keep propagating so the field can still clear its query or cancel an edit.
         return;
       }
       if (sidebarSearch && redirectDropdownNavigationKey(event, sidebarSearch)) return;
@@ -793,6 +983,16 @@ export function TimelineVimMode({
         return;
       }
       if (event.key === "Escape") {
+        const selected = !(window.getSelection()?.isCollapsed ?? true);
+        // With nothing to cancel, Escape belongs to whatever else listens: find, panels, Settings.
+        if (
+          state.mode === "NORMAL" &&
+          !state.count &&
+          !state.pending &&
+          !state.helpOpen &&
+          !selected
+        )
+          return;
         consume();
         if ((state.mode === "VISUAL" || state.mode === "TEXT HINT") && state.selection) {
           state.selection.anchor = state.selection.focus;
@@ -897,6 +1097,17 @@ export function TimelineVimMode({
           return;
         }
       }
+      const scrollNode = getScrollNode();
+      const sidebarActive =
+        active instanceof HTMLElement && !appModal() && active.closest("[data-app-sidebar]");
+      // Focus on the page itself goes to the conversation when one is shown, else the main area.
+      const activeArea =
+        sidebarActive || activeRightPanel
+          ? null
+          : (genericAreaOf(active) ??
+            ((!vimConversation() || appModal()) && !active?.closest(COMPOSER_SELECTOR)
+              ? primaryArea()
+              : null));
       if (/^[1-9]$/u.test(event.key) || (event.key === "0" && state.count)) {
         consume();
         state.count += event.key;
@@ -916,6 +1127,10 @@ export function TimelineVimMode({
             if (!dispatchFileTreeKey(activeRightPanel, "Home")) {
               rightPanelScrollNode(activeRightPanel).scrollTop = 0;
             }
+          } else if (activeArea) {
+            const first = listItems(activeArea)[0];
+            if (first) first.focus({ preventScroll: false });
+            else areaScrollNode(activeArea).scrollTop = 0;
           } else {
             const scrollNode = getScrollNode();
             if (scrollNode) {
@@ -949,17 +1164,15 @@ export function TimelineVimMode({
         else if (/^[a-z]$/iu.test(event.key)) {
           if (pending === "m") {
             const mark = currentMark();
-            if (mark) state.marks.set(`${routeKey}:${event.key.toLowerCase()}`, mark);
+            if (mark) state.marks.set(markKey(event.key.toLowerCase()), mark);
           } else {
-            const mark = state.marks.get(`${routeKey}:${event.key.toLowerCase()}`);
+            const mark = state.marks.get(markKey(event.key.toLowerCase()));
             if (mark) jumpToMark(mark);
           }
         }
         update();
         return;
       }
-      const scrollNode = getScrollNode();
-      const sidebarActive = active instanceof HTMLElement && active.closest("[data-app-sidebar]");
       if (sidebarActive) {
         if (event.key === "j" || event.key === "k") {
           consume();
@@ -1007,6 +1220,74 @@ export function TimelineVimMode({
         state.count = "";
         update();
         return;
+      }
+      if (activeArea) {
+        const items = listItems(activeArea);
+        if (event.key === "j" || event.key === "k") {
+          consume();
+          const direction = event.key === "j" ? 1 : -1;
+          const current = active instanceof HTMLElement ? items.indexOf(active) : -1;
+          if (items.length > 0)
+            items[nextVimListIndex(items.length, current, direction, repetitions)]?.focus({
+              preventScroll: false,
+            });
+          else
+            vimScroller.press(areaScrollNode(activeArea), direction * 64 * repetitions, {
+              code: event.code,
+              continuous: repetitions === 1,
+              repeat: event.repeat,
+            });
+        } else if (event.ctrlKey && (event.key === "d" || event.key === "u")) {
+          consume();
+          const node = areaScrollNode(activeArea);
+          node.scrollBy({
+            top: (event.key === "d" ? 1 : -1) * node.clientHeight * 0.5,
+            behavior: vimScrollBehavior(),
+          });
+        } else if (event.key === "G") {
+          consume();
+          const last = items.at(-1);
+          if (last) last.focus({ preventScroll: false });
+          else {
+            const node = areaScrollNode(activeArea);
+            node.scrollTop = node.scrollHeight;
+          }
+        } else if (event.key === "g") {
+          consume();
+          state.pending = "g";
+        } else if (event.key === "Enter" || event.key === "o") {
+          if (
+            !(active instanceof HTMLElement) ||
+            !activeArea.contains(active) ||
+            active === activeArea
+          )
+            return;
+          consume();
+          active.click();
+        } else if (event.key === "/") {
+          const search = activeArea.querySelector<HTMLElement>(
+            'input[type="search"]:not([disabled]), [role="searchbox"]:not([aria-disabled=true])',
+          );
+          // Pages such as Settings bind / to their own search.
+          if (!search || !visible(search)) return;
+          consume();
+          search.focus({ preventScroll: true });
+        } else if (event.key === "i" || event.key === "a") {
+          const field = [...activeArea.querySelectorAll<HTMLElement>("[data-vim-insert]")].find(
+            visible,
+          );
+          if (!field) return;
+          consume();
+          field.focus({ preventScroll: false });
+        } else if (!["f", "F", ":", " ", "?", "z"].includes(event.key)) {
+          // Anything else belongs to the page, such as Usage's own shortcuts.
+          return;
+        }
+        if (!["f", "F", ":", " ", "?", "z"].includes(event.key)) {
+          state.count = "";
+          update();
+          return;
+        }
       }
       if (activeRightPanel) {
         const fileTreeKeys: Record<string, string> = {
@@ -1140,7 +1421,8 @@ export function TimelineVimMode({
       } else if (event.key === " ") {
         consume();
         state.pending = "SPACE";
-      } else if (event.key.length === 1) {
+      } else if (event.key.length === 1 && scrollNode) {
+        // Printable keys never type into the page behind the conversation.
         consume();
       } else {
         return;
@@ -1159,24 +1441,32 @@ export function TimelineVimMode({
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [
-    clear,
-    focusComposer,
-    getScrollNode,
-    onScrollToEnd,
-    onUserNavigation,
-    previewThreads,
-    routeKey,
-    update,
-  ]);
+  }, [clear, previewThreads, update]);
 
   const matchingHints = view.hints.filter((hint) => hint.label.startsWith(view.hintInput));
+  // The composer shows its own mode; this says what the rest of the workspace will do with a key.
+  const status =
+    view.mode === "PASS"
+      ? "PASS · Esc to resume"
+      : view.mode === "HINT" || view.mode === "TEXT HINT"
+        ? `HINT ${view.hintInput}`
+        : view.pending || view.count
+          ? `${view.count}${view.pending === "CTRL-W" ? "Ctrl-w" : view.pending === "SPACE" ? "Space" : view.pending}`
+          : null;
   return (
     <div className="contents" data-timeline-vim-mode="" data-vim-hint-ignore="true">
+      {status ? (
+        <span
+          role="status"
+          className="pointer-events-none fixed right-3 bottom-3 z-100 rounded-md bg-popover px-2 py-1 font-mono text-xs text-popover-foreground shadow ring-1 ring-border"
+        >
+          {status}
+        </span>
+      ) : null}
       {view.caretRect && (view.mode === "CARET" || view.mode === "VISUAL") ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none fixed z-80 w-0.5 bg-primary shadow-[0_0_0_1px_var(--background)]"
+          className="pointer-events-none fixed z-80 w-0.5 bg-primary ring-1 ring-background"
           style={view.caretRect}
         />
       ) : null}
@@ -1184,11 +1474,13 @@ export function TimelineVimMode({
         ? matchingHints.map((hint) => (
             <span
               key={hint.label}
-              className="pointer-events-none fixed z-100 rounded-sm bg-amber-300 px-1 py-0.5 font-mono text-[11px] font-bold text-black shadow ring-1 ring-black/30"
+              className="pointer-events-none fixed z-100 rounded-sm bg-warning px-1 py-0.5 font-mono text-2xs font-bold text-warning-foreground shadow ring-1 ring-border"
               style={{ left: hint.left, top: hint.top }}
             >
               {hint.label.slice(0, view.hintInput.length) ? (
-                <span className="text-red-700">{hint.label.slice(0, view.hintInput.length)}</span>
+                <span className="text-destructive">
+                  {hint.label.slice(0, view.hintInput.length)}
+                </span>
               ) : null}
               {hint.label.slice(view.hintInput.length)}
             </span>
@@ -1229,6 +1521,12 @@ export function TimelineVimMode({
               <span>previous / next tab · focus search</span>
               <kbd>Right panel f / F</kbd>
               <span>activate / focus a visible panel control</span>
+              <kbd>Other pages j / k · Enter · /</kbd>
+              <span>next / previous row or scroll · open · search</span>
+              <kbd>Other pages i</kbd>
+              <span>focus the area's message field</span>
+              <kbd>Esc in a field</kbd>
+              <span>leave it and return to its region</span>
               <kbd>i / gi</kbd>
               <span>composer Insert / Normal mode</span>
               <kbd>v · motions · v / V</kbd>

@@ -1,0 +1,5 @@
+[data-controller-focus] {
+  outline: 3px solid var(--color-ring, #789cff) !important;
+  outline-offset: 3px;
+  scroll-margin: 12px;
+}

@@ -147,6 +147,7 @@ const SplatterCanvas = memo(function SplatterCanvas({
  */
 function useMergeDayStart(): number {
   const [since, setSince] = useState(() => mergeDayStart(new Date()).getTime());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- runs a timer that advances the merge day at local midnight
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {

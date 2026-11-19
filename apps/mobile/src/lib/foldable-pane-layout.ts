@@ -1,4 +1,12 @@
-import type { Layout, WorkspacePaneLayout } from "./layout";
+import { deriveLayout, type Layout, type WorkspacePaneLayout } from "./layout";
+
+/** Fold has no floating sidebar: windows too narrow for side-by-side panes stay compact. */
+export function deriveFoldLayout(input: Parameters<typeof deriveLayout>[0]): Layout {
+  const layout = deriveLayout(input);
+  return layout.variant === "medium"
+    ? deriveLayout({ width: 0, height: 0, platform: input.platform })
+    : layout;
+}
 
 export const FOLDABLE_PANE_COMPACT_WIDTH = 72;
 /** How far past either end of its range the divider must travel to maximize or close the pane. */
@@ -100,7 +108,7 @@ export function deriveWorkspaceFoldRegions(input: {
     (hinge) =>
       hinge.orientation === "vertical" &&
       hinge.separating &&
-      hinge.right > hinge.left &&
+      hinge.right >= hinge.left &&
       hinge.left > input.leadingInset &&
       hinge.right < input.width - input.trailingInset,
   );
@@ -137,7 +145,11 @@ export interface FoldWorkspacePaneLayout extends WorkspacePaneLayout {
   readonly auxiliaryPaneWidthRange: { readonly min: number; readonly max: number } | null;
 }
 
-// The sidebar yields when the inspector would squeeze chat below its minimum readable width.
+/**
+ * Fold's replacement for upstream's `deriveWorkspacePaneLayout`: sidebar, chat and inspector.
+ * When the inspector would squeeze the chat below a readable width the sidebar yields
+ * (`primarySidebarSuppressedByAuxiliary`: showing it closes the inspector).
+ */
 export function deriveFoldWorkspacePaneLayout(input: {
   readonly layout: Layout;
   readonly viewportWidth: number;

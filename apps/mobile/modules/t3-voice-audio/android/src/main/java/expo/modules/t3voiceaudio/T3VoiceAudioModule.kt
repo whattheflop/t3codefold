@@ -58,6 +58,7 @@ class T3VoiceAudioModule : Module() {
   private var dictationStartJob: Job? = null
   private var dictation: LocalDictationCapture? = null
   private val dictationMutex = Mutex()
+  private val recordingDiagnostics get() = RecordingDiagnostics(context)
   private val dictationPreferences get() = context.getSharedPreferences("local-dictation", 0)
   private fun modelDirectory(arch: Int) = File(context.noBackupFilesDir, "speech/en-$arch")
   private val context get() = requireNotNull(appContext.reactContext)
@@ -73,6 +74,7 @@ class T3VoiceAudioModule : Module() {
         "bluetooth" to dictationPreferences.getBoolean("bluetooth", true),
         "architecture" to arch, "ready" to File(modelDirectory(arch), "installed").isFile)
     }
+    AsyncFunction("getLocalCrashDiagnostics") { recordingDiagnostics.records() }
     AsyncFunction("configureDictation") { promise: Promise -> configureDictation(promise) }
     AsyncFunction("startDictation") { allowDownload: Boolean, promise: Promise ->
       scope.launch {
@@ -83,10 +85,11 @@ class T3VoiceAudioModule : Module() {
             try {
               dictationMutex.withLock { startLocalDictation(allowDownload) }
               promise.resolve(null)
-            } catch (error: Exception) {
+            } catch (error: Throwable) {
               try {
                 withContext(NonCancellable) { dictationMutex.withLock { stopLocalDictation(false) } }
-              } catch (_: Exception) { /* Preserve the startup failure after releasing owned audio. */ }
+              } catch (_: Throwable) { /* Preserve the startup failure after releasing owned audio. */ }
+              recordingDiagnostics.stage("startup-failed", failure = error)
               promise.reject("LOCAL_DICTATION", error.message, error)
             } finally { dictationStartJob = null }
           }
@@ -180,8 +183,12 @@ class T3VoiceAudioModule : Module() {
         try {
           dictationStartJob?.cancelAndJoin()
           dictationMutex.withLock { stopLocalDictation(false) }
+        } catch (error: Throwable) {
+          runCatching { recordingDiagnostics.stage("stop-failed", failure = error) }
         } finally {
-          try { stop() } finally { scope.cancel() }
+          try { stop() }
+          catch (error: Throwable) { runCatching { recordingDiagnostics.stage("stop-failed", failure = error) } }
+          finally { scope.cancel() }
         }
       }
       VoiceCallService.endCall = null
@@ -231,6 +238,7 @@ class T3VoiceAudioModule : Module() {
     check(appContext.currentActivity != null) { "Start dictation with T3 in the foreground." }
     val arch = dictationPreferences.getInt("architecture", 4)
     val bluetooth = dictationPreferences.getBoolean("bluetooth", true)
+    recordingDiagnostics.stage("preparing", arch)
     val directory = modelDirectory(arch)
     if (!File(directory, "installed").isFile) {
       check(allowDownload) { "The speech model was removed. Start dictation again to download it." }
@@ -242,7 +250,7 @@ class T3VoiceAudioModule : Module() {
             sendEvent("dictationPreparation", mapOf("message" to "Downloading speech model · file $index/$total"))
           }
         })
-        File(directory, "installed").writeText("moonshine-voice:0.1.5\n")
+        File(directory, "installed").writeText("moonshine-voice:0.1.6\n")
       }
     }
     kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -263,19 +271,30 @@ class T3VoiceAudioModule : Module() {
     var speech: LocalSpeechStream? = null
     try {
       sendEvent("dictationPreparation", mapOf("message" to "Loading on-device speech model"))
+      recordingDiagnostics.stage("loading-model", arch)
       withContext(Dispatchers.IO) { speech = LocalSpeechStream(MoonshineEngine(directory.absolutePath, arch)) }
       kotlinx.coroutines.currentCoroutineContext().ensureActive()
       val capture = LocalDictationCapture(audio, selected.type, checkNotNull(speech),
         phrase = { sendEvent("dictationPhrase", mapOf("text" to it)) },
         meter = { decibels, duration -> sendEvent("dictationMeter", mapOf("decibels" to decibels, "durationMillis" to duration)) },
-        failed = { message ->
-          sendEvent("dictationError", mapOf("message" to message))
-          scope.launch { dictationMutex.withLock { stopLocalDictation(false) } }
+        failed = { error ->
+          try {
+            recordingDiagnostics.stage("recording-failed", failure = error)
+            sendEvent("dictationError", mapOf("message" to (error.message ?: "Dictation failed.")))
+          } finally {
+            scope.launch {
+              try { dictationMutex.withLock { stopLocalDictation(false) } }
+              catch (cleanup: Throwable) { recordingDiagnostics.stage("stop-failed", failure = cleanup) }
+            }
+          }
         })
       dictation = capture
       capture.start()
-    } catch (error: Exception) {
-      if (dictation == null) speech?.close()
+      recordingDiagnostics.stage("recording", arch)
+    } catch (error: Throwable) {
+      if (dictation == null) {
+        try { speech?.close() } catch (cleanup: Throwable) { if (cleanup !== error) error.addSuppressed(cleanup) }
+      }
       throw error
     }
   }
@@ -283,7 +302,15 @@ class T3VoiceAudioModule : Module() {
   private suspend fun stopLocalDictation(flush: Boolean): List<String> {
     val capture = dictation
     dictation = null
-    return try { capture?.stop(flush) ?: emptyList() }
+    return try {
+      if (capture != null) recordingDiagnostics.stage(if (flush) "finishing" else "canceling")
+      val phrases = capture?.stop(flush) ?: emptyList()
+      if (capture != null) recordingDiagnostics.stage(if (flush) "finished" else "canceled")
+      phrases
+    } catch (error: Throwable) {
+      recordingDiagnostics.stage("stop-failed", failure = error)
+      throw error
+    }
     finally { if (capture != null || VoiceCallService.title == "On-device dictation") stop() }
   }
 
@@ -333,7 +360,7 @@ class T3VoiceAudioModule : Module() {
         }
       } catch (error: CancellationException) {
         if (!ready.isCompleted) ready.completeExceptionally(error)
-      } catch (error: Exception) {
+      } catch (error: Throwable) {
         if (!ready.isCompleted) {
           ready.completeExceptionally(error)
         } else {
@@ -351,7 +378,7 @@ class T3VoiceAudioModule : Module() {
       try {
         promise.resolve(work())
       } catch (
-        error: Exception
+        error: Throwable
       ) {
         promise.reject("VOICE_AUDIO", error.message, error)
       }

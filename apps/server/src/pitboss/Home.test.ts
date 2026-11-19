@@ -84,13 +84,21 @@ const harness = (initial: PitbossSnapshot = emptyWork) => {
         }),
     }),
     Layer.mock(ThreadManagementService)({
-      getProjectThread: (input) =>
+      getThreadShell: (id) =>
+        Effect.succeed(
+          (homeThreads.find((entry) => entry.id === id) as Effect.Success<
+            ReturnType<ThreadManagementService["Service"]["getThreadShell"]>
+          >) ?? null,
+        ),
+      getProjectThreadRecords: (input) =>
         Effect.succeed({
           thread: {
             archivedAt:
               homeThreads.find((thread) => thread.id === input.threadId)?.archivedAt ?? null,
           },
-        } as Effect.Success<ReturnType<ThreadManagementService["Service"]["getProjectThread"]>>),
+        } as Effect.Success<
+          ReturnType<ThreadManagementService["Service"]["getProjectThreadRecords"]>
+        >),
       dispatch: (command) =>
         Effect.sync(() => {
           dispatched.push(command.type);
@@ -104,12 +112,14 @@ const harness = (initial: PitbossSnapshot = emptyWork) => {
         }),
       listProjectThreads: () =>
         Effect.succeed(
-          homeThreads.map(
-            (thread) =>
-              ({ ...thread }) as unknown as Effect.Success<
-                ReturnType<ThreadManagementService["Service"]["listProjectThreads"]>
-              >[number],
-          ),
+          homeThreads
+            .filter((thread) => thread.archivedAt === null)
+            .map(
+              (thread) =>
+                ({ ...thread }) as unknown as Effect.Success<
+                  ReturnType<ThreadManagementService["Service"]["listProjectThreads"]>
+                >[number],
+            ),
         ),
     }),
     Layer.mock(ThreadLaunchService)({

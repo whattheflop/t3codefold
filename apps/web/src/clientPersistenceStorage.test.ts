@@ -56,6 +56,17 @@ describe("clientPersistenceStorage", () => {
     },
   );
 
+  it.each([
+    [{ legacySidebarEnabled: true }, true],
+    [{ legacySidebarEnabled: true, boringSidebarEnabled: false }, false],
+  ] as const)("loads the project-folder preference from %o", async (saved, expected) => {
+    const testWindow = getTestWindow();
+    testWindow.localStorage.setItem("t3code:client-settings:v1", JSON.stringify(saved));
+    const { readBrowserClientSettings } = await import("./clientPersistenceStorage");
+
+    expect(readBrowserClientSettings()?.boringSidebarEnabled).toBe(expected);
+  });
+
   it("preserves saved settings across a transient read failure", async () => {
     const testWindow = getTestWindow();
     const settings = { ...DEFAULT_CLIENT_SETTINGS, timestampFormat: "12-hour" as const };

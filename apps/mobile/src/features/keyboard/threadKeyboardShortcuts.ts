@@ -1,6 +1,5 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
-import { useCallback } from "react";
 
 import type { ThreadListV2ListItem } from "../threads/threadListV2";
 import {
@@ -36,14 +35,11 @@ export function useThreadJumpShortcuts(
   // Fold: the selected thread (null when none) enables previous/next thread shortcuts.
   selectedThreadKey?: string | null,
 ) {
-  const jumpToThread = useCallback(
-    (command: HardwareKeyboardCommand) => {
-      const thread = threadJumpTarget(items, command);
-      if (thread !== null) onSelectThread(thread);
-      return true;
-    },
-    [items, onSelectThread],
-  );
+  const jumpToThread = (command: HardwareKeyboardCommand) => {
+    const thread = threadJumpTarget(items, command);
+    if (thread !== null) onSelectThread(thread);
+    return true;
+  };
   useHardwareKeyboardCommand(THREAD_JUMP_KEYBINDING_COMMANDS, jumpToThread);
   useThreadTraversalShortcuts(items, onSelectThread, selectedThreadKey);
 }

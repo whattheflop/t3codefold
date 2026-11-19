@@ -6,8 +6,9 @@ The JavaScript contract is intentionally small:
 
 - input from the native surface is emitted as `{ data: string }`
 - resize from the native surface is emitted as `{ cols: number, rows: number }`
-- remote PTY output arrives through the `output` prop as resets and appends (see
-  `src/features/terminal/terminalSurfaceOutput.ts`), acknowledged with `onOutputApplied`
+- remote PTY output is streamed with the view's `writeOutput(data, reset)` async function (see
+  `src/features/terminal/terminalOutputWriter.ts`); binaries without `outputRevision` fall back
+  to the `initialBuffer` prop
 
 The iOS implementation uses the vendored `GhosttyKit.xcframework` built from VVTerm's Ghostty
 custom-I/O and live-padding branch. `T3TerminalView` owns a `libghostty` surface and uses that

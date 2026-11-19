@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { View, type AccessibilityActionEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -28,8 +28,6 @@ interface WorkspacePaneDividerProps {
 
 // Move only the handle while dragging; resizing chat and terminals every frame causes repaint spikes.
 export function FoldWorkspacePaneDivider(props: WorkspacePaneDividerProps) {
-  const latestProps = useRef(props);
-  latestProps.current = props;
   const translationX = useSharedValue(0);
   const active = useSharedValue(0);
 
@@ -37,63 +35,62 @@ export function FoldWorkspacePaneDivider(props: WorkspacePaneDividerProps) {
   // so it never jumps back to the old edge for a frame. The release count
   // covers a release the layout clamps back to the same width.
   const [releaseCount, setReleaseCount] = useState(0);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resets the Reanimated divider drag offset after the pane width settles
   useEffect(() => {
-    translationX.value = 0;
+    translationX.set(0);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A committed pane resize or clamped release resets the native offset.
   }, [props.width, props.maximized, releaseCount, translationX]);
 
-  const release = useCallback(
-    (finalTranslationX: number) => {
-      const current = latestProps.current;
-      const result = resolvePaneDividerRelease({
-        startWidth: current.width,
-        translationX: finalTranslationX,
-        range: current.range,
-        ...(current.snapWidths ? { snapWidths: current.snapWidths } : {}),
-      });
-      const unchanged =
-        (result.kind === "maximize" && current.maximized) ||
-        (result.kind === "resize" && !current.maximized && result.width === current.width);
-      if (unchanged) {
-        translationX.value = withTiming(0, HANDLE_FADE);
-        return;
-      }
-      current.onRelease(result);
-      setReleaseCount((count) => count + 1);
-    },
-    [translationX],
-  );
-  const toggleMaximized = useCallback(() => latestProps.current.onToggleMaximized(), []);
+  const release = useEffectEvent((finalTranslationX: number) => {
+    const current = props;
+    const result = resolvePaneDividerRelease({
+      startWidth: current.width,
+      translationX: finalTranslationX,
+      range: current.range,
+      ...(current.snapWidths ? { snapWidths: current.snapWidths } : {}),
+    });
+    const unchanged =
+      (result.kind === "maximize" && current.maximized) ||
+      (result.kind === "resize" && !current.maximized && result.width === current.width);
+    if (unchanged) {
+      translationX.set(withTiming(0, HANDLE_FADE));
+      return;
+    }
+    current.onRelease(result);
+    setReleaseCount((count) => count + 1);
+  });
+  const toggleMaximized = useEffectEvent(() => props.onToggleMaximized());
 
-  const gesture = useMemo(() => {
+  const [gesture] = useState(() => {
     const pan = Gesture.Pan()
       .activeOffsetX([-6, 6])
       .failOffsetY([-24, 24])
       .onStart(() => {
-        active.value = withTiming(1, HANDLE_FADE);
+        active.set(withTiming(1, HANDLE_FADE));
       })
       .onUpdate((event) => {
-        translationX.value = event.translationX;
+        translationX.set(event.translationX);
       })
       .onEnd((event, success) => {
         if (success) runOnJS(release)(event.translationX);
-        else translationX.value = withTiming(0, HANDLE_FADE);
+        else translationX.set(withTiming(0, HANDLE_FADE));
       })
       .onFinalize(() => {
-        active.value = withTiming(0, HANDLE_FADE);
+        active.set(withTiming(0, HANDLE_FADE));
       });
     const tap = Gesture.Tap().onEnd((_event, success) => {
       if (success) runOnJS(toggleMaximized)();
     });
     return Gesture.Exclusive(pan, tap);
-  }, [active, release, toggleMaximized, translationX]);
+  });
 
   const handleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translationX.value }],
+    transform: [{ translateX: translationX.get() }],
   }));
-  const activeStyle = useAnimatedStyle(() => ({ opacity: active.value }));
+  const activeStyle = useAnimatedStyle(() => ({ opacity: active.get() }));
 
   const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
-    const { width, range, onRelease, onToggleMaximized } = latestProps.current;
+    const { width, range, onRelease, onToggleMaximized } = props;
     switch (event.nativeEvent.actionName) {
       case "increment":
         onRelease({

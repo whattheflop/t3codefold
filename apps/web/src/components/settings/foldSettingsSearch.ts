@@ -3,6 +3,13 @@ import type { SettingsSearchItem } from "./settingsSearch";
 /** Settings search entries for Fold's rows (see FoldSettingsRows). */
 export const FOLD_SETTINGS_SEARCH_ITEMS = [
   {
+    id: "glados",
+    title: "GLaDOS",
+    to: "/settings/glados",
+    scope: "environment",
+    searchTerms: ["Linear task sources", "coordinator", "brief", "pitboss"],
+  },
+  {
     id: "gaming-hud",
     title: "Gaming HUD",
     to: "/settings/general",

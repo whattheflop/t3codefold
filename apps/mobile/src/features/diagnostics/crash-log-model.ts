@@ -12,6 +12,29 @@ export interface StartupCrashRecord {
   readonly detail: string;
 }
 
+export async function readCrashRecords(
+  sources: {
+    readonly updates: (() => Promise<ReadonlyArray<UpdatesLogEntryLike>>) | null;
+    readonly native: (() => Promise<ReadonlyArray<StartupCrashRecord>>) | null;
+  },
+  since: number,
+): Promise<ReadonlyArray<StartupCrashRecord>> {
+  const reads = [
+    ...(sources.updates ? [sources.updates().then(parseStartupCrashRecords)] : []),
+    ...(sources.native ? [sources.native()] : []),
+  ];
+  const results = await Promise.allSettled(reads);
+  const records = results.filter((result) => result.status === "fulfilled");
+  if (records.length === 0) {
+    const failure = results.find((result) => result.status === "rejected");
+    throw failure?.reason ?? new Error("No crash log is available.");
+  }
+  return records
+    .flatMap((result) => result.value)
+    .filter((record) => record.timestamp >= since)
+    .sort((left, right) => right.timestamp - left.timestamp);
+}
+
 const FATAL_PREFIX = "ErrorRecovery fatal exception: ";
 const DESCRIPTION_PREFIX = "Description: ";
 const UNHANDLED_PREFIX = "Unhandled JS Exception: ";
@@ -52,7 +75,7 @@ export function formatStartupCrashReport(
   app: { readonly version: string; readonly build: string },
 ): string {
   const header = `T3 Code ${app.version} (${app.build})`;
-  if (records.length === 0) return `${header}\nNo startup crashes recorded.`;
+  if (records.length === 0) return `${header}\nNo crashes or recording failures recorded.`;
   return [
     header,
     ...records.map(

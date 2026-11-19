@@ -72,7 +72,7 @@ export class WorkStore extends Context.Service<
       detail: string,
     ) => Effect.Effect<void, PitbossError>;
     mirrorTask: (sender: EnvironmentId, task: PitbossTask) => Effect.Effect<void, PitbossError>;
-    receiveMessage: (message: typeof PitbossMessage.Type) => Effect.Effect<void, PitbossError>;
+    receiveMessage: (message: PitbossMessage) => Effect.Effect<void, PitbossError>;
     recordVerification: (
       taskId: string,
       run: PitbossVerification,
@@ -295,7 +295,7 @@ export const layer = Layer.effect(
     return WorkStore.of({
       read,
       command,
-      finishBoardClear: (operationId) =>
+      finishBoardClear: Effect.fn("WorkStore.finishBoardClear")((operationId) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -312,35 +312,38 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
+      ),
       rebuild,
-      resolveRemoteReceipt: (operationId, applied, detail) =>
-        sql
-          .withTransaction(
-            Effect.gen(function* () {
-              const state = yield* readAll();
-              const task = state.tasks.find((entry) => entry.pendingOperationId === operationId);
-              if (!task) return;
-              const updated = {
-                ...task,
-                pendingOperationId: undefined,
-                status: applied ? task.status : ("blocked" as const),
-                note: applied ? task.note : detail,
-              };
-              const id = `remote-receipt:${NodeCrypto.createHash("sha256").update(operationId).digest("hex")}`;
-              const now = DateTime.formatIso(yield* DateTime.now);
-              yield* sql`INSERT INTO pitboss_events (operation_id, request_json, payload_json, created_at) VALUES (${id}, ${id}, ${encodeJson({ type: "source", task: updated })}, ${now})`;
-              yield* persist({
-                ...state,
-                revision: state.revision + 1,
-                tasks: state.tasks.map((entry) => (entry.id === task.id ? updated : entry)),
-              });
-            }),
-          )
-          .pipe(
-            Effect.tap(() => PubSub.publish(notifications, undefined)),
-            Effect.mapError(unavailable),
-          ),
-      mirrorTask: (sender, task) =>
+      resolveRemoteReceipt: Effect.fn("WorkStore.resolveRemoteReceipt")(
+        (operationId, applied, detail) =>
+          sql
+            .withTransaction(
+              Effect.gen(function* () {
+                const state = yield* readAll();
+                const task = state.tasks.find((entry) => entry.pendingOperationId === operationId);
+                if (!task) return;
+                const updated = {
+                  ...task,
+                  pendingOperationId: undefined,
+                  status: applied ? task.status : ("blocked" as const),
+                  note: applied ? task.note : detail,
+                };
+                const id = `remote-receipt:${NodeCrypto.createHash("sha256").update(operationId).digest("hex")}`;
+                const now = DateTime.formatIso(yield* DateTime.now);
+                yield* sql`INSERT INTO pitboss_events (operation_id, request_json, payload_json, created_at) VALUES (${id}, ${id}, ${encodeJson({ type: "source", task: updated })}, ${now})`;
+                yield* persist({
+                  ...state,
+                  revision: state.revision + 1,
+                  tasks: state.tasks.map((entry) => (entry.id === task.id ? updated : entry)),
+                });
+              }),
+            )
+            .pipe(
+              Effect.tap(() => PubSub.publish(notifications, undefined)),
+              Effect.mapError(unavailable),
+            ),
+      ),
+      mirrorTask: Effect.fn("WorkStore.mirrorTask")((sender, task) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -411,7 +414,8 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
-      receiveMessage: (message) =>
+      ),
+      receiveMessage: Effect.fn("WorkStore.receiveMessage")((message) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -435,6 +439,7 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
+      ),
       subscribeChanges: PubSub.subscribe(notifications).pipe(Effect.map(Stream.fromSubscription)),
       subscribe: () =>
         Stream.unwrap(
@@ -446,7 +451,7 @@ export const layer = Layer.effect(
             );
           }),
         ),
-      effects: () =>
+      effects: Effect.fn("WorkStore.effects")(() =>
         Effect.all({
           operations: sql<WorkEffect>`SELECT operation_id, kind, payload_json, attempts, error FROM pitboss_effects WHERE state = 'pending' AND kind <> 'wake' ORDER BY rowid LIMIT 20`,
           wakes: sql<WorkEffect>`SELECT operation_id, kind, payload_json, attempts, error FROM pitboss_effects WHERE state = 'pending' AND kind = 'wake' ORDER BY rowid LIMIT 20`,
@@ -454,7 +459,8 @@ export const layer = Layer.effect(
           Effect.map(({ operations, wakes }) => [...operations, ...wakes]),
           Effect.mapError(unavailable),
         ),
-      wakeDeliveries: (recipientId, generation) =>
+      ),
+      wakeDeliveries: Effect.fn("WorkStore.wakeDeliveries")((recipientId, generation) =>
         sql<{
           readonly key: string;
           readonly deliveries: number;
@@ -467,7 +473,8 @@ export const layer = Layer.effect(
           Effect.map((rows) => new Map(rows.map((row) => [row.key, row.deliveries]))),
           Effect.mapError(unavailable),
         ),
-      queueWake: (id, payloadJson) =>
+      ),
+      queueWake: Effect.fn("WorkStore.queueWake")((id, payloadJson) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -480,18 +487,21 @@ export const layer = Layer.effect(
             }),
           )
           .pipe(Effect.mapError(unavailable)),
-      retryEffect: (id, error) =>
+      ),
+      retryEffect: Effect.fn("WorkStore.retryEffect")((id, error) =>
         sql`UPDATE pitboss_effects SET attempts = attempts + 1, error = ${error} WHERE operation_id = ${id} AND state = 'pending'`.pipe(
           Effect.asVoid,
           Effect.mapError(unavailable),
         ),
-      finishWake: (id, payloadJson) =>
+      ),
+      finishWake: Effect.fn("WorkStore.finishWake")((id, payloadJson) =>
         sql`UPDATE pitboss_effects SET state = 'done', payload_json = ${payloadJson}, attempts = attempts + 1, error = NULL WHERE operation_id = ${id} AND kind = 'wake'`.pipe(
           Effect.tap(() => PubSub.publish(notifications, undefined)),
           Effect.asVoid,
           Effect.mapError(unavailable),
         ),
-      finishEffect: (id, error) =>
+      ),
+      finishEffect: Effect.fn("WorkStore.finishEffect")((id, error) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -525,7 +535,8 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
-      recordVerification: (taskId, run) =>
+      ),
+      recordVerification: Effect.fn("WorkStore.recordVerification")((taskId, run) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -542,24 +553,34 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
-      updateAttempt: (taskId, attemptId, status, detail, workspacePath) =>
-        sql
-          .withTransaction(
-            Effect.gen(function* () {
-              const before = yield* readAll();
-              const next = observeAttempt(before, taskId, attemptId, status, detail, workspacePath);
-              if (next === before) return;
-              const now = DateTime.formatIso(yield* DateTime.now);
-              const eventId = `attempt:${attemptId}:${next.revision}`;
-              yield* sql`INSERT INTO pitboss_events (operation_id, request_json, payload_json, created_at) VALUES (${eventId}, ${eventId}, ${encodeJson({ type: "attempt", taskId, attemptId, status, detail, workspacePath })}, ${now})`;
-              yield* persist(next);
-            }),
-          )
-          .pipe(
-            Effect.tap(() => PubSub.publish(notifications, undefined)),
-            Effect.mapError(unavailable),
-          ),
-      observeAwaitingApproval: (attemptIds) =>
+      ),
+      updateAttempt: Effect.fn("WorkStore.updateAttempt")(
+        (taskId, attemptId, status, detail, workspacePath) =>
+          sql
+            .withTransaction(
+              Effect.gen(function* () {
+                const before = yield* readAll();
+                const next = observeAttempt(
+                  before,
+                  taskId,
+                  attemptId,
+                  status,
+                  detail,
+                  workspacePath,
+                );
+                if (next === before) return;
+                const now = DateTime.formatIso(yield* DateTime.now);
+                const eventId = `attempt:${attemptId}:${next.revision}`;
+                yield* sql`INSERT INTO pitboss_events (operation_id, request_json, payload_json, created_at) VALUES (${eventId}, ${eventId}, ${encodeJson({ type: "attempt", taskId, attemptId, status, detail, workspacePath })}, ${now})`;
+                yield* persist(next);
+              }),
+            )
+            .pipe(
+              Effect.tap(() => PubSub.publish(notifications, undefined)),
+              Effect.mapError(unavailable),
+            ),
+      ),
+      observeAwaitingApproval: Effect.fn("WorkStore.observeAwaitingApproval")((attemptIds) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -584,7 +605,8 @@ export const layer = Layer.effect(
             Effect.asVoid,
             Effect.mapError(unavailable),
           ),
-      setSourceAuthority: (authority) =>
+      ),
+      setSourceAuthority: Effect.fn("WorkStore.setSourceAuthority")((authority) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -613,7 +635,8 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
-      importSources: (config, observations) =>
+      ),
+      importSources: Effect.fn("WorkStore.importSources")((config, observations) =>
         sql
           .withTransaction(
             Effect.gen(function* () {
@@ -734,7 +757,8 @@ export const layer = Layer.effect(
             Effect.tap(() => PubSub.publish(notifications, undefined)),
             Effect.mapError(unavailable),
           ),
-      context: (threadId, packetId) =>
+      ),
+      context: Effect.fn("WorkStore.context")((threadId, packetId) =>
         Effect.gen(function* () {
           const previous = yield* sql<{
             thread_id: string;
@@ -763,6 +787,7 @@ export const layer = Layer.effect(
           yield* sql`INSERT INTO pitboss_context_packets (packet_id, thread_id, revision, content, created_at) VALUES (${packetId}, ${threadId}, ${state.revision}, ${content}, ${now}) ON CONFLICT(packet_id) DO NOTHING`;
           return content;
         }).pipe(Effect.mapError(unavailable)),
+      ),
     });
   }),
 );

@@ -19,12 +19,10 @@ export const layer = Layer.unwrap(
           yield* peers.receive(request.headers.authorization ?? "", input),
         );
       }).pipe(
-        Effect.catch(() =>
-          Effect.succeed(
-            HttpServerResponse.jsonUnsafe(
-              { error: "Peer request rejected. Check enrollment, scope, and credential." },
-              { status: 403 },
-            ),
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.jsonUnsafe(
+            { error: "Peer request rejected. Check enrollment, scope, and credential." },
+            { status: 403 },
           ),
         ),
       ),

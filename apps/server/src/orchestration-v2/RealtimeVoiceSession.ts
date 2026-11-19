@@ -24,11 +24,11 @@ type VoiceProjection = {
   providerThreads: OrchestrationV2ThreadProjection["providerThreads"];
   providerSessions: OrchestrationV2ThreadProjection["providerSessions"];
 };
-export const makeRealtimeVoiceSessionResolver = <E>(dependencies: {
-  getThreadProjection(threadId: ThreadId): Effect.Effect<VoiceProjection, E>;
-  sessions: Pick<ProviderSessionManagerV2Shape, "get" | "open">;
-}) =>
-  Effect.gen(function* () {
+export const makeRealtimeVoiceSessionResolver = Effect.fn("makeRealtimeVoiceSessionResolver")(
+  function* <E>(dependencies: {
+    getThreadProjection(threadId: ThreadId): Effect.Effect<VoiceProjection, E>;
+    sessions: Pick<ProviderSessionManagerV2Shape, "get" | "open">;
+  }) {
     const { sessions } = dependencies;
     const locks = yield* KeyedLock.make<ThreadId>();
     return (
@@ -87,7 +87,8 @@ export const makeRealtimeVoiceSessionResolver = <E>(dependencies: {
           }),
         )
         .pipe(Effect.mapError(() => new ProviderRealtimeVoiceError({ threadId, operation })));
-  });
+  },
+);
 
 type VoiceRuntime = Pick<
   ProviderAdapter.ProviderAdapterV2SessionRuntime,

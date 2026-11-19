@@ -1,9 +1,10 @@
 import { Slider } from "@expo/ui/jetpack-compose";
 import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { View } from "react-native";
 
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import { AppText as Text } from "./AppText";
 import { SymbolView } from "./AppSymbol";
 import { NativeThemeHost } from "./NativeThemeHost.android";
@@ -12,11 +13,8 @@ import type { SliderRowProps } from "./SliderRow.types";
 
 export function SliderRow(props: SliderRowProps) {
   const { colors } = useControlTheme();
-  const draft = useRef(props.value);
-  const dragging = useRef(false);
-  useEffect(() => {
-    if (!dragging.current) draft.current = props.value;
-  }, [props.value]);
+  // The value of the drag in progress; null between drags.
+  const draft = useRef<number | null>(null);
   const commit = (value: number) => {
     if (props.disabled) return;
     const next = Math.min(
@@ -34,7 +32,11 @@ export function SliderRow(props: SliderRowProps) {
         <Text className="min-w-0 flex-1 text-base">{props.label}</Text>
         <Text className="text-sm text-foreground-muted">{props.valueLabel}</Text>
       </View>
-      <View
+      <ControllerPressable
+        touchPassthrough
+        disabled={props.disabled}
+        onActivate={() => {}}
+        onAdjust={(direction) => commit(props.value + direction * props.step)}
         accessible
         accessibilityLabel={props.label}
         accessibilityRole="adjustable"
@@ -66,17 +68,17 @@ export function SliderRow(props: SliderRowProps) {
                 inactiveTrackColor: colors["--color-secondary"],
               }}
               onValueChange={(value) => {
-                dragging.current = true;
                 draft.current = value;
               }}
               onValueChangeFinished={() => {
-                dragging.current = false;
-                commit(draft.current);
+                const value = draft.current;
+                draft.current = null;
+                if (value !== null) commit(value);
               }}
             />
           </NativeThemeHost>
         </View>
-      </View>
+      </ControllerPressable>
     </View>
   );
 }

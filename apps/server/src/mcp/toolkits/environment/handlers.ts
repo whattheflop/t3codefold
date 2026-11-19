@@ -1,5 +1,6 @@
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
 import { FleetRouter } from "../../FleetRouter.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
@@ -45,7 +46,13 @@ export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
   t3_environment_list: McpToolAccess.reads(() =>
     Effect.gen(function* () {
       yield* readCaller();
-      return yield* (yield* FleetRouter).environments;
+      // Optional so the toolkit registers without fleet; server.ts provides it.
+      const router = yield* Effect.serviceOption(FleetRouter);
+      if (Option.isSome(router)) return yield* router.value.environments;
+      const descriptor = yield* (yield* Environment.ServerEnvironment).getDescriptor;
+      return {
+        environments: [{ environmentId: descriptor.environmentId, label: descriptor.label }],
+      };
     }),
   ),
   t3_environment_read: McpToolAccess.reads(() =>

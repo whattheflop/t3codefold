@@ -1,6 +1,7 @@
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import { NativeThemeHost } from "./NativeThemeHost.android";
 import { Switch as ComposeSwitch } from "@expo/ui/jetpack-compose";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import type { ThemedSwitchProps } from "./NativeSwitch.types";
 
 import { useControlTheme } from "./useControlTheme";
@@ -10,8 +11,9 @@ export function NativeSwitch(props: ThemedSwitchProps) {
   const { colors } = useControlTheme();
 
   return (
-    <Pressable
+    <ControllerPressable
       disabled={props.disabled}
+      onActivate={() => props.onValueChange?.(!props.value)}
       onPress={() => props.onValueChange?.(!props.value)}
       accessibilityLabel={props.accessibilityLabel}
       accessibilityHint={props.accessibilityHint}
@@ -36,6 +38,6 @@ export function NativeSwitch(props: ThemedSwitchProps) {
           />
         </NativeThemeHost>
       </View>
-    </Pressable>
+    </ControllerPressable>
   );
 }

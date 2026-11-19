@@ -109,7 +109,7 @@ it.effect("does not resurrect a task for a late context update", () =>
     const open = vi.fn(() => Effect.die("Must not open"));
     const resolve = yield* makeRealtimeVoiceSessionResolver({
       getThreadProjection: () => Effect.succeed(projection),
-      sessions: { get: () => Effect.succeed(Option.none()), open },
+      sessions: { get: () => Effect.succeedNone, open },
     });
     const error = yield* resolve(threadId, "share context").pipe(Effect.flip);
     assert.equal(error.operation, "share context");
@@ -122,7 +122,7 @@ it.effect("does not start a provider for an archived task", () =>
     const resolve = yield* makeRealtimeVoiceSessionResolver({
       getThreadProjection: () =>
         Effect.succeed({ ...projection, thread: { ...projection.thread, archivedAt: now } }),
-      sessions: { get: () => Effect.succeed(Option.none()), open },
+      sessions: { get: () => Effect.succeedNone, open },
     });
     yield* resolve(threadId, "start", true).pipe(Effect.flip);
     assert.equal(open.mock.calls.length, 0);

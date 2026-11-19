@@ -132,7 +132,7 @@ export const layer = Layer.effect(
     }, Effect.mapError(error));
     yield* Effect.gen(function* () {
       for (const source of (yield* list()).sources.filter((entry) => entry.config.enabled)) {
-        yield* sync(source.config.id).pipe(Effect.catch(() => Effect.void));
+        yield* sync(source.config.id).pipe(Effect.ignore);
       }
     }).pipe(Effect.repeat(Schedule.spaced("60 seconds")), Effect.forkScoped);
     return SourceService.of({ list, execute });

@@ -110,12 +110,6 @@ export function supportsDesktopAppUpdate(
   );
 }
 
-export function supportsServerUpdateThreadContinuation(
-  serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
-): boolean {
-  return serverConfig?.environment.capabilities.serverUpdateThreadContinuation === true;
-}
-
 /** The command to hand users whose server cannot update itself. Fold ships
     as GitHub release tarballs, never the upstream npm `t3` package, so global
     installs get the tarball and every runner gets the Fold `npx` command. */
@@ -130,10 +124,6 @@ export function manualServerUpdateCommand(
     return `npm install --global --prefix ${prefix} ${foldServerPackageSpec(version)}`;
   }
   return foldServerCommand(version);
-}
-
-export function serverUpdateGuidance(capability: ServerSelfUpdateCapability): string {
-  return capability === "desktop-managed" ? "Update the desktop app" : "Update to stay in sync";
 }
 
 export function buildVersionMismatchDismissalKey(

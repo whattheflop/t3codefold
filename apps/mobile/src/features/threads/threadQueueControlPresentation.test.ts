@@ -1,4 +1,6 @@
+import { ComposerContextId } from "@t3tools/contracts";
 import { formatAssistantCitationHref } from "@t3tools/shared/assistantCitations";
+import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -56,6 +58,36 @@ describe("threadQueueControlPresentation", () => {
     );
   });
 
+  it("shows context chips by their labels", () => {
+    const environment = formatComposerContextReference({
+      kind: "environment",
+      contextId: ComposerContextId.make("environment_mac"),
+      label: "MacBook",
+    });
+    const file = formatComposerContextReference({
+      kind: "file",
+      contextId: ComposerContextId.make("report"),
+      label: "report.pdf",
+    });
+    const image = formatComposerContextReference({
+      kind: "image",
+      contextId: ComposerContextId.make("screenshot"),
+      label: "screenshot.png",
+    });
+
+    expect(
+      resolveThreadQueueRowControls({
+        busy: false,
+        canPromoteToSteer: true,
+        canSendNow: false,
+        text: `Check ${environment} for ${file} ${image} `,
+        canReorder: false,
+        index: 0,
+        queuedCount: 1,
+      }).displayText,
+    ).toBe("Check MacBook for report.pdf screenshot.png");
+  });
+
   it("keeps the row already open in the composer from being reopened or steered", () => {
     const editing = resolveThreadQueueRowControls({
       busy: false,
@@ -111,4 +143,19 @@ describe("queue drag insertion", () => {
     expect(resolveQueueDropBeforeRunId([{ id: rows[0]!.id }], rows[0]!.id, 10)).toBeUndefined();
     expect(resolveQueueDropBeforeRunId(rows, "missing" as never, 100)).toBeUndefined();
   });
+});
+
+it("keeps queued editing blocked while a question owns the composer", () => {
+  expect(
+    resolveThreadQueueRowControls({
+      busy: false,
+      canPromoteToSteer: true,
+      canSendNow: false,
+      canReorder: true,
+      index: 0,
+      queuedCount: 2,
+      text: "Queued",
+      editBlocked: true,
+    }),
+  ).toMatchObject({ canEdit: false, canMoveDown: true, canDismiss: true });
 });

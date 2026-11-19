@@ -8,6 +8,7 @@ import {
   OrchestratorMcpThreadListInput,
   OrchestratorMcpThreadReadInput,
   OrchestratorMcpThreadStartInput,
+  OrchestratorMcpThreadWaitResult,
 } from "./orchestratorMcp.ts";
 
 const decodeCapabilitiesInput = Schema.decodeUnknownSync(OrchestratorMcpCapabilitiesInput);
@@ -16,6 +17,7 @@ const decodeDelegateTaskResult = Schema.decodeUnknownSync(OrchestratorMcpDelegat
 const decodeThreadListInput = Schema.decodeUnknownSync(OrchestratorMcpThreadListInput);
 const decodeThreadReadInput = Schema.decodeUnknownSync(OrchestratorMcpThreadReadInput);
 const decodeThreadStartInput = Schema.decodeUnknownSync(OrchestratorMcpThreadStartInput);
+const decodeThreadWaitResult = Schema.decodeUnknownSync(OrchestratorMcpThreadWaitResult);
 
 describe("orchestrator MCP contracts", () => {
   it("decodes cross-provider delegated task requests and durable results", () => {
@@ -93,5 +95,18 @@ describe("orchestrator MCP contracts", () => {
       decodeThreadReadInput({ environmentId: "environment-b", threadId: "thread-1" }).environmentId,
     ).toBe("environment-b");
     expect(decodeThreadListInput({}).environmentId).toBeUndefined();
+  });
+
+  it("decodes a running-task next written by another version", () => {
+    const next = "Completion wakes this thread, so end your turn. Do not wait on it or poll it.";
+    expect(
+      decodeThreadWaitResult({
+        threadId: "thread-child-1",
+        runId: "run-child-1",
+        status: "running",
+        timedOut: true,
+        next,
+      }).next,
+    ).toBe(next);
   });
 });

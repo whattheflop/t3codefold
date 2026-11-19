@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -25,16 +26,23 @@ import kotlin.math.max
 class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   private val container = FrameLayout(context)
   private val terminalCanvas = TerminalCanvasView(context)
+  private val sentText = TerminalSentText()
 
   // Newer Android can request autofill even with importantForAutofill=no.
   // Reporting no autofill type keeps terminal input out of credential autofill.
   private val inputView = object : EditText(context) {
     override fun getAutofillType(): Int = View.AUTOFILL_TYPE_NONE
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
+      super.onCreateInputConnection(outAttrs)?.let { connection ->
+        TerminalInputConnection(connection, sentText, { !readOnly }) { count ->
+          if (!readOnly) onInput(mapOf("data" to "\u007F".repeat(count)))
+        }
+      }
   }
   private val onInput by EventDispatcher()
   private val onResize by EventDispatcher()
   private val onCapture by EventDispatcher()
-  private val onOutputApplied by EventDispatcher()
   private val onCursorKeysChange by EventDispatcher()
   private val onFontScaleCommit by EventDispatcher()
   private var pinching = false
@@ -116,14 +124,14 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       onCapture(mapOf("text" to text))
     }
   private var terminalHandle = 0L
-
-  // The output stream the terminal holds: reset `appliedResetId` up to UTF-16
-  // offset `appliedEnd`. 0 means the terminal holds no stream yet.
-  private var appliedResetId = 0
-  private var appliedEnd = 0
+  private var fedBuffer = ""
+  private var streamedOutput: TerminalOutputBuffer? = null
   private var applicationCursorKeys = false
   private var cols = 0
   private var rows = 0
+  private var cellSize = 0 to 0
+  private var measuredCols = 0
+  private var measuredRows = 0
   private var clearingInput = false
   private var isCleanedUp = false
   private var backgroundColorValue = Color.parseColor("#24292E")
@@ -140,11 +148,16 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       recreateTerminal()
     }
 
-  var output: TerminalOutputWrite? = null
+  // Expo sets a batch's props in no fixed order, so the buffer waits for the whole batch:
+  // output fed before the same batch's sharedGrid lands would be drawn, and clipped, at the
+  // previous grid.
+  var initialBuffer: String = ""
     set(value) {
+      if (field == value) return
       field = value
-      applyOutput()
+      hasPendingBuffer = true
     }
+  private var hasPendingBuffer = false
 
   var fontSize: Float = 10f
     set(value) {
@@ -156,6 +169,17 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
     }
 
   var appearanceScheme: String = "dark"
+
+  // The PTY grid shared by every attached client, or empty before the server reports one.
+  // The terminal draws this grid, clamped to the view's own fit (the server's grid lags a
+  // local resize, and read-only observers never constrain it), so its wrapping and cursor
+  // match the PTY; the view's own fit still goes out through onResize.
+  var sharedGrid: List<Int> = emptyList()
+    set(value) {
+      if (field == value) return
+      field = value
+      applyGrid()
+    }
 
   var themeConfig: String = ""
     set(value) {
@@ -324,32 +348,20 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
       InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
     inputView.setPadding(0, 0, 0, 0)
-    inputView.setOnEditorActionListener { _, actionId, event ->
-      if (readOnly) return@setOnEditorActionListener true
-      // A single-line EditText moves focus to the next view on an unconsumed hardware
-      // Enter key-up, which would leave the terminal deaf to the next keys.
-      if (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_UP) {
-        return@setOnEditorActionListener true
-      }
-      val isKeyUp = event?.action == KeyEvent.ACTION_UP
-      val isImeSend = actionId == EditorInfo.IME_ACTION_SEND && !isKeyUp
-      val isHardwareEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-        event.action == KeyEvent.ACTION_DOWN
-      val isEnter = isImeSend || isHardwareEnter
-      if (isEnter) {
+    inputView.setOnEditorActionListener(
+      TerminalEnterListener({ readOnly }) {
         // Enter must send CR: raw-mode TUIs treat LF as Ctrl+J (insert newline).
         onInput(mapOf("data" to "\r"))
-        true
-      } else {
-        false
-      }
-    }
+      },
+    )
     inputView.setOnKeyListener { _, keyCode, event ->
       if (readOnly) return@setOnKeyListener true
       when {
-        event.action != KeyEvent.ACTION_DOWN -> false
+        // An unconsumed arrow or Tab key-up moves focus off the terminal input.
+        event.action != KeyEvent.ACTION_DOWN -> TerminalHardwareKeys.shouldEncode(keyCode, event.metaState)
         TerminalHardwareKeys.shouldEncode(keyCode, event.metaState) && sendHardwareKey(event) -> true
         keyCode == KeyEvent.KEYCODE_DEL -> {
+          sentText.removeCodePoints(1)
           onInput(mapOf("data" to "\u007F"))
           true
         }
@@ -366,6 +378,7 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
           val end = (start + count).coerceAtMost(s.length)
           if (start < end) {
             val insertedText = s.subSequence(start, end).toString()
+            sentText.append(insertedText)
             onInput(mapOf("data" to insertedText))
           }
         }
@@ -413,24 +426,35 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
     val nextRows = (terminalCanvas.usableHeight() / terminalCanvas.cellHeightPx)
       .toInt()
       .coerceIn(2, 200)
-    if (nextCols == cols && nextRows == rows && terminalHandle != 0L) return
+    if (nextCols != measuredCols || nextRows != measuredRows) {
+      measuredCols = nextCols
+      measuredRows = nextRows
+      onResize(mapOf("cols" to measuredCols, "rows" to measuredRows))
+    }
+    applyGrid()
+  }
+
+  @Suppress("ComplexCondition")
+  private fun applyGrid() {
+    if (measuredCols <= 0 || measuredRows <= 0 || isCleanedUp) return
+    val shared = sharedGrid.takeIf { it.size == 2 && it[0] > 0 && it[1] > 0 }
+    val nextCols = shared?.get(0)?.coerceAtMost(measuredCols) ?: measuredCols
+    val nextRows = shared?.get(1)?.coerceAtMost(measuredRows) ?: measuredRows
+    val nextCellSize = terminalCanvas.cellWidthPx.toInt() to terminalCanvas.cellHeightPx.toInt()
+    if (nextCols == cols && nextRows == rows && nextCellSize == cellSize && terminalHandle != 0L) {
+      return
+    }
     cols = nextCols
     rows = nextRows
+    cellSize = nextCellSize
     val response = if (terminalHandle == 0L) {
       createTerminal()
       ByteArray(0)
     } else {
-      GhosttyBridge.nativeResize(
-        terminalHandle,
-        cols,
-        rows,
-        terminalCanvas.cellWidthPx.toInt(),
-        terminalCanvas.cellHeightPx.toInt(),
-      )
+      GhosttyBridge.nativeResize(terminalHandle, cols, rows, cellSize.first, cellSize.second)
     }
     emitResponse(response)
-    onResize(mapOf("cols" to cols, "rows" to rows))
-    applyOutput()
+    if (!hasPendingBuffer) feedPendingBuffer()
     renderSnapshot()
   }
 
@@ -440,22 +464,23 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
     terminalHandle = GhosttyBridge.nativeCreate(
       cols,
       rows,
-      terminalCanvas.cellWidthPx.toInt(),
-      terminalCanvas.cellHeightPx.toInt(),
+      cellSize.first,
+      cellSize.second,
       foregroundColorValue,
       backgroundColorValue,
       cursorColorValue,
       paletteColors,
     )
-    appliedResetId = 0
-    appliedEnd = 0
+    fedBuffer = ""
+    // Replayed history must not answer old terminal queries, so drop its replies.
+    streamedOutput?.let { output -> feedOutput(output.data, replay = true) }
   }
 
   private fun recreateTerminal() {
     if (terminalHandle == 0L) return
     destroyTerminal()
     createTerminal()
-    applyOutput()
+    if (!hasPendingBuffer) feedPendingBuffer()
     renderSnapshot()
   }
 
@@ -463,53 +488,52 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
     if (terminalHandle == 0L) return
     GhosttyBridge.nativeDestroy(terminalHandle)
     terminalHandle = 0L
-    appliedResetId = 0
-    appliedEnd = 0
+    fedBuffer = ""
     terminalCanvas.resetSelectionState()
   }
 
-  /**
-   * Applies the `output` prop (see terminalSurfaceOutput.ts): a new reset id replays
-   * history into a fresh terminal, otherwise only the part past `appliedEnd` is fed.
-   * Every change is acknowledged so JS can send the next write from there.
-   */
-  private fun applyOutput() {
-    val write = output ?: return
-    if (terminalHandle == 0L) return
-    if (write.resetId != appliedResetId) {
-      // A continuation of a stream this terminal does not hold; the ack asks JS for a reset.
-      if (write.start != 0) {
-        emitOutputApplied()
-        return
-      }
-      if (appliedResetId != 0) {
-        destroyTerminal()
-        createTerminal()
-        if (terminalHandle == 0L) return
-      }
-      // Replayed history must not answer old terminal queries, so drop its replies.
-      GhosttyBridge.nativeFeed(terminalHandle, write.data.toByteArray(Charsets.UTF_8))
-      appliedResetId = write.resetId
-      appliedEnd = write.data.length
-    } else {
-      if (write.start > appliedEnd) {
-        emitOutputApplied()
-        return
-      }
-      val unapplied = appliedEnd - write.start
-      if (unapplied >= write.data.length) return
-      val suffix = write.data.substring(unapplied)
-      emitResponse(GhosttyBridge.nativeFeed(terminalHandle, suffix.toByteArray(Charsets.UTF_8)))
-      appliedEnd = write.start + write.data.length
-      // New output invalidates an active selection (matches the web drawer);
-      // otherwise the copy toolbar drifts out of sync with the grid.
-      if (terminalCanvas.hasActiveSelection()) {
-        GhosttyBridge.nativeClearSelection(terminalHandle)
-        terminalCanvas.resetSelectionState()
-      }
+  fun applyPendingBuffer() {
+    if (!hasPendingBuffer) return
+    hasPendingBuffer = false
+    feedPendingBuffer()
+  }
+
+  private fun feedPendingBuffer() {
+    if (streamedOutput != null || terminalHandle == 0L || initialBuffer == fedBuffer) return
+    if (!initialBuffer.startsWith(fedBuffer)) {
+      recreateTerminal()
+      if (terminalHandle == 0L) return
     }
+    val suffix = initialBuffer.substring(fedBuffer.length)
+    feedOutput(suffix.toByteArray(Charsets.UTF_8))
+    fedBuffer = initialBuffer
     renderSnapshot()
-    emitOutputApplied()
+  }
+
+  fun writeOutput(data: String, reset: Boolean) {
+    if (isCleanedUp) return
+    val output = streamedOutput ?: TerminalOutputBuffer()
+    val bytes = data.toByteArray(Charsets.UTF_8)
+    output.write(bytes, reset)
+    streamedOutput = output
+    if (reset) {
+      recreateTerminal()
+    } else if (terminalHandle != 0L) {
+      feedOutput(bytes)
+      renderSnapshot()
+    }
+  }
+
+  private fun feedOutput(data: ByteArray, replay: Boolean = false) {
+    if (terminalHandle == 0L || data.isEmpty()) return
+    val response = GhosttyBridge.nativeFeed(terminalHandle, data)
+    if (!replay) emitResponse(response)
+    // New output invalidates an active selection (matches the web drawer);
+    // otherwise the copy toolbar drifts out of sync with the grid.
+    if (terminalCanvas.hasActiveSelection()) {
+      GhosttyBridge.nativeClearSelection(terminalHandle)
+      terminalCanvas.resetSelectionState()
+    }
     syncCursorKeyMode()
   }
 
@@ -519,10 +543,6 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
     if (enabled == applicationCursorKeys) return
     applicationCursorKeys = enabled
     onCursorKeysChange(mapOf("application" to enabled))
-  }
-
-  private fun emitOutputApplied() {
-    onOutputApplied(mapOf("resetId" to appliedResetId, "end" to appliedEnd))
   }
 
   private fun renderSnapshot() {

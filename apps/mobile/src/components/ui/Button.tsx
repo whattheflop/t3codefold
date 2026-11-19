@@ -1,10 +1,12 @@
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import { SymbolView, type AppSymbolName } from "./AppSymbol";
-import { Pressable } from "react-native";
 import { AppActivityIndicator } from "./AppActivityIndicator";
 import { AppText } from "./AppText";
 import { cn } from "../../lib/cn";
 
 export interface ButtonProps {
+  readonly controllerKey?: string;
+  readonly controllerFooter?: boolean;
   readonly label: string;
   readonly accessibilityLabel?: string;
   readonly icon?: AppSymbolName;
@@ -14,6 +16,7 @@ export interface ButtonProps {
   readonly loading?: boolean;
   readonly tone?: "primary" | "secondary" | "danger" | "text" | "contrast";
   readonly fullWidth?: boolean;
+  readonly size?: "default" | "compact";
 }
 
 const TONE_CLASS_NAMES = {
@@ -28,7 +31,10 @@ export function Button(props: ButtonProps) {
   const [containerClassName, labelClassName] = TONE_CLASS_NAMES[props.tone ?? "secondary"];
   const disabled = Boolean(props.disabled || props.loading);
   return (
-    <Pressable
+    <ControllerPressable
+      controllerKey={props.controllerKey}
+      footer={props.controllerFooter}
+      onActivate={props.onPress}
       accessibilityRole="button"
       accessibilityLabel={props.accessibilityLabel ?? props.label}
       accessibilityHint={props.accessibilityHint}
@@ -36,7 +42,8 @@ export function Button(props: ButtonProps) {
       disabled={disabled}
       onPress={props.onPress}
       className={cn(
-        "min-h-12 flex-row items-center justify-center gap-2 rounded-full px-6 active:opacity-70",
+        "flex-row items-center justify-center gap-2 rounded-full active:opacity-70",
+        props.size === "compact" ? "min-h-10 px-5" : "min-h-12 px-6",
         props.fullWidth ? "w-full" : "self-start",
         disabled ? "bg-subtle-strong" : containerClassName,
       )}
@@ -60,6 +67,6 @@ export function Button(props: ButtonProps) {
       >
         {props.label}
       </AppText>
-    </Pressable>
+    </ControllerPressable>
   );
 }

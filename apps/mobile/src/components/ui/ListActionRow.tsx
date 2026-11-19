@@ -21,6 +21,7 @@ export function ListActionRow(
       accessibilityHint={props.description}
       accessibilityState={{ disabled, busy: Boolean(props.loading) }}
       disabled={disabled}
+      controllerActivate={props.onPress}
       onPress={props.onPress}
       android_ripple={{ color: rippleStyle.backgroundColor }}
       unstable_pressDelay={Platform.OS === "android" ? 50 : undefined}

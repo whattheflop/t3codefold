@@ -320,10 +320,6 @@ const harness = Effect.gen(function* () {
           run: running(input.threadId),
           timedOut: interruptTimesOut,
         }),
-      getProjectThread: (input) => {
-        if (forbidHistoryReads) return Effect.die("Runtime monitoring loaded full history");
-        return loadProjection(input);
-      },
       // Record reads skip the transcript, so they stay allowed under forbidHistoryReads.
       getProjectThreadRecords: (input) => loadProjection(input),
       sendToThread: (input) =>
@@ -1615,7 +1611,7 @@ it.effect("wakes once with an honest review action when a worker finishes withou
       "Changed: the worker stopped without submitting any evidence.",
     );
     expect(h.sentMessages[0]?.text).toContain(
-      "Next: settle this outcome yourself — close it with an honest reason if it is complete or superseded, or use revise-result with the information the worker was missing",
+      "Next: settle this outcome yourself. Close it with an honest reason if it is complete or superseded, or use revise-result with the information the worker was missing",
     );
     expect(h.sentMessages[0]?.text).not.toContain("work_read");
     expect(h.sentMessages[0]?.text).not.toContain("Pending user decisions");
@@ -2731,7 +2727,7 @@ it.effect(
       const state = yield* h.store.read();
       expect(state.tasks[0]!.attempts).toHaveLength(2);
       const text = h.sentMessages.at(-1)!.text;
-      expect(text).toContain("Out of attempts — close it out");
+      expect(text).toContain("Out of attempts. Close it out");
       expect(text).toContain("close it with an honest reason, or cancel it as superseded");
       expect(text).not.toContain("revise-result with the information the worker was missing");
       expect(text).toContain("Recovery needed · task out-of-attempts");
@@ -2748,7 +2744,7 @@ it.effect(
 it.effect("offers the revision again once the user raises the saved attempt limit", () =>
   Effect.gen(function* () {
     const h = yield* cappedHarness;
-    expect(h.sentMessages.at(-1)?.text).toContain("Out of attempts — close it out");
+    expect(h.sentMessages.at(-1)?.text).toContain("Out of attempts. Close it out");
     yield* h.command({
       type: "brief",
       brief: {
@@ -2763,7 +2759,7 @@ it.effect("offers the revision again once the user raises the saved attempt limi
     h.projections.set(boss, projection(boss, a));
     yield* h.drain();
     const text = h.sentMessages.at(-1)!.text;
-    expect(text).not.toContain("Out of attempts — close it out");
+    expect(text).not.toContain("Out of attempts. Close it out");
     expect(text).toContain("revise-result with the information the worker was missing");
     const revised = yield* Effect.result(
       h.command({ type: "revise-result", taskId: "out-of-attempts", note: "Continue" }),
@@ -2780,9 +2776,9 @@ it.effect("escalates an out-of-attempts stall without offering an impossible con
     }
     const decision = (yield* h.store.read()).tasks[0]!.decisions?.at(-1);
     expect(decision?.options).toContain(
-      "Keep going — raise the saved attempt limit so another attempt can start",
+      "Keep going. Raise the saved attempt limit so another attempt can start",
     );
-    expect(decision?.options).not.toContain("Keep going — give the worker what it was missing");
+    expect(decision?.options).not.toContain("Keep going. Give the worker what it was missing");
     expect(decision?.recommendation).toContain("maxAttempts");
   }).pipe(Effect.provide(services)),
 );

@@ -44,6 +44,7 @@ function LocalNotificationSettingsSection() {
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const [granted, setGranted] = useState(false);
   const [busy, setBusy] = useState(true);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads native notification permission on mount and on every foreground
   useEffect(() => {
     const refresh = async () => {
       const result = await settlePromise(() => Notifications.getPermissionsAsync());

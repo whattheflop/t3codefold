@@ -72,4 +72,14 @@ describe("DesktopEnvironment", () => {
       assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
     }),
   );
+  it.effect("isolates Chromium data when development has an explicit T3 home", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        {},
+        { T3CODE_HOME: "/isolated/herdr", VITE_DEV_SERVER_URL: "http://localhost:5733" },
+      );
+      assert.equal(environment.appDataDirectory, "/isolated/herdr/desktop-app-data");
+      assert.equal(environment.stateDir, "/isolated/herdr/userdata");
+    }),
+  );
 });

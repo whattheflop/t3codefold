@@ -1,3 +1,4 @@
+import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import { SymbolView } from "./AppSymbol";
 import { NativeThemeHost } from "./NativeThemeHost.android";
 import {
@@ -46,7 +47,11 @@ export function Button(props: ButtonProps) {
             ? colors["--color-primary-text"]
             : colors["--color-secondary-foreground"];
   return (
-    <View
+    <ControllerPressable
+      controllerKey={props.controllerKey}
+      footer={props.controllerFooter}
+      onActivate={props.onPress}
+      disabled={Boolean(props.disabled || props.loading)}
       accessible
       accessibilityRole="button"
       accessibilityLabel={props.accessibilityLabel ?? props.label}
@@ -111,6 +116,6 @@ export function Button(props: ButtonProps) {
           </Component>
         </NativeThemeHost>
       </View>
-    </View>
+    </ControllerPressable>
   );
 }

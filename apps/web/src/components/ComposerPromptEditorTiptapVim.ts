@@ -98,7 +98,7 @@ export function projectComposerDoc(doc: ProseMirrorNode): ComposerVimProjection 
 }
 
 /** Projection offset of a ProseMirror position (the first offset at or after it). */
-export function projectionOffsetAt(projection: ComposerVimProjection, pos: number): number {
+function projectionOffsetAt(projection: ComposerVimProjection, pos: number): number {
   const { positions } = projection;
   let low = 0;
   let high = positions.length - 1;

@@ -1,3 +1,5 @@
+import { ControllerConsole } from "../../features/controller/ControllerConsole";
+import { androidKeyboardFirst } from "../../lib/android-back";
 import { useId, useState } from "react";
 import { Platform, View } from "react-native";
 import { FormSheet, ScreenStack } from "react-native-screens";
@@ -17,20 +19,24 @@ export function Sheet(props: SheetProps) {
   const containerStyle = useResolveClassNames("bg-sheet");
   const screenId = useId();
   const [isOpen, setIsOpen] = useState(true);
-  const close = () => setIsOpen(false);
+  const close = () => {
+    if (!props.dismissDisabled) setIsOpen(false);
+  };
 
   return (
     <FormSheet
       isOpen={isOpen}
       detents={formSheetDetents(0.5, 0.9)}
       prefersGrabberVisible
+      preventNativeDismiss={props.dismissDisabled}
       // The header holds the close button, so the Duo needs no rail inside this sheet.
       prefersHorizontalBars
       nativeContainerStyle={containerStyle}
       onDismiss={props.onClose}
       onNativeDismiss={props.onClose}
     >
-      <View collapsable={false} className="flex-1 bg-sheet">
+      {/* Flex children are not bounded by the FormSheet host, so pin to its edges. */}
+      <View collapsable={false} className="absolute inset-0 bg-sheet">
         <ScreenStack style={{ flex: 1 }}>
           <NativeScreen
             activityState={2}
@@ -40,27 +46,30 @@ export function Sheet(props: SheetProps) {
             scrollEdgeEffects={HEADER_SCROLL_EDGE_EFFECTS}
             className="flex-1 bg-sheet"
           >
-            {props.children}
-            <NativeHeader
-              backgroundColor="rgba(0,0,0,0)"
-              tintColorClassName="accent-foreground"
-              hideBackButton
-              hideShadow={false}
-              title={props.title}
-              titleColorClassName="accent-foreground"
-              titleFontSize={18}
-              titleFontWeight="800"
-              translucent
-              headerRightBarButtonItems={[
-                {
-                  type: "button",
-                  icon: { name: "xmark", type: "sfSymbol" },
-                  accessibilityLabel: `Close ${props.title}`,
-                  identifier: `app-sheet-close-${screenId}`,
-                  onPress: close,
-                },
-              ]}
-            />
+            <ControllerConsole scopeKey={`sheet:${screenId}`} onBack={androidKeyboardFirst(close)}>
+              {props.children}
+              <NativeHeader
+                backgroundColor="rgba(0,0,0,0)"
+                tintColorClassName="accent-foreground"
+                hideBackButton
+                hideShadow={false}
+                title={props.title}
+                titleColorClassName="accent-foreground"
+                titleFontSize={18}
+                titleFontWeight="800"
+                translucent
+                headerRightBarButtonItems={[
+                  {
+                    type: "button",
+                    icon: { name: "xmark", type: "sfSymbol" },
+                    accessibilityLabel: `Close ${props.title}`,
+                    identifier: `app-sheet-close-${screenId}`,
+                    disabled: props.dismissDisabled,
+                    onPress: close,
+                  },
+                ]}
+              />
+            </ControllerConsole>
           </NativeScreen>
         </ScreenStack>
       </View>

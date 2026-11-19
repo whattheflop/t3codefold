@@ -12,7 +12,13 @@ import {
   parseAndroidAbi,
   resolveJavaHome,
 } from "./fold-android-native-client.ts";
-import { NativeClientError, clientStatus } from "./mobile-native-client.ts";
+import {
+  androidSdk,
+  buildRunTitle,
+  clientStatus,
+  NativeClientError,
+  remoteBuildState,
+} from "./mobile-native-client.ts";
 
 describe("mobile native client build planning", () => {
   it("keeps prebuild incremental for both platforms", () => {
@@ -115,9 +121,8 @@ it.layer(NodeServices.layer)("android jdk resolution", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs
-        .makeTempDirectoryScoped({ prefix: "jdk-" })
-        .pipe(Effect.flatMap(fs.realPath));
+      // javac is located through realpath, and macOS temp directories sit behind /var -> /private/var.
+      const root = yield* fs.realPath(yield* fs.makeTempDirectoryScoped({ prefix: "jdk-" }));
       const jre = yield* makeJvm(root, "jre-25", false);
       const jdk = yield* makeJvm(root, "jdk-17", true);
 
@@ -146,5 +151,88 @@ it.layer(NodeServices.layer)("android jdk resolution", (it) => {
       assert.include(error.message, jre);
       assert.include(error.message, "not a JRE");
     }),
+  );
+});
+
+it.layer(NodeServices.layer)("androidSdk", (it) => {
+  it.effect("skips a configured SDK path that holds no SDK", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "android-sdk-home-" });
+      const sdk = path.join(home, "sdk");
+      yield* fs.makeDirectory(path.join(sdk, "platform-tools"), { recursive: true });
+
+      const resolved = yield* androidSdk.pipe(
+        Effect.provideService(HostProcess.Environment, {
+          HOME: home,
+          ANDROID_HOME: path.join(home, "stale"),
+          ANDROID_SDK_ROOT: sdk,
+        }),
+      );
+
+      assert.strictEqual(resolved, sdk);
+    }),
+  );
+});
+
+it("finds a Blacksmith build by its run title and reads its state", () => {
+  const fingerprint = "a".repeat(40);
+  const title = buildRunTitle("android", "x86_64", fingerprint);
+  assert.strictEqual(title, `Dev client android x86_64 ${fingerprint}`);
+  assert.strictEqual(buildRunTitle("ios", null, fingerprint), `Dev client ios ${fingerprint}`);
+  const run = (
+    createdAt: string,
+    status: string,
+    conclusion: string | null,
+    displayTitle = title,
+  ) => ({
+    displayTitle,
+    status,
+    conclusion,
+    createdAt,
+  });
+  const since = Date.parse("2026-11-09T12:00:00Z");
+  assert.strictEqual(remoteBuildState([], title, since), "none");
+  // Another client's run, and a run from before this wait, say nothing about this build.
+  assert.strictEqual(
+    remoteBuildState(
+      [
+        run(
+          "2026-11-09T12:05:00Z",
+          "in_progress",
+          null,
+          buildRunTitle("android", "arm64-v8a", fingerprint),
+        ),
+        run("2026-11-09T11:00:00Z", "completed", "failure"),
+      ],
+      title,
+      since,
+    ),
+    "none",
+  );
+  assert.strictEqual(
+    remoteBuildState([run("2026-11-09T12:01:00Z", "queued", null)], title, since),
+    "running",
+  );
+  assert.strictEqual(
+    remoteBuildState([run("2026-11-09T12:01:00Z", "completed", "success")], title, since),
+    "succeeded",
+  );
+  // The newest run decides: a retry that is running outranks the failure before it.
+  assert.strictEqual(
+    remoteBuildState(
+      [
+        run("2026-11-09T12:01:00Z", "completed", "failure"),
+        run("2026-11-09T12:09:00Z", "in_progress", null),
+      ],
+      title,
+      since,
+    ),
+    "running",
+  );
+  assert.strictEqual(
+    remoteBuildState([run("2026-11-09T12:01:00Z", "completed", "cancelled")], title, since),
+    "failed",
   );
 });

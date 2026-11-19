@@ -56,7 +56,7 @@ export function refinementCommand(
 }
 
 /** Events after which a thread may have a provisional title ready to refine. */
-export function mayNeedRefinement(event: OrchestrationV2DomainEvent): boolean {
+function mayNeedRefinement(event: OrchestrationV2DomainEvent): boolean {
   return (
     (event.type === "run.updated" && event.payload.status === "completed") ||
     (event.type === "thread.metadata-updated" && event.payload.titleState?.needsRefinement === true)

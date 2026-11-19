@@ -18,8 +18,7 @@ const failure = (message: string) =>
 /**
  * `t3_thread_start`, an alias of `t3_thread_launch` kept for existing callers. It runs
  * t3_thread_launch's own handler, which applies the caller's limits ("inherit" means the
- * caller's own modes), keeps GLaDOS inside the work ledger, and routes a launch that
- * names another environment.
+ * caller's own modes), and routes a launch that names another environment.
  */
 export const startThread = (input: OrchestratorMcpThreadStartInput) =>
   threadStartAsLaunch(input).pipe(

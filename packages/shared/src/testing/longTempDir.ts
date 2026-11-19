@@ -1,5 +1,6 @@
-// Windows runner temp paths use 8.3 names; canonicalize before equality checks.
-// Load built-ins through process so browser test setup works before jsdom exists.
+// Windows runner temp paths use 8.3 names; canonicalize to long names before equality checks.
+// Built-ins come through the process, not static `node:` imports, so browser-environment
+// tests can load this setup before Vitest creates jsdom.
 const NodeProcess = process.getBuiltinModule("node:process");
 if (NodeProcess.platform === "win32") {
   try {

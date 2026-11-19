@@ -1,6 +1,22 @@
+import { ControllerConsole } from "../controller/ControllerConsole";
+import * as Dialog from "../../components/ui/Dialog";
+import { nextThreadNeedingAttention } from "@t3tools/client-runtime/state/thread-sort";
+import { threadHasUnseenCompletion, resolveThreadListV2RowStatus } from "../threads/threadListV2";
+import { useComposerDraft } from "../../state/use-composer-drafts";
+import {
+  discardComposerReply,
+  queuedEditDraftKey,
+  useQueuedRunEdit,
+} from "../../state/queued-run-edit";
+import { controllerDictation } from "../controller/controllerDictation";
+import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
+import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { dismissAndroidKeyboard } from "../../lib/android-back";
+import { disableAndroidController } from "../../native/controllerBack";
+import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
+import { useAtomValue } from "@effect/atom-react";
 import { uuidv4 } from "../../lib/uuid";
-import { useNavigation } from "@react-navigation/native";
+import { CommonActions, useNavigation } from "@react-navigation/native";
 import {
   claimThreadOpen,
   nextShownOrder,
@@ -8,6 +24,7 @@ import {
   type EnvironmentThreadSearchMatch,
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
+import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
 import {
   foldSearchQuery,
@@ -17,9 +34,8 @@ import {
   pickedQuery,
   threadRecentUse,
 } from "@t3tools/shared/paletteSearch";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -42,16 +58,28 @@ import { cn } from "../../lib/cn";
 import { deriveBottomControlInsets } from "../../lib/reserved-regions";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { useNativeLayoutMetrics } from "../../native/native-layout-metrics";
-import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
-import { useProjects, useThreadShell, useThreadShells } from "../../state/entities";
+import {
+  useDelegatedUnderParent,
+  useProjects,
+  useServerConfigs,
+  useThreadShell,
+  useVisibleThreadShells,
+} from "../../state/entities";
 import { useThreadSearch } from "../../state/queries";
 import { requestThreadMessageJump } from "../threads/threadMessageJump";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { serverEnvironment } from "../../state/server";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { androidWorkspaceNavigationState } from "../../lib/android-workspace-navigation";
+import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { ThreadSearchMatchExcerpt } from "../threads/thread-search-match";
+import { pickTriageEnvironment } from "../triage/triageTarget";
+import { useStartTriage } from "../triage/useStartTriage";
+import { useNewTaskFlow } from "../threads/new-task-flow-provider";
+import { useActiveNewTask } from "../../state/active-new-task";
 import {
   filterCommandPaletteItems,
   nextPaletteIndex,
@@ -62,8 +90,8 @@ import { parseActiveThreadPath, type HardwareKeyboardCommand } from "./hardwareK
 import { threadJumpIndex } from "./threadKeyboardShortcuts";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { openSettings } from "../settings/settings-navigation";
-import { useSelectWorkspaceTab } from "../workspace/useSelectWorkspaceTab";
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceTab } from "../layout/workspace/useSelectWorkspaceTab";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 
 const PALETTE_COMMANDS: ReadonlyArray<HardwareKeyboardCommand> = [
   "commandPalette",
@@ -74,9 +102,9 @@ const PALETTE_COMMANDS: ReadonlyArray<HardwareKeyboardCommand> = [
   ...THREAD_JUMP_KEYBINDING_COMMANDS,
 ];
 const ROW_HEIGHT = 50;
+const SHORTCUT_MODIFIER = Platform.OS === "android" ? "Ctrl+" : "⌘";
 // The "In messages" label above the first message match; server results always come last.
 const SECTION_LABEL_HEIGHT = 26;
-const SHORTCUT_MODIFIER = Platform.OS === "android" ? "Ctrl+" : "⌘";
 
 const ACTION_ICONS: Record<string, AppSymbolName> = {
   newTask: "square.and.pencil",
@@ -117,6 +145,8 @@ function PaletteRow(props: {
       accessibilityRole="button"
       interactionOpacity={props.selected ? 0 : 1}
       accessibilityState={{ selected: props.selected }}
+      controllerKey={props.item.key}
+      controllerActivate={props.onSelect}
       onPress={props.onSelect}
       className={
         props.selected
@@ -218,18 +248,37 @@ export function CommandPalette(props: {
   readonly onCommand: (command: HardwareKeyboardCommand) => void;
 }) {
   const navigation = useNavigation();
+  const workspaceTabs = useWorkspaceTabs();
   const selectTab = useSelectWorkspaceTab();
   const { themeVariables } = useAppearancePreferences();
   const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
   const projects = useProjects();
-  const threads = useThreadShells();
-  const activeThreadRef = useMemo(() => parseActiveThreadPath(props.pathname), [props.pathname]);
+  const threads = useVisibleThreadShells();
+  const delegatedUnderParent = useDelegatedUnderParent();
+  const activeThreadRef = parseActiveThreadPath(props.pathname);
   const activeThread = useThreadShell(activeThreadRef);
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
   const environments = useWorkspaceEnvironments();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const [query, setQuery] = useState("");
+  const queryText = useRef("");
+  const dictationId = useId();
+  const controllerVoice = useGlobalVoiceInput();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases only dictation this controller palette started when the modal owner unmounts
+  useEffect(() => () => controllerDictation.cancel(dictationId), [dictationId]);
+  const [dictationSelection, setDictationSelection] = useState({ start: 0, end: 0 });
+  const paletteVoice = useVoiceInputController({
+    ownerKey: `palette:${dictationId}`,
+    label: "Search commands, projects, and threads",
+    readDraftMessage: () => queryText.current,
+    selection: dictationSelection,
+    onChangeDraftMessage: (value) => {
+      queryText.current = value;
+      setQuery(value);
+    },
+    onChangeSelection: setDictationSelection,
+  });
   // Ranking is relative to when the palette opened, so rows do not reorder as time passes.
   const [now] = useState(() => Date.now());
   const [selection, setSelection] = useState<string | null>(null);
@@ -237,7 +286,7 @@ export function CommandPalette(props: {
   const pendingAction = useRef<(() => void) | null>(null);
   const closing = useRef(false);
   const inputRef = useRef<TextInputInstance>(null);
-  const listRef = useRef<FlatList<CommandPaletteResult>>(null);
+  const listRef = useRef<LegendListRef>(null);
   const { width, height } = useWindowDimensions();
   // The palette floats above every column, so it keeps itself inside the window's side insets
   // and to one side of a book fold.
@@ -249,15 +298,61 @@ export function CommandPalette(props: {
         .map((environment) => environment.environmentId),
     [environments],
   );
-  const search = useThreadSearch(searchEnvironmentIds, query.startsWith(">") ? "" : query);
-  const contentMatchByKey = useMemo(
-    () =>
-      new Map(
-        search.matches
-          .filter((match) => match.source === "user" || match.source === "assistant")
-          .map((match) => [scopedThreadKey(match.environmentId, match.threadId), match]),
-      ),
-    [search.matches],
+  // The palette matches environment names when there are several; older rows must match the same.
+  const environmentLabels =
+    environments.length > 1
+      ? Object.fromEntries(
+          searchEnvironmentIds.flatMap((environmentId) => {
+            const label = savedConnectionsById[environmentId]?.environmentLabel;
+            return label === undefined ? [] : [[environmentId, label]];
+          }),
+        )
+      : undefined;
+  const search = useThreadSearch(
+    searchEnvironmentIds,
+    query.startsWith(">") ? "" : query,
+    environmentLabels === undefined ? {} : { environmentLabels },
+  );
+  const serverConfigs = useServerConfigs();
+  const startTriage = useStartTriage();
+  const newTaskFlow = useNewTaskFlow();
+  const activeNewTask = useActiveNewTask();
+  const draftEnvironmentId =
+    activeNewTask === null ? null : (newTaskFlow.selectedProject?.environmentId ?? null);
+  const activeThreadKey =
+    activeThreadRef === null
+      ? null
+      : scopedThreadKey(activeThreadRef.environmentId, activeThreadRef.threadId);
+  const queuedEdit = useQueuedRunEdit(activeThreadKey);
+  const composedReplyKey =
+    activeNewTask !== null
+      ? newTaskFlow.draftKey
+      : activeThreadKey === null
+        ? null
+        : queuedEdit === null
+          ? activeThreadKey
+          : queuedEditDraftKey(activeThreadKey, queuedEdit.runId);
+  const composedReply = useComposerDraft(composedReplyKey);
+  const hasComposedReply =
+    composedReply.text.length > 0 ||
+    composedReply.attachments.length > 0 ||
+    (queuedEdit?.existingAttachments.length ?? 0) > 0 ||
+    (composedReply.context?.records.length ?? 0) > 0;
+  const triageEnvironmentId = pickTriageEnvironment({
+    // The route names the machine even before the thread shell loads.
+    onScreen: activeThreadRef?.environmentId ?? draftEnvironmentId,
+    connected: searchEnvironmentIds,
+    supportsTriage: (environmentId) =>
+      serverConfigs.get(environmentId)?.environment.capabilities.triage === true,
+  });
+  const canTriage =
+    useAtomValue(serverEnvironment.prepareTriage.permissionAtom(triageEnvironmentId)) &&
+    triageEnvironmentId !== null &&
+    serverConfigs.get(triageEnvironmentId)?.environment.capabilities.triage === true;
+  const contentMatchByKey = new Map(
+    search.matches
+      .filter((match) => match.source === "user" || match.source === "assistant")
+      .map((match) => [scopedThreadKey(match.environmentId, match.threadId), match]),
   );
   const items = useMemo(() => {
     const actions: CommandPaletteItem[] = [
@@ -315,7 +410,14 @@ export function CommandPalette(props: {
         kind: "action",
         title: "Pull requests",
         searchTerms: ["pr", "review", "code review", "github"],
-        run: () => selectTab("pullRequests"),
+        // Android shows pull requests as a workspace tab, like its navigation rail.
+        run: () => {
+          if (!workspaceTabs) return navigation.navigate("PullRequests");
+          workspaceTabs.dispatch({ type: "select", tab: "pullRequests" });
+          navigation.dispatch((state) =>
+            CommonActions.reset(androidWorkspaceNavigationState(state)),
+          );
+        },
       },
       {
         key: "archive",
@@ -325,6 +427,17 @@ export function CommandPalette(props: {
         run: () => openSettings(navigation, "SettingsArchive"),
       },
     ];
+    if (canTriage) {
+      actions.push({
+        key: "triage",
+        kind: "action",
+        title: "Triage an issue",
+        // Mobile has no triage hero, so name the machine before it starts.
+        detail: `On ${savedConnectionsById[triageEnvironmentId]?.environmentLabel ?? "this machine"}`,
+        searchTerms: ["triage", "bug", "issue", "report", "broken", "debug", "help", "support"],
+        run: () => void startTriage(triageEnvironmentId),
+      });
+    }
     const projectByKey = new Map(
       projects.map((project) => [scopedProjectKey(project.environmentId, project.id), project]),
     );
@@ -356,7 +469,7 @@ export function CommandPalette(props: {
         ["files", "Go to file", ["open", "files", "browse", "search"]],
         ["terminal", "Open terminal", ["shell", "console"]],
         ["review", "Review changes", ["diff", "git", "pull request"]],
-        ["copyThreadReference", "Copy PR link or thread ID", ["reference", "clipboard"]],
+        ["copyThreadReference", "Copy PR link or thread", ["reference", "clipboard"]],
       ] as const;
       actions.push(
         ...threadActions.map(([command, title, searchTerms]) => ({
@@ -368,7 +481,19 @@ export function CommandPalette(props: {
         })),
       );
     }
-    const projectItems: CommandPaletteItem[] = projects.map((project) => ({
+    if (Platform.OS === "android")
+      actions.push({
+        key: "disableController",
+        kind: "action",
+        title: "Disable controller",
+        searchTerms: ["gamepad", "controller", "off"],
+        run: () => void disableAndroidController(),
+      });
+    const openProjects = projects.filter((project) => project.archivedAt == null);
+    const projectItems: CommandPaletteItem[] = [
+      ...openProjects.filter((project) => project.pinnedAt != null),
+      ...openProjects.filter((project) => project.pinnedAt == null),
+    ].map((project) => ({
       key: `project:${scopedProjectKey(project.environmentId, project.id)}`,
       kind: "project",
       project,
@@ -391,7 +516,12 @@ export function CommandPalette(props: {
     const threadItems: CommandPaletteItem[] = threads
       .filter(
         (thread) =>
-          thread.archivedAt === null && thread.lineage.relationshipToParent !== "subagent",
+          thread.archivedAt === null &&
+          !isShownUnderParent(
+            { environmentId: thread.environmentId, threadId: thread.id },
+            thread.lineage,
+            delegatedUnderParent,
+          ),
       )
       .map((thread) => {
         const project = projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId));
@@ -425,18 +555,83 @@ export function CommandPalette(props: {
         (right.threadSearch ? threadRecentUse(right.threadSearch) : 0) -
         (left.threadSearch ? threadRecentUse(left.threadSearch) : 0),
     );
+    const threadByKey = new Map(
+      threads.map((thread) => [scopedThreadKey(thread.environmentId, thread.id), thread]),
+    );
+    const attentionThread = nextThreadNeedingAttention(
+      threadItems,
+      activeThreadKey,
+      (item) => item.key,
+      (item) => {
+        const thread = threadByKey.get(item.key);
+        if (!thread) return false;
+        const status = resolveThreadListV2RowStatus(thread);
+        return (
+          ["approval", "input", "request", "failed", "limited"].includes(status) ||
+          (status === "ready" && threadHasUnseenCompletion(thread))
+        );
+      },
+    );
+    if (attentionThread)
+      actions.push({
+        key: "nextAttentionThread",
+        kind: "action",
+        title: "Next thread needing attention",
+        searchTerms: ["next", "approval", "question", "failed", "unread"],
+        run: () => {
+          const thread = threadByKey.get(attentionThread.key);
+          if (thread) {
+            // oxlint-disable-next-line react/purity -- runs when the palette action is selected
+            claimThreadOpen(thread.environmentId, thread.id, Date.now());
+            if (thread.lastVisitedAt !== undefined)
+              void visitThread({
+                environmentId: thread.environmentId,
+                input: { threadId: thread.id, visitedAt: thread.updatedAt, opened: true },
+              });
+          }
+          attentionThread.run();
+        },
+      });
+    if (hasComposedReply && composedReplyKey !== null)
+      actions.push({
+        key: "discardReply",
+        kind: "action",
+        title: "Discard current composed reply…",
+        searchTerms: ["discard", "clear", "draft", "reply"],
+        run: () =>
+          Dialog.confirm({
+            title: "Discard current composed reply?",
+            message: "The text and attachments in this reply will be removed.",
+            confirmText: "Discard reply",
+            destructive: true,
+            onConfirm: () => {
+              controllerVoice.session.cancel(composedReplyKey);
+              discardComposerReply(composedReplyKey, activeThreadKey);
+            },
+          }),
+      });
     return [...actions, ...projectItems, ...threadItems];
   }, [
     selectTab,
+    activeThreadKey,
+    composedReplyKey,
+    hasComposedReply,
+    controllerVoice.session,
+    visitThread,
     activeThread,
     activeThreadRef,
     environments.length,
+    canTriage,
     navigation,
     projects,
     runCommand,
     savedConnectionsById,
     selectDetail,
+    startTriage,
     threads,
+    workspaceTabs,
+    delegatedUnderParent,
+    triageEnvironmentId,
   ]);
   const rankedMessageKeys = useMemo(() => {
     const subjectByKey = new Map(
@@ -505,6 +700,10 @@ export function CommandPalette(props: {
     results.findIndex((item) => item.key === selection),
   );
   const selectedKey = results[selectedIndex]?.key;
+  // The native list follows the highlighted row. Key presses move it, but so do
+  // live thread updates and late message matches that reorder or drop the
+  // selected row under a kept selection, so no single handler owns the scroll.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the native list to the highlighted row, which key presses and live result updates both move
   useEffect(() => {
     if (selectedIndex === 0) {
       // Centering before the list measures its height scrolls half the first row out of view.
@@ -515,26 +714,31 @@ export function CommandPalette(props: {
   }, [selectedIndex, selectedKey]);
 
   const dismissed = useRef(false);
-  const handleDismissed = useCallback(() => {
+  const dismissFallback = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleDismissed = () => {
+    if (dismissFallback.current !== null) clearTimeout(dismissFallback.current);
+    dismissFallback.current = null;
     if (dismissed.current) return;
     dismissed.current = true;
     // Present navigation sheets only after UIKit has dismissed this modal.
     props.onClose();
     pendingAction.current?.();
-  }, [props]);
-
-  // iOS may drop onDismiss during presentation or competing sheets; a fallback clears stale palette state.
-  useEffect(() => {
-    if (visible) return;
-    const fallback = setTimeout(handleDismissed, 400);
-    return () => clearTimeout(fallback);
-  }, [visible, handleDismissed]);
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the dismiss fallback timer on unmount
+  useEffect(
+    () => () => {
+      if (dismissFallback.current !== null) clearTimeout(dismissFallback.current);
+    },
+    [],
+  );
 
   function close(run?: () => void) {
     if (closing.current) return;
     closing.current = true;
     pendingAction.current = run ?? null;
     setVisible(false);
+    // iOS may drop onDismiss during presentation or competing sheets; a fallback clears stale palette state.
+    dismissFallback.current = setTimeout(handleDismissed, 400);
   }
 
   function onCommand(command: HardwareKeyboardCommand) {
@@ -563,7 +767,25 @@ export function CommandPalette(props: {
       onDismiss={handleDismissed}
     >
       <GestureHandlerRootView className="flex-1">
-        <T3KeyboardCommands enabledCommands={PALETTE_COMMANDS} onCommand={onCommand}>
+        <ControllerConsole
+          scopeKey="palette"
+          selection
+          enabledCommands={PALETTE_COMMANDS}
+          onCommand={onCommand}
+          onSelectionInput={({ action }) => {
+            if (action === "back") {
+              if (paletteVoice.isBusy) paletteVoice.cancel();
+              else if (!dismissAndroidKeyboard()) close();
+            } else if (action === "dictate") {
+              if (paletteVoice.isBusy) paletteVoice.stop();
+              else if (paletteVoice.isAvailable)
+                controllerDictation.start(dictationId, controllerVoice.session, paletteVoice.start);
+            } else if (action === "reset") controllerDictation.cancel(dictationId);
+            else if (action === "up" || action === "previous") onCommand("palettePrevious");
+            else if (action === "down" || action === "next") onCommand("paletteNext");
+            else if (action === "activate") onCommand("paletteSelect");
+          }}
+        >
           <KeyboardAvoidingView
             behavior="padding"
             className="flex-1 items-center justify-center py-4"
@@ -595,6 +817,10 @@ export function CommandPalette(props: {
                   />
                   <TextInput
                     ref={inputRef}
+                    editable={!paletteVoice.freezesEditor}
+                    onSelectionChange={(event) =>
+                      setDictationSelection(event.nativeEvent.selection)
+                    }
                     accessibilityLabel="Search commands, projects, and threads"
                     placeholder="Search commands, projects, and threads…"
                     placeholderTextColorClassName="accent-placeholder"
@@ -604,8 +830,11 @@ export function CommandPalette(props: {
                     className="h-[34px] flex-1 px-0 py-0 font-sans text-base text-foreground"
                     value={query}
                     onChangeText={(value) => {
+                      queryText.current = value;
                       setQuery(value);
                       setSelection(null);
+                      // The follow effect stays idle when the top row and its key are unchanged,
+                      // so a touch-scrolled list would otherwise keep its old offset.
                       listRef.current?.scrollToOffset({ offset: 0, animated: false });
                     }}
                     returnKeyType="go"
@@ -617,22 +846,23 @@ export function CommandPalette(props: {
                   />
                 </View>
               </View>
-              <FlatList
+              {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- The palette is a modal with no navigation header to register with. */}
+              <LegendList
                 ref={listRef}
                 data={results}
-                extraData={selectedKey}
+                extraData={{
+                  selectedKey,
+                  firstMessageIndex,
+                  contentMatchByKey,
+                  query: search.query,
+                }}
                 keyboardShouldPersistTaps="handled"
                 keyExtractor={(item) => item.key}
-                getItemLayout={(_, index) => ({
-                  length: ROW_HEIGHT + (index === firstMessageIndex ? SECTION_LABEL_HEIGHT : 0),
-                  offset:
-                    ROW_HEIGHT * index +
-                    (firstMessageIndex !== -1 && index > firstMessageIndex
-                      ? SECTION_LABEL_HEIGHT
-                      : 0),
-                  index,
-                })}
-                contentContainerClassName="pb-2"
+                getFixedItemSize={(_, index) =>
+                  ROW_HEIGHT + (index === firstMessageIndex ? SECTION_LABEL_HEIGHT : 0)
+                }
+                recycleItems
+                contentContainerStyle={{ paddingBottom: 8 }}
                 ListEmptyComponent={
                   <Text className="p-5 text-center text-foreground-muted">
                     {search.isPending ? "Searching…" : "No results"}
@@ -669,7 +899,7 @@ export function CommandPalette(props: {
               />
             </GlassSurface>
           </KeyboardAvoidingView>
-        </T3KeyboardCommands>
+        </ControllerConsole>
       </GestureHandlerRootView>
     </Modal>
   );

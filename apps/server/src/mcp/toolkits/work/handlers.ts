@@ -19,16 +19,15 @@ const needsLaunchAuthority = ({ action }: PitbossCommand) =>
  * declarations below refuse an MCP client signed in from outside one;
  * readCaller adds the orchestration capability.
  */
-const agent = (operation: string) =>
-  Effect.gen(function* () {
-    const context = yield* readCaller();
-    const scope = yield* requireThreadScope(context.scope, operation);
-    return {
-      actor: { type: "agent" as const, threadId: scope.thread.threadId },
-      limits: context.limits,
-      store: yield* WorkStore,
-    };
-  });
+const agent = Effect.fn("work.agent")(function* (operation: string) {
+  const context = yield* readCaller();
+  const scope = yield* requireThreadScope(context.scope, operation);
+  return {
+    actor: { type: "agent" as const, threadId: scope.thread.threadId },
+    limits: context.limits,
+    store: yield* WorkStore,
+  };
+});
 
 /** Pitboss work tools: only an agent inside a T3 thread, and work_command only during its live run. */
 export const layer = McpToolAccess.toLayer(WorkToolkit, {

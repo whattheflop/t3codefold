@@ -5,6 +5,7 @@ import { dismissAndroidKeyboard } from "../lib/android-back";
 
 /** Give the IME priority over React Navigation even on screens without a custom handler. */
 export function AndroidKeyboardBackCoordinator() {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to keyboard and BackHandler events so Back closes the IME first
   useEffect(() => {
     if (Platform.OS !== "android") return;
     let backSubscription: ReturnType<typeof BackHandler.addEventListener> | undefined;

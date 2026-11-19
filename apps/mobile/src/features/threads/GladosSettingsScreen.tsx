@@ -1,4 +1,4 @@
-import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { type StaticScreenProps } from "@react-navigation/native";
 import {
   CommandId,
@@ -25,8 +25,8 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ListRowLayout } from "../../components/ui/ListRowLayout";
-import { SettingsActionRow } from "../settings/components/SettingsActionRow";
-import { SettingsChoiceRow } from "../settings/components/SettingsChoiceRow";
+import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
+import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { SettingsSection } from "../settings/components/SettingsSection";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";

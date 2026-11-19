@@ -22,9 +22,9 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as EventStore from "../orchestration-v2/EventStore.ts";
-import * as ProjectionMaintenance from "../orchestration-v2/ProjectionMaintenance.ts";
+import * as ProjectionReplay from "../orchestration-v2/testkit/ProjectionReplay.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
-import PitbossMigration from "./FoldMigrations/001_Pitboss.ts";
+import PitbossMigration from "./fixtures/legacyFoldMigration.ts";
 import { foldMigrationEntries } from "./FoldMigrations.ts";
 import * as SqlitePersistence from "./Sqlite.ts";
 import { migrationManifest, runMigrations } from "./Migrations.ts";
@@ -378,11 +378,11 @@ describe("importFoldDatabase", () => {
 
         // The persistence layer opens the result without migrating, and its projections verify.
         const verification = yield* Effect.gen(function* () {
-          const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
+          const maintenance = yield* ProjectionReplay.ProjectionReplay;
           return yield* maintenance.verify;
         }).pipe(
           Effect.provide(
-            ProjectionMaintenance.layer.pipe(
+            ProjectionReplay.layer.pipe(
               Layer.provide(Layer.mergeAll(EventStore.layer, ProjectionStore.layer)),
               Layer.provideMerge(SqlitePersistence.layerFromPath(databasePath)),
             ),

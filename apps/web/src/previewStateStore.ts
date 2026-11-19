@@ -15,6 +15,7 @@ import { appAtomRegistry } from "./rpc/atomRegistry";
 
 export interface DesktopPreviewOverlay {
   hasWebContents: boolean;
+  navStatus: PreviewSessionSnapshot["navStatus"];
   canGoBack: boolean;
   canGoForward: boolean;
   loading: boolean;
@@ -85,7 +86,15 @@ const activePreviewSessionsAtom = Atom.make((get) => {
   return byThreadKey;
 }).pipe(Atom.withLabel("preview:active-sessions"));
 
-const changedPreviewThreadKeys = new Set<string>();
+/**
+ * Every thread whose preview state has been written. Panel tabs and the mini
+ * player follow those threads' states from a store this one cannot import
+ * (rightPanelStore -> closedViewStore -> lib/utils -> composerDraftStore ->
+ * previewStateStore is a cycle), so they subscribe through this index.
+ */
+export const previewThreadRefsAtom = Atom.make<ReadonlyMap<string, ScopedThreadRef>>(
+  new Map(),
+).pipe(Atom.keepAlive, Atom.withLabel("preview:thread-refs"));
 
 function syncActivePreviewThread(threadKey: string, state: ThreadPreviewState): void {
   const active = Object.keys(state.sessions).length > 0;
@@ -103,15 +112,17 @@ function updateThreadPreviewState(
   update: (current: ThreadPreviewState) => ThreadPreviewState,
 ): void {
   const threadKey = scopedThreadKey(ref);
+  // Indexed before the write so a new thread's subscribers see this change.
+  appAtomRegistry.update(previewThreadRefsAtom, (refs) =>
+    refs.has(threadKey) ? refs : new Map(refs).set(threadKey, ref),
+  );
   const atom = previewStateAtom(threadKey);
   let nextState = appAtomRegistry.get(atom);
   const changed = appAtomRegistry.modify(atom, (current) => {
     nextState = update(current);
     return [nextState !== current, nextState];
   });
-  if (!changed) return;
-  changedPreviewThreadKeys.add(threadKey);
-  syncActivePreviewThread(threadKey, nextState);
+  if (changed) syncActivePreviewThread(threadKey, nextState);
 }
 
 const dedupeRecentUrls = (existing: string[], url: string): string[] => {
@@ -159,6 +170,10 @@ export function useThreadPreviewState(ref: ScopedThreadRef | null | undefined): 
 
 export function useActivePreviewSessions(): Record<string, ThreadPreviewState> {
   return useAtomValue(activePreviewSessionsAtom);
+}
+
+export function readActivePreviewSessions(): Record<string, ThreadPreviewState> {
+  return appAtomRegistry.get(activePreviewSessionsAtom);
 }
 
 export function readThreadPreviewState(ref: ScopedThreadRef): ThreadPreviewState {
@@ -361,6 +376,21 @@ function haveSameValues<T>(left: Record<string, T>, right: Record<string, T>): b
   return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
+function sameDesktopNavStatus(
+  previous: DesktopPreviewOverlay["navStatus"],
+  next: DesktopPreviewOverlay["navStatus"],
+): boolean {
+  if (previous._tag === "Idle" || next._tag === "Idle") return previous._tag === next._tag;
+  return (
+    previous._tag === next._tag &&
+    previous.url === next.url &&
+    previous.title === next.title &&
+    (previous._tag !== "LoadFailed" ||
+      next._tag !== "LoadFailed" ||
+      (previous.code === next.code && previous.description === next.description))
+  );
+}
+
 function isPreviewStateEqual(
   previous: DesktopPreviewOverlay | null,
   next: DesktopPreviewOverlay | null,
@@ -370,6 +400,7 @@ function isPreviewStateEqual(
     (previous !== null &&
       next !== null &&
       previous.hasWebContents === next.hasWebContents &&
+      sameDesktopNavStatus(previous.navStatus, next.navStatus) &&
       previous.canGoBack === next.canGoBack &&
       previous.canGoForward === next.canGoForward &&
       previous.loading === next.loading &&
@@ -503,10 +534,10 @@ export function clearThreadPreviewState(ref: ScopedThreadRef): void {
 }
 
 export function resetPreviewStateForTests(): void {
-  for (const threadKey of changedPreviewThreadKeys) {
+  for (const threadKey of appAtomRegistry.get(previewThreadRefsAtom).keys()) {
     appAtomRegistry.set(previewStateAtom(threadKey), EMPTY_THREAD_PREVIEW_STATE);
   }
-  changedPreviewThreadKeys.clear();
+  appAtomRegistry.set(previewThreadRefsAtom, new Map());
   appAtomRegistry.set(activePreviewThreadKeysAtom, { keys: new Set<string>() });
 }
 

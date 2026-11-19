@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { EnvironmentId, ProjectId, FleetInvokeInput } from "@t3tools/contracts";
@@ -50,7 +51,7 @@ function fixture() {
   const command = makeFleetCommand((_flags, run) => run(client).pipe(Effect.as(undefined)));
   const run = (args: string[]) =>
     Command.runWith(command, { version: "0.0.0" })(args).pipe(
-      Effect.provide(Layer.mergeAll(NodeServices.layer, NetService.layer)),
+      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer)),
     );
   return { calls, client, run };
 }
@@ -202,7 +203,7 @@ describe("fleet CLI", () => {
         const result = yield* Effect.result(readFleetPrompt(flags));
         expect(result._tag).toBe("Failure");
       }
-    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NetService.layer))),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))),
   );
   it.effect("propagates target operation errors instead of claiming success", () =>
     Effect.gen(function* () {
@@ -230,7 +231,7 @@ describe("fleet CLI", () => {
       const f = fixture();
       yield* f.run(["start", "--project", "Repo", "--file", `${dir}/handoff.md`]);
       expect(f.calls[1]?.input).toMatchObject({ projectId, message: text });
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
   it.effect(
     "fails clearly before opening credentials when no server has published runtime state",
@@ -248,7 +249,9 @@ describe("fleet CLI", () => {
         expect(result._tag === "Failure" && result.failure.message).toContain(
           "No running T3 server",
         );
-      }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NetService.layer))),
+      }).pipe(
+        Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer)),
+      ),
   );
   it.effect("does not select arbitrarily between duplicate project titles", () =>
     Effect.gen(function* () {

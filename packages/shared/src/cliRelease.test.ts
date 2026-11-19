@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   cliArchiveTarCommand,
+  cliReleaseAssetUrl,
   cliReleaseDownloadBaseUrl,
   cliReleaseIndexPageUrl,
   newestCliReleaseVersion,
@@ -15,6 +16,9 @@ describe("cliRelease", () => {
     );
     expect(cliReleaseDownloadBaseUrl("1.2.3", "https://mirror.example/t3/")).toBe(
       "https://mirror.example/t3/fold-server-v1.2.3",
+    );
+    expect(cliReleaseAssetUrl("1.2.3", "SHA256SUMS")).toBe(
+      "https://github.com/whattheflop/T3codefold/releases/download/fold-server-v1.2.3/SHA256SUMS",
     );
   });
 

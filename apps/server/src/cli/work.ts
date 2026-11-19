@@ -20,6 +20,7 @@ const ToolReply = Schema.Struct({
   ),
 });
 
+const isPitbossError = Schema.is(PitbossError);
 const decodeReply = Schema.decodeUnknownSync(Reply);
 const decodeToolReply = Schema.decodeUnknownEffect(ToolReply);
 const decodeCommand = Schema.decodeUnknownEffect(Schema.fromJsonString(PitbossCommand));
@@ -52,6 +53,15 @@ export function readWorkReply(body: string): unknown {
     message: "The MCP endpoint did not return a result.",
   });
 }
+const parseWorkReply = (body: string) =>
+  Effect.try({
+    try: () => readWorkReply(body),
+    catch: (cause) =>
+      isPitbossError(cause)
+        ? cause
+        : new PitbossError({ code: "unavailable", message: "The MCP reply was malformed." }),
+  });
+
 const invoke = Effect.fn("work.invoke")(function* (
   name: "work_read" | "work_command",
   input: unknown,
@@ -93,7 +103,7 @@ const invoke = Effect.fn("work.invoke")(function* (
         "The scoped MCP session is unavailable. No administrative credential fallback is used.",
     });
   const initializedText = yield* initialized.text;
-  yield* Effect.try(() => readWorkReply(initializedText));
+  yield* parseWorkReply(initializedText);
   const sessionId = initialized.headers["mcp-session-id"];
   yield* send({ jsonrpc: "2.0", method: "notifications/initialized" }, sessionId);
   const response = yield* send(
@@ -101,7 +111,7 @@ const invoke = Effect.fn("work.invoke")(function* (
     sessionId,
   );
   const text = yield* response.text;
-  const result = yield* Effect.try(() => readWorkReply(text));
+  const result = yield* parseWorkReply(text);
   const tool = yield* decodeToolReply(result);
   if (tool.isError)
     return yield* new PitbossError({

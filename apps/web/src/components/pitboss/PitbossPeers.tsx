@@ -45,6 +45,7 @@ export function PitbossPeers({
       ),
     ).entries(),
   ];
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Refresh remote state while this section is open.
   useEffect(() => {
     if (!open) return;
     const timer = setInterval(query.refresh, 15000);
@@ -72,7 +73,7 @@ export function PitbossPeers({
         <NetworkIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">Peers</span>
-          <span className="block text-[13px] text-muted-foreground/80">
+          <span className="block text-sm text-muted-foreground/80">
             Share work with GLaDOS on other environments
           </span>
         </span>

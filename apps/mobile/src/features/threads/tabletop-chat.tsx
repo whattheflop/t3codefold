@@ -59,20 +59,26 @@ export function useTabletopChat(input: {
 export function TabletopKeyboardStickyView(
   props: ComponentProps<typeof KeyboardStickyView> & {
     readonly tabletop: { readonly controlsTop: number } | null;
+    readonly inFlow?: boolean;
   },
 ) {
-  const { tabletop, ...stickyProps } = props;
+  const { tabletop, inFlow, ...stickyProps } = props;
   return (
     <View
       pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        top: tabletop?.controlsTop ?? 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        overflow: tabletop ? "hidden" : "visible",
-      }}
+      // Upstream's in-flow question card lays the composer out below the feed instead of over it.
+      style={
+        !tabletop && inFlow
+          ? undefined
+          : {
+              position: "absolute",
+              top: tabletop?.controlsTop ?? 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              overflow: tabletop ? "hidden" : "visible",
+            }
+      }
     >
       <KeyboardStickyView {...stickyProps} />
     </View>

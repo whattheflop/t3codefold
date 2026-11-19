@@ -18,6 +18,7 @@ export function useVimEffectHandler(
   types: ReadonlyArray<VimEffectType>,
   handler: VimEffectHandler,
 ): void {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers a Vim effect handler in the module registry until unmount
   useEffect(() => {
     for (const type of types) {
       const handlers = effectHandlers.get(type) ?? new Set();
@@ -44,6 +45,7 @@ export function dispatchVimEffect(effect: VimEffect): boolean {
 
 /** The workspace registers the one handler that interprets Vim keys. */
 export function useVimKeyHandler(handler: (key: VimKey) => void): void {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- installs the workspace Vim key handler in the module registry until unmount
   useEffect(() => {
     keyHandler = handler;
     keyHandlerListeners.forEach((listener) => listener());

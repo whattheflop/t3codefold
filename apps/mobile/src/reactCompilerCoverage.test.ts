@@ -16,29 +16,18 @@ const metroConfig: Promise<{ transformer: { babelTransformerPath: string } }> =
 const KNOWN_BAILOUTS: Record<string, string> = {
   // Fold pane refs, UI-thread gestures and cleanup paths still need manual memoization.
   "src/features/keyboard/useWorkspaceVimNavigation.tsx": "ref read during render",
-  "src/features/layout/fold-workspace-inspector-pane.tsx": "ref read during render",
   "src/features/layout/fold-workspace-pane-divider.tsx": "mutates a frozen value",
-  "src/features/layout/fold-workspace-sidebar-column.tsx": "ref read during render",
   "src/features/layout/use-fold-workspace-android-back.ts": "ref read during render",
-  "src/features/settings/SettingsNotificationsRouteScreen.tsx": "unsupported try/finally syntax",
-  "src/features/terminal/terminalSurfaceOutput.ts": "ref read during render",
-  "src/features/threads/GladosSettingsScreen.tsx": "unsupported try/finally syntax",
-  "src/features/threads/PitbossWork.tsx": "unsupported try/finally syntax",
-  "src/features/threads/ThreadDetailScreen.tsx": "Fold tabletop viewport refs",
   "src/features/threads/thread-list-drag.tsx": "ref read during render",
   "src/features/threads/use-ui-thread-drag.ts": "mutates a frozen value",
+  "src/features/threads/GladosSettingsScreen.tsx": "unsupported try/finally syntax",
+  "src/features/threads/PitbossWork.tsx": "unsupported try/finally syntax",
   "src/features/voice-input/VoiceWorkspaceProvider.tsx": "unsupported try/finally syntax",
-  "src/components/ComposerAttachmentStrip.tsx": "unsupported syntax",
-  "src/components/ui/AndroidAnchoredMenu.tsx": "ref read during render",
   "src/components/ui/Menu.tsx": "ref read during render",
   "src/features/diffs/nativeReviewDiffSurface.ts": "ref read during render",
   "src/features/home/thread-swipe-actions.tsx": "ref read during render",
-  "src/features/terminal/ThreadTerminalRouteScreen.tsx": "ref read during render",
-  "src/features/threads/PendingUserInputCard.tsx": "mutates a frozen value",
   "src/features/threads/ThreadArrangementSheet.tsx": "ref read during render",
-  "src/features/voice-input/VoiceInputProvider.tsx": "ref read during render",
   "src/features/voice-input/useVoiceInputController.ts": "ref read during render",
-  "src/native/StackHeader.tsx": "ref read during render",
   "src/native/T3ComposerEditor.ios.tsx": "ref read during render",
   "src/native/T3ComposerEditor.native.tsx": "ref read during render",
 };
@@ -199,6 +188,24 @@ describe("React Compiler coverage", () => {
   it("caches the thread feed derivation", () => {
     expect(
       compilerCachedCalls("src/features/threads/ThreadFeed.tsx", "deriveThreadFeedPresentation"),
+    ).toEqual([true]);
+  });
+
+  // The compiler once silently dropped these caches, so the new-task context
+  // value changed on every provider render and re-rendered every consumer.
+  it("caches the new-task model options and host environments", () => {
+    const file = "src/features/threads/new-task-flow-provider.tsx";
+    expect(compilerCachedCalls(file, "buildModelOptions")).toEqual([true]);
+    expect(compilerCachedCalls(file, "repositoryGroupingKeyOf")).toEqual([true, true]);
+  });
+
+  // An uncached registration would re-register the workspace inspector on every render.
+  it("registers the workspace inspector only when its renderer changes", () => {
+    expect(
+      compilerCachedCalls(
+        "src/features/layout/AdaptiveWorkspaceLayout.tsx",
+        "registerWorkspaceInspector",
+      ),
     ).toEqual([true]);
   });
 

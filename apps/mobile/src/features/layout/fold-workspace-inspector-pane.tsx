@@ -13,20 +13,26 @@ import {
   type FoldWorkspacePaneLayout,
   type PaneDividerRelease,
 } from "../../lib/foldable-pane-layout";
-import { AndroidHeaderIconButton } from "../../components/ui/AndroidScreenHeader";
+import { AndroidHeaderIconButton } from "../../components/ui/AndroidScreenHeader.android";
 import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderErrorBoundary";
 import { FoldWorkspacePaneDivider } from "./fold-workspace-pane-divider";
 import { VimPaneFocusMarker } from "../keyboard/useWorkspaceVimNavigation";
 
-// Animate opacity and translation only; animated widths reflow chat and resize terminals every frame.
+/**
+ * Pane widths change in one layout pass: animating a width re-lays out the chat
+ * feed (and any terminal) every frame. Only the pane being shown fades and slides in.
+ */
 export const WORKSPACE_PANE_REVEAL_TIMING = {
   duration: 180,
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
 
-// Keep hidden content mounted at its last width to preserve scroll and terminal state.
-// Accept layout via props to avoid an import cycle with AdaptiveWorkspaceLayout.
+/**
+ * Fold's inspector column, a sibling of the navigator so the stack header spans only content.
+ * A hidden pane stays mounted at its last width (scroll kept, no sliver terminal widths).
+ * Takes pane layout via props to stay import-cycle-free with AdaptiveWorkspaceLayout.
+ */
 export function FoldWorkspaceInspectorPane(props: {
   readonly topRegionHeight?: number | null;
   readonly fixedDivider?: boolean;
@@ -40,8 +46,8 @@ export function FoldWorkspaceInspectorPane(props: {
   const { panes } = props;
   const width = panes.auxiliaryPaneWidth;
   const visible = props.renderInspector !== undefined && panes.auxiliaryPaneVisible;
-  const lastVisibleWidth = useRef(width ?? 0);
-  if (visible && width !== null) lastVisibleWidth.current = width;
+  const [lastVisibleWidth, setLastVisibleWidth] = useState(width ?? 0);
+  if (visible && width !== null && width !== lastVisibleWidth) setLastVisibleWidth(width);
 
   // A route replace remounts the screen that owns the inspector; starting at
   // the current visibility keeps an already-open pane from replaying its reveal.
@@ -56,12 +62,15 @@ export function FoldWorkspaceInspectorPane(props: {
     if (exitGeneration.current === generation) setRetainedInspector(null);
   }, []);
   const reveal = useSharedValue(visible ? 1 : 0);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- animates the Reanimated inspector reveal when visibility changes
   useLayoutEffect(() => {
     const generation = ++exitGeneration.current;
     const releaseRegistration = props.renderInspector === undefined;
-    reveal.value = withTiming(visible ? 1 : 0, WORKSPACE_PANE_REVEAL_TIMING, (finished) => {
-      if (finished && !visible && releaseRegistration) runOnJS(finishExit)(generation);
-    });
+    reveal.set(
+      withTiming(visible ? 1 : 0, WORKSPACE_PANE_REVEAL_TIMING, (finished) => {
+        if (finished && !visible && releaseRegistration) runOnJS(finishExit)(generation);
+      }),
+    );
   }, [finishExit, props.renderInspector, reveal, visible]);
   const revealStyle = useAnimatedStyle(() => ({
     opacity: reveal.value,
@@ -71,7 +80,7 @@ export function FoldWorkspaceInspectorPane(props: {
   if (retainedInspector === null || width === null) return null;
 
   return (
-    <>
+    <View nativeID="t3-controller-pane:inspector" className="shrink-0 flex-row">
       {visible && !props.fixedDivider && panes.auxiliaryPaneWidthRange !== null ? (
         <FoldWorkspacePaneDivider
           accessibilityLabel="Resize detail pane"
@@ -101,7 +110,7 @@ export function FoldWorkspaceInspectorPane(props: {
           className="flex-1"
           style={[
             {
-              width: visible ? width : lastVisibleWidth.current,
+              width: visible ? width : lastVisibleWidth,
               ...(visible
                 ? {}
                 : {
@@ -140,7 +149,7 @@ export function FoldWorkspaceInspectorPane(props: {
         </Animated.View>
         <VimPaneFocusMarker region="inspector" />
       </View>
-    </>
+    </View>
   );
 }
 

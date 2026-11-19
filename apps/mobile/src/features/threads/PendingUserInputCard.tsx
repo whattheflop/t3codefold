@@ -1,45 +1,57 @@
+import { ControllerPressable } from "../controller/ControllerPressable";
 import { Button } from "../../components/ui/Button";
 import { QuestionAttachments } from "./QuestionAttachments";
 import { PendingUserInputFullScreen } from "./PendingUserInputFullScreen";
 import { useVoiceViewContext } from "../voice-input/VoiceWorkspaceProvider";
-import type { RuntimeRequestId } from "@t3tools/contracts";
+import type { EnvironmentId, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
 import type { ThreadUserInputQuestion } from "@t3tools/client-runtime/state/thread-requests";
-import { useCallback, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
+import {
+  markdownProseDirection,
+  textDirection,
+  type TextDirection,
+} from "@t3tools/shared/textDirection";
+import { useNavigation } from "@react-navigation/native";
+import { useRef, useState } from "react";
+import { Platform, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
-  Easing,
-  FadeInUp,
-  FadeOutDown,
   useAnimatedStyle,
   useSharedValue,
   type DerivedValue,
   type SharedValue,
 } from "react-native-reanimated";
 
-import { USER_INPUT_TOGGLE_DURATION_MS } from "./pendingUserInputLayout";
-
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { ControlPill } from "../../components/ui/ControlPill";
 import { cn } from "../../lib/cn";
+import { resolveMarkdownLinkPresentation } from "../../lib/markdownLinks";
 import { SelectableMarkdownText } from "../../native/SelectableMarkdownText";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
 import {
+  fileRoutePathSegments,
+  resolveFileLinkPath,
+  resolveWorkspaceRelativeFilePath,
+} from "../files/filePath";
+import { useLiveThreadLinkLabels } from "../../state/entities";
+import {
   isPendingUserInputOptionSelected,
-  type PendingUserInput,
   type PendingUserInputDraftAnswer,
-} from "../../lib/threadActivity";
+} from "@t3tools/client-runtime/state/pending-user-input";
+import type { PendingUserInput } from "../../lib/threadActivity";
 
 export interface PendingUserInputCardProps {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly workspaceRoot: string | null;
   readonly canOperateThread: boolean;
   readonly pendingUserInput: PendingUserInput;
   readonly maxHeight: DerivedValue<number>;
   readonly collapsed: boolean;
   readonly onToggleCollapsed: () => void;
   readonly onStopThread?: () => void;
-  readonly cardProgress?: SharedValue<number>;
-  readonly cardCoverage?: SharedValue<number>;
+  readonly cardProgress: SharedValue<number>;
+  readonly cardCoverage: SharedValue<number>;
   readonly onInputFocusChange?: (focused: boolean) => void;
   readonly drafts: Record<string, PendingUserInputDraftAnswer>;
   readonly answers: Record<string, string | ReadonlyArray<string>> | null;
@@ -58,17 +70,54 @@ export interface PendingUserInputCardProps {
   readonly onDismiss: () => Promise<unknown>;
 }
 
-/** Android cannot hit-test overlays beyond their parent's bounds; render its expanded card in-flow. */
-const EXPANDED_CARD_IS_OVERLAY = Platform.OS === "ios";
+function proseDirectionStyle(text: string, setDirection: TextDirection | undefined) {
+  const direction = textDirection(text);
+  return {
+    ...(direction ? { direction, writingDirection: direction } : null),
+    textAlign: (direction === "rtl") === (setDirection === "rtl") ? "left" : "right",
+  } as const;
+}
 
-function QuestionText(props: { readonly markdown: string }) {
+function QuestionText(props: {
+  readonly markdown: string;
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly workspaceRoot: string | null;
+  readonly setDirection: TextDirection | undefined;
+  readonly preserveSoftBreaks?: boolean;
+}) {
   const styles = useMarkdownPreviewStyles();
-  const openLink = useOpenPullRequest();
+  const markdown = useLiveThreadLinkLabels(props.markdown, props.environmentId);
+  const navigation = useNavigation();
+  const openPullRequest = useOpenPullRequest();
+  const openLink = (href: string) => {
+    const link = resolveMarkdownLinkPresentation(href);
+    if (link.kind !== "file") {
+      void openPullRequest(href);
+      return;
+    }
+    const path = resolveFileLinkPath(props.workspaceRoot, link.path);
+    if (path === null) return;
+    navigation.navigate("ThreadFile", {
+      environmentId: String(props.environmentId),
+      threadId: String(props.threadId),
+      path: fileRoutePathSegments(
+        resolveWorkspaceRelativeFilePath(props.workspaceRoot, path) ?? path,
+      ),
+      ...(link.line ? { line: String(link.line) } : {}),
+    });
+  };
   return (
     <SelectableMarkdownText
-      markdown={props.markdown}
+      markdown={markdown}
       textStyle={styles.nativeTextStyle}
-      onLinkPress={(href) => void openLink(href)}
+      writingDirection={markdownProseDirection(markdown)}
+      // Android's renderer aligns relative to each paragraph's direction.
+      textAlign={
+        Platform.OS === "android" ? undefined : props.setDirection === "rtl" ? "right" : "left"
+      }
+      onLinkPress={openLink}
+      preserveSoftBreaks={props.preserveSoftBreaks}
     />
   );
 }
@@ -79,53 +128,66 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const questionCount = props.pendingUserInput.questions.length;
   const canRespond = props.pendingUserInput.responseCapability !== "not_resumable";
   const isResponding = props.respondingUserInputId === props.pendingUserInput.requestId;
-  const responseDisabled = !canRespond || isResponding;
+  const responseDisabled = !props.canOperateThread || !canRespond || isResponding;
   // Opt-in reading mode for long requests; the card stays the default presentation.
   const [fullScreen, setFullScreen] = useState(false);
+  const setDirection = markdownProseDirection(
+    props.pendingUserInput.questions
+      .flatMap((question) => [
+        question.header,
+        question.question,
+        ...question.options.flatMap((option) => [option.label, option.description ?? ""]),
+      ])
+      .join(" "),
+  );
 
-  const cardCoverage = props.cardCoverage;
+  const { cardCoverage, cardProgress, maxHeight } = props;
   const barHeightRef = useRef(0);
   const cardHeightRef = useRef(0);
   const cardHeight = useSharedValue(0);
-  const notifyCoverage = useCallback(() => {
-    if (!cardCoverage) {
-      return;
-    }
+  const notifyCoverage = () => {
     // The card resizes with the keyboard every frame, so easing each sample would leave the
     // feed inset and floating controls trailing it.
-    cardCoverage.value = Math.max(0, cardHeightRef.current - barHeightRef.current);
-  }, [cardCoverage]);
-  const handleBarLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      barHeightRef.current = event.nativeEvent.layout.height;
-      notifyCoverage();
-    },
-    [notifyCoverage],
-  );
-  const handleCardLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      cardHeightRef.current = event.nativeEvent.layout.height;
-      cardHeight.value = event.nativeEvent.layout.height;
-      notifyCoverage();
-    },
-    [cardHeight, notifyCoverage],
-  );
-  const cardProgress = props.cardProgress;
-  const maxHeight = props.maxHeight;
+    cardCoverage.set(Math.max(0, cardHeightRef.current - barHeightRef.current));
+  };
+  const handleBarLayout = (event: LayoutChangeEvent) => {
+    barHeightRef.current = event.nativeEvent.layout.height;
+    notifyCoverage();
+  };
+  const handleCardLayout = (event: LayoutChangeEvent) => {
+    cardHeightRef.current = event.nativeEvent.layout.height;
+    cardHeight.set(event.nativeEvent.layout.height);
+    notifyCoverage();
+  };
   const cardAnimatedStyle = useAnimatedStyle(() => {
-    const progress = cardProgress === undefined ? 1 : cardProgress.value;
+    const progress = cardProgress.value;
+    const travel = Platform.OS === "android" ? cardCoverage.value : cardHeight.value;
     return {
       maxHeight: maxHeight.value,
-      transform: [{ translateY: (1 - progress) * cardHeight.value }],
+      opacity:
+        Platform.OS === "android"
+          ? Math.min(1, (progress * cardHeight.value) / Math.max(1, cardHeight.value - travel))
+          : 1,
+      transform: [{ translateY: (1 - progress) * travel }],
     };
   });
-  const cardMaxHeightStyle = useAnimatedStyle(() => ({ maxHeight: maxHeight.value }));
+  // Android hit-tests inside the parent; its height is also the space the card takes below the feed.
+  const androidBoundsStyle = useAnimatedStyle(() => ({
+    paddingTop: cardCoverage.value * cardProgress.value,
+  }));
   const overlayHeightStyle = useAnimatedStyle(() => ({ height: maxHeight.value }));
 
-  // Keep the iOS card mounted so expansion starts on the UI thread without waiting for React layout.
-  const renderCard = EXPANDED_CARD_IS_OVERLAY || !props.collapsed;
-  const showBar = props.collapsed || EXPANDED_CARD_IS_OVERLAY;
-  const bar = showBar ? (
+  const stopButton = props.onStopThread ? (
+    <ControlPill
+      accessibilityLabel="Stop"
+      icon="stop.fill"
+      variant="danger"
+      className="h-9 w-9"
+      disabled={!props.canOperateThread}
+      onPress={props.onStopThread}
+    />
+  ) : null;
+  const bar = (
     <View
       onLayout={handleBarLayout}
       pointerEvents={props.collapsed ? "auto" : "none"}
@@ -133,7 +195,8 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       importantForAccessibility={props.collapsed ? "auto" : "no-hide-descendants"}
       className="flex-row items-center gap-2 rounded-full border border-border bg-card-alt py-1.5 pl-4 pr-1.5"
     >
-      <Pressable
+      <ControllerPressable
+        onActivate={props.onToggleCollapsed}
         accessibilityRole="button"
         accessibilityLabel={`Expand user input, ${questionCount} question${
           questionCount === 1 ? "" : "s"
@@ -154,51 +217,46 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           tintColorClassName={"accent-icon-subtle"}
           type="monochrome"
         />
-      </Pressable>
-      {props.onStopThread ? (
-        <ControlPill
-          accessibilityLabel="Stop"
-          icon="stop.fill"
-          variant="danger"
-          className="h-9 w-9"
-          disabled={!props.canOperateThread}
-          onPress={props.onStopThread}
-        />
-      ) : null}
+      </ControllerPressable>
+      {stopButton}
     </View>
-  ) : null;
-  const card = renderCard ? (
+  );
+  const card = (
     <Animated.View
       onLayout={handleCardLayout}
       pointerEvents={props.collapsed ? "none" : "auto"}
       accessibilityElementsHidden={props.collapsed}
       importantForAccessibility={props.collapsed ? "no-hide-descendants" : "auto"}
-      entering={
-        EXPANDED_CARD_IS_OVERLAY
-          ? undefined
-          : FadeInUp.duration(USER_INPUT_TOGGLE_DURATION_MS).easing(Easing.out(Easing.cubic))
-      }
-      exiting={
-        EXPANDED_CARD_IS_OVERLAY
-          ? undefined
-          : FadeOutDown.duration(USER_INPUT_TOGGLE_DURATION_MS).easing(Easing.out(Easing.cubic))
-      }
       className="overflow-hidden gap-2.5 rounded-[20px] border border-border bg-card-alt p-4"
-      style={EXPANDED_CARD_IS_OVERLAY ? cardAnimatedStyle : cardMaxHeightStyle}
+      style={cardAnimatedStyle}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Collapse user input"
-        onPress={props.onToggleCollapsed}
-        className="flex-row items-start gap-2"
-      >
-        <View className="flex-1 gap-2.5">
-          <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-            User input needed
-          </Text>
-          <Text className="font-t3-bold text-lg text-foreground">Fill in the pending answers</Text>
-        </View>
-        <Pressable
+      <View className="flex-row items-start gap-2">
+        <ControllerPressable
+          onActivate={props.onToggleCollapsed}
+          accessibilityRole="button"
+          accessibilityLabel="Collapse user input"
+          onPress={props.onToggleCollapsed}
+          className="flex-1 flex-row items-start gap-2"
+        >
+          <View className="flex-1 gap-2.5">
+            <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
+              User input needed
+            </Text>
+            <Text className="font-t3-bold text-lg text-foreground">
+              Fill in the pending answers
+            </Text>
+          </View>
+          <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
+            <SymbolView
+              name="chevron.down"
+              size={13}
+              tintColorClassName={"accent-icon-subtle"}
+              type="monochrome"
+            />
+          </View>
+        </ControllerPressable>
+        <ControllerPressable
+          onActivate={() => setFullScreen(true)}
           accessibilityRole="button"
           accessibilityLabel="Open user input full screen"
           onPress={() => setFullScreen(true)}
@@ -210,16 +268,9 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             tintColorClassName={"accent-icon-subtle"}
             type="monochrome"
           />
-        </Pressable>
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
-          <SymbolView
-            name="chevron.down"
-            size={13}
-            tintColorClassName={"accent-icon-subtle"}
-            type="monochrome"
-          />
-        </View>
-      </Pressable>
+        </ControllerPressable>
+        {stopButton}
+      </View>
       <ScrollView
         bounces={false}
         className="min-h-0"
@@ -239,10 +290,20 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           const draft = props.drafts[question.id];
           return (
             <View key={question.id} className="gap-2 pt-1">
-              <Text className="font-t3-bold text-xs uppercase tracking-[1px] text-foreground-muted">
+              <Text
+                className="font-t3-bold text-xs uppercase tracking-[1px] text-foreground-muted"
+                style={proseDirectionStyle(question.header, setDirection)}
+              >
                 {question.header}
               </Text>
-              <QuestionText markdown={question.question} />
+              <QuestionText
+                markdown={question.question}
+                environmentId={props.environmentId}
+                threadId={props.threadId}
+                workspaceRoot={props.workspaceRoot}
+                setDirection={setDirection}
+                preserveSoftBreaks
+              />
               <View className="gap-2">
                 {question.options.map((option) => {
                   const optionValue = option.value ?? option.label.trim();
@@ -250,44 +311,70 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
                   const description =
                     option.description !== option.label ? option.description : undefined;
                   return (
-                    <Pressable
-                      key={optionValue}
-                      accessibilityRole={question.multiSelect ? "checkbox" : "radio"}
-                      accessibilityState={{ checked: selected, disabled: responseDisabled }}
-                      disabled={responseDisabled}
-                      className={cn(
-                        "min-h-12 w-full rounded-2xl border px-3.5 py-3",
-                        selected ? "border-primary bg-primary/10" : "border-border bg-input",
-                      )}
-                      onPress={() =>
-                        props.onSelectOption(
-                          props.pendingUserInput.requestId,
-                          question,
-                          optionValue,
-                        )
-                      }
-                    >
-                      <View className="min-w-0 flex-1 gap-0.5">
-                        <Text
-                          className={cn(
-                            "font-t3-bold text-sm",
-                            selected ? "text-foreground" : "text-foreground-secondary",
-                          )}
-                        >
-                          {option.label}
-                        </Text>
-                        {description ? (
-                          <Text className="font-sans text-sm leading-5 text-foreground-muted">
-                            {description}
+                    <View key={optionValue} className="gap-1.5">
+                      <ControllerPressable
+                        controllerKey={`${props.pendingUserInput.requestId}:${question.id}:${optionValue}`}
+                        onActivate={() =>
+                          props.onSelectOption(
+                            props.pendingUserInput.requestId,
+                            question,
+                            optionValue,
+                          )
+                        }
+                        accessibilityRole={question.multiSelect ? "checkbox" : "radio"}
+                        accessibilityState={{ checked: selected, disabled: responseDisabled }}
+                        disabled={responseDisabled}
+                        className={cn(
+                          "min-h-12 w-full rounded-2xl border px-3.5 py-3",
+                          selected ? "border-primary bg-primary/10" : "border-border bg-input",
+                        )}
+                        onPress={() =>
+                          props.onSelectOption(
+                            props.pendingUserInput.requestId,
+                            question,
+                            optionValue,
+                          )
+                        }
+                      >
+                        <View className="min-w-0 flex-1 gap-0.5">
+                          <Text
+                            className={cn(
+                              "font-t3-bold text-sm",
+                              selected ? "text-foreground" : "text-foreground-secondary",
+                            )}
+                            style={proseDirectionStyle(option.label, setDirection)}
+                          >
+                            {option.label}
                           </Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
+                          {description ? (
+                            <Text
+                              className="font-sans text-sm leading-5 text-foreground-muted"
+                              style={proseDirectionStyle(description, setDirection)}
+                            >
+                              {description}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </ControllerPressable>
+                      {option.preview ? (
+                        <View className="px-3.5">
+                          <QuestionText
+                            markdown={option.preview}
+                            environmentId={props.environmentId}
+                            threadId={props.threadId}
+                            workspaceRoot={props.workspaceRoot}
+                            setDirection={setDirection}
+                            preserveSoftBreaks
+                          />
+                        </View>
+                      ) : null}
+                    </View>
                   );
                 })}
               </View>
               {question.allowCustomAnswer !== false ? (
                 <QuestionAttachments
+                  key={`${props.pendingUserInput.requestId}:${question.id}`}
                   requestId={props.pendingUserInput.requestId}
                   question={question}
                   questions={props.pendingUserInput.questions}
@@ -305,6 +392,8 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       </ScrollView>
       <Button
         label="Submit answers"
+        controllerFooter
+        controllerKey={props.pendingUserInput.requestId}
         fullWidth
         tone={props.answers ? "primary" : "secondary"}
         disabled={!props.canOperateThread || responseDisabled || props.answers === null}
@@ -324,14 +413,17 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
         </Text>
       ) : null}
     </Animated.View>
-  ) : null;
+  );
   return (
-    <View className="relative">
+    <Animated.View
+      className="relative"
+      style={Platform.OS === "android" ? androidBoundsStyle : undefined}
+    >
       {bar}
       <PendingUserInputFullScreen
         visible={fullScreen}
         pendingUserInput={props.pendingUserInput}
-        canRespond={canRespond}
+        canRespond={props.canOperateThread && canRespond}
         drafts={props.drafts}
         answers={props.answers}
         respondingUserInputId={props.respondingUserInputId}
@@ -342,17 +434,13 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
         onSubmit={props.onSubmit}
         onDismiss={props.onDismiss}
       />
-      {EXPANDED_CARD_IS_OVERLAY ? (
-        <Animated.View
-          pointerEvents={props.collapsed ? "none" : "box-none"}
-          className="absolute inset-x-0 bottom-0 justify-end overflow-hidden"
-          style={overlayHeightStyle}
-        >
-          {card}
-        </Animated.View>
-      ) : (
-        card
-      )}
-    </View>
+      <Animated.View
+        pointerEvents={props.collapsed ? "none" : "box-none"}
+        className="absolute inset-x-0 bottom-0 justify-end overflow-hidden"
+        style={overlayHeightStyle}
+      >
+        {card}
+      </Animated.View>
+    </Animated.View>
   );
 }

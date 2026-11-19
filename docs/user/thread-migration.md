@@ -28,9 +28,9 @@ present.
 
 Fold builds before 0.4.0 stored their V2 database under migration numbers that upstream T3 Code
 now uses for other changes. On the first start of 0.4.0 or later, the server upgrades `statev2.sqlite`
-in place before it opens it: threads, projects, GLaDOS work, pairings, and settings carry over with
-the same IDs. In-flight background work and queued GLaDOS actions from the old build are cancelled
-rather than replayed; start them again if you still need them.
+in place before it opens it: threads, projects, pairings, and settings carry over with
+the same IDs. In-flight background work from the old build is cancelled rather than replayed; start
+it again if you still need it.
 
 The original database is kept beside the new one as `statev2.fold-backup-<timestamp>.sqlite`.
 The upgrade needs free disk space of about three times the database size while it runs (the backup
@@ -61,7 +61,7 @@ handoff is also a good choice when the old conversation contains conflicting ins
 
 T3 Code does not currently have a whole-thread export command. Before a major server update, stop
 the server and copy its `userdata` directory to a safe location. The default is
-`~/.t3/userdata`; a server started with `--home-dir <path>` uses `<path>/userdata`.
+`~/.t3/userdata`; a server started with `--base-dir <path>` uses `<path>/userdata`.
 
 If a migrated transcript is missing from the app, keep that copy unchanged. You can inspect the
 old transcript without starting a server against it:

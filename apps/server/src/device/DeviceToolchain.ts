@@ -40,10 +40,13 @@ export class DeviceToolchainInstallError extends Schema.TaggedError<DeviceToolch
     tool: Schema.String,
     step: Schema.String,
     exitCode: Schema.optional(Schema.Number),
+    reason: Schema.optional(Schema.Literal("npm_not_found")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
+    if (this.reason === "npm_not_found")
+      return "Device support needs npm, which is not on the T3 server's PATH. Install npm (it comes with Node.js from nodejs.org), restart T3 Code, then retry.";
     const suffix = this.exitCode === undefined ? "" : ` (exit code ${this.exitCode})`;
     return `Installing ${this.tool} failed while ${this.step}${suffix}.`;
   }
@@ -98,6 +101,11 @@ const isInstalled = Effect.fn("DeviceToolchain.isInstalled")(function* (
   return entryExists && Option.isSome(sentinel) && sentinel.value.trim() === version;
 });
 
+const isCommandNotFound = (error: ProcessRunner.ProcessRunError) =>
+  error._tag === "ProcessSpawnError" &&
+  error.cause instanceof PlatformError.PlatformError &&
+  error.cause.reason._tag === "NotFound";
+
 const installTool = Effect.fn("DeviceToolchain.installTool")(function* (
   spec: ToolSpec,
   paths: DeviceToolPaths,
@@ -135,8 +143,7 @@ const installTool = Effect.fn("DeviceToolchain.installTool")(function* (
       .pipe(
         Effect.catchTags({
           ProcessSpawnError: (error) =>
-            error.cause instanceof PlatformError.PlatformError &&
-            error.cause.reason._tag === "NotFound"
+            isCommandNotFound(error)
               ? runner.run({
                   command: "pnpm",
                   args: ["--package=npm@11", "dlx", "npm", ...installArgs],
@@ -144,7 +151,16 @@ const installTool = Effect.fn("DeviceToolchain.installTool")(function* (
                 })
               : Effect.fail(error),
         }),
-        Effect.mapError(fail("running npm install")),
+        Effect.mapError((cause) =>
+          isCommandNotFound(cause)
+            ? new DeviceToolchainInstallError({
+                tool: spec.name,
+                step: "running npm install",
+                reason: "npm_not_found",
+                cause,
+              })
+            : fail("running npm install")(cause),
+        ),
       );
     if (result.code !== 0) {
       return yield* new DeviceToolchainInstallError({
@@ -227,6 +243,19 @@ export const isDeviceHubInstalled = (baseDir: string) =>
 
 export const isAgentDeviceInstalled = (baseDir: string) =>
   isToolInstalled(baseDir, AGENT_DEVICE_SPEC, (paths) => paths.agentDevice);
+
+/** Entry of the first installed agent-device among `versions`; never installs. */
+export const installedAgentDeviceEntry = Effect.fn("DeviceToolchain.installedAgentDeviceEntry")(
+  function* (baseDir: string, versions: ReadonlyArray<string>) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    for (const version of versions) {
+      const paths = toolPaths(path, baseDir, { ...AGENT_DEVICE_SPEC, version });
+      if (yield* isInstalled(fs, paths, version)) return paths.entryPath;
+    }
+    return null;
+  },
+);
 
 export const deviceToolVersions = Effect.fn("DeviceToolchain.versions")(function* (
   baseDir: string,

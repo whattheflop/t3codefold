@@ -2,7 +2,7 @@
    cascade position they had at the end of their index.css sections. All rules
    are unlayered, like the index.css rules they sit beside. */
 
-/* Backdrop artwork for the chat canvas: paint splatter in the active theme's
+/* Backdrop artwork for the chat and Factory canvases: paint splatter in the active theme's
    colours. Layout lives here; the images come from the runtime renderer
    described below.
 
@@ -29,7 +29,7 @@
    overlay on top of it, and nothing animates, so the layers rasterize once and
    are never re-blended afterwards. See the --surface-grain note in index.css for what
    a full-viewport overlay cost us last time. */
-[data-chat-canvas] {
+:is([data-chat-canvas], [data-factory-canvas]) {
   background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
   background-position:
     top right,
@@ -48,7 +48,7 @@
 /* On a phone both clusters scale up to stay legible, and the lower one lifts
    clear of the composer, which would otherwise bury its largest splat. */
 @media (max-width: 640px) {
-  [data-chat-canvas] {
+  :is([data-chat-canvas], [data-factory-canvas]) {
     background-position:
       top right,
       left -18vw bottom 12%,
@@ -74,15 +74,15 @@
    light half takes less: the same noise over a near-white canvas reads as dirt
    long before it reads as texture. Defined for every canvas, but only painted
    while the backdrop is on. */
-[data-chat-canvas] {
+:is([data-chat-canvas], [data-factory-canvas]) {
   --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.07'/%3E%3C/svg%3E");
 }
 
-html.dark [data-chat-canvas] {
+html.dark :is([data-chat-canvas], [data-factory-canvas]) {
   --canvas-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.12'/%3E%3C/svg%3E");
 }
 
-html[data-theme-backdrop="on"] [data-chat-canvas] {
+html[data-theme-backdrop="on"] :is([data-chat-canvas], [data-factory-canvas]) {
   background-image:
     var(--backdrop-a), var(--backdrop-b), var(--backdrop-merges, none), var(--backdrop-field),
     var(--canvas-grain);
