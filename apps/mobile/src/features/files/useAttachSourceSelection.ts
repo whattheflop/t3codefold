@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { ComposerContextId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useCallback } from "react";
@@ -17,6 +18,7 @@ export function useAttachSourceSelection(input: {
   readonly contents: string | null;
   readonly path: string;
 }) {
+  const gt = useGT();
   const selectDetail = useSelectWorkspaceDetail();
   const { environmentId, threadId, contents, path } = input;
   const attachSelectedLines = useCallback(
@@ -38,10 +40,13 @@ export function useAttachSourceSelection(input: {
           },
         });
       } else {
-        Alert.alert("Too many context items", "Remove some context from the draft and try again.");
+        Alert.alert(
+          gt("Too many context items"),
+          gt("Remove some context from the draft and try again."),
+        );
       }
     },
-    [selectDetail, environmentId, threadId, contents, path],
+    [gt, selectDetail, environmentId, threadId, contents, path],
   );
   return threadId === null ? undefined : attachSelectedLines;
 }

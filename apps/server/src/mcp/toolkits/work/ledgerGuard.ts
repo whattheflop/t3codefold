@@ -6,14 +6,7 @@ import { activeLeads } from "../../../pitboss/Leads.ts";
 import { WorkStore } from "../../../pitboss/WorkStore.ts";
 import { McpInvocationContext } from "../../McpInvocationContext.ts";
 
-/**
- * Keeps GLaDOS and project leads inside the durable work ledger. Both hold the
- * ordinary thread tools, and spawning an agent with them creates work with no
- * task identity, no evidence and no acceptance: a second, undurable work domain
- * beside the real one. Workers keep the tools, since a subagent inside an
- * assigned task is bounded by that task. Client callers have no thread, so they
- * are never a coordinator. Call it at the top of tools that start agents.
- */
+// Coordinator launches need a ledger task so their evidence and acceptance can be tracked.
 export const requireLedgerDelegation = Effect.fn("mcp.requireLedgerDelegation")(function* (
   tool: string,
 ) {

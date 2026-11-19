@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -66,6 +67,7 @@ import { PitbossSources } from "./PitbossSources";
 
 /** The one place to set up and configure GLaDOS for the selected environment (/settings/glados). */
 export function GladosSettingsPanel() {
+  const gt = useGT();
   const { environment } = useSettingsScope();
   return (
     <SettingsPageContainer>
@@ -77,7 +79,7 @@ export function GladosSettingsPanel() {
         />
       ) : (
         <SettingsSection title="GLaDOS">
-          <SettingsRow title="Connect an environment to set up GLaDOS." />
+          <SettingsRow title={gt("Connect an environment to set up GLaDOS.")} />
         </SettingsSection>
       )}
     </SettingsPageContainer>
@@ -173,20 +175,20 @@ function WorkerModelPicker({
 
 function CountSelect({
   label,
-  unit,
+  formatCount,
   max,
   value,
   onChange,
 }: {
   label: string;
-  unit: [string, string];
+  formatCount: (count: number) => string;
   max: number;
   value: number;
   onChange: (value: number) => void;
 }) {
   const options = Array.from({ length: max }, (_, i) => ({
     value: String(i + 1),
-    label: `${i + 1} ${i === 0 ? unit[0] : unit[1]}`,
+    label: formatCount(i + 1),
   }));
   return (
     <Select
@@ -254,7 +256,7 @@ function ConfirmRow({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogClose disabled={busy} render={<Button variant="outline" />}>
-                Cancel
+                <T>Cancel</T>
               </AlertDialogClose>
               <Button
                 variant="destructive"
@@ -272,6 +274,7 @@ function ConfirmRow({
 }
 
 function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId; label: string }) {
+  const gt = useGT();
   const query = useEnvironmentQuery(serverEnvironment.pitbossLive({ environmentId, input: {} }));
   const peers = useEnvironmentQuery(serverEnvironment.pitbossPeers({ environmentId, input: {} }));
   const mutate = useAtomCommand(serverEnvironment.pitbossCommand, { label: "GLaDOS settings" });
@@ -327,7 +330,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
     return (
       <SettingsSection title="GLaDOS">
         <SettingsRow
-          title={query.error ? "GLaDOS is unavailable" : "Loading GLaDOS…"}
+          title={query.error ? gt("GLaDOS is unavailable") : gt("Loading GLaDOS…")}
           description={query.error ? String(query.error) : undefined}
         />
       </SettingsSection>
@@ -350,11 +353,13 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
     return (
       <SettingsSection title="GLaDOS" hideTitle>
         <SettingsRow
-          title="GLaDOS is not set up"
+          title={gt("GLaDOS is not set up")}
           description={
             setupModel
-              ? `An always-on coordinator on ${label} that plans work and runs agents for you.`
-              : "Connect an available provider in Settings to set up GLaDOS."
+              ? gt("An always-on coordinator on {label} that plans work and runs agents for you.", {
+                  label,
+                })
+              : gt("Connect an available provider in Settings to set up GLaDOS.")
           }
           control={
             <Button
@@ -372,7 +377,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
               }}
             >
               <CrownIcon className="size-3.5" />
-              Set up GLaDOS
+              <T>Set up GLaDOS</T>
             </Button>
           }
         />
@@ -398,10 +403,17 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
 
   return (
     <>
-      <SettingsSection title="Status" hideTitle>
+      <SettingsSection title={gt("Status")} hideTitle>
         <SettingsRow
-          title={role.paused ? "GLaDOS is paused" : "GLaDOS is running"}
-          description={`Home on ${label} · ${working} ${working === 1 ? "worker" : "workers"} active${needsYou ? ` · ${needsYou} ${needsYou === 1 ? "needs" : "need"} you` : ""}`}
+          title={role.paused ? gt("GLaDOS is paused") : gt("GLaDOS is running")}
+          description={
+            needsYou
+              ? gt(
+                  "Home on {label} · Active workers: {working} · Need your attention: {needsYou}",
+                  { label, working, needsYou },
+                )
+              : gt("Home on {label} · Active workers: {working}", { label, working })
+          }
           control={
             <>
               <Button
@@ -415,10 +427,10 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                 ) : (
                   <PauseIcon className="size-3.5" />
                 )}
-                {role.paused ? "Resume" : "Pause"}
+                {role.paused ? gt("Resume") : gt("Pause")}
               </Button>
               <Button size="sm" disabled={busy} onClick={() => void openHome()}>
-                Open GLaDOS
+                <T>Open GLaDOS</T>
               </Button>
             </>
           }
@@ -426,17 +438,20 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
         {errorRow}
       </SettingsSection>
 
-      <SettingsSection title="Brief">
-        <SettingsRow title="Priorities" description="What matters most, and what should wait.">
+      <SettingsSection title={gt("Brief")}>
+        <SettingsRow
+          title={gt("Priorities")}
+          description={gt("What matters most, and what should wait.")}
+        >
           <Textarea
             className="mb-2 mt-3"
             value={brief.priorities}
             disabled={busy}
             onChange={(event) => edit({ priorities: event.target.value })}
-            placeholder="What matters most? What should wait?"
+            placeholder={gt("What matters most? What should wait?")}
           />
         </SettingsRow>
-        <SettingsRow title="Projects" description="Where GLaDOS may start work.">
+        <SettingsRow title={gt("Projects")} description={gt("Where GLaDOS may start work.")}>
           <div className="mb-2 mt-3 flex flex-wrap gap-2">
             {brief.projectIds.map((id) => (
               <span
@@ -448,7 +463,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                 <Button
                   size="icon-micro"
                   variant="ghost-muted"
-                  aria-label={`Remove ${projectName(id)}`}
+                  aria-label={gt("Remove {project}", { project: projectName(id) })}
                   disabled={busy}
                   onClick={() =>
                     edit({ projectIds: brief.projectIds.filter((entry) => entry !== id) })
@@ -469,7 +484,7 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                 }
               >
                 <PlusIcon className="size-3.5" />
-                Add project
+                <T>Add project</T>
               </MenuTrigger>
               <MenuPopup align="start">
                 {addableProjects.map((project) => (
@@ -486,19 +501,23 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="How GLaDOS works">
+      <SettingsSection title={gt("How GLaDOS works")}>
         <SettingsRow
-          title="Autonomy"
+          title={gt("Autonomy")}
           description={
             autonomy === "full-auto"
-              ? "Full auto: GLaDOS and its workers run without approval prompts and verify their own work."
+              ? gt(
+                  "Full auto: GLaDOS and its workers run without approval prompts and verify their own work.",
+                )
               : autonomy === "ask"
-                ? "Ask me: GLaDOS and its workers ask for approvals, and you review each new verification recipe."
-                : "Custom permissions. Pick a preset to simplify."
+                ? gt(
+                    "Ask me: GLaDOS and its workers ask for approvals, and you review each new verification recipe.",
+                  )
+                : gt("Custom permissions. Pick a preset to simplify.")
           }
           control={
             <ToggleGroup
-              aria-label="Autonomy"
+              aria-label={gt("Autonomy")}
               variant="outline"
               size="sm"
               value={autonomy === "custom" ? [] : [autonomy]}
@@ -514,19 +533,23 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                 if (draft) setDraft(withPitbossAutonomy(draft, next));
               }}
             >
-              <Toggle value="ask">Ask me</Toggle>
-              <Toggle value="full-auto">Full auto</Toggle>
+              <Toggle value="ask">
+                <T>Ask me</T>
+              </Toggle>
+              <Toggle value="full-auto">
+                <T>Full auto</T>
+              </Toggle>
             </ToggleGroup>
           }
         />
         <SettingsRow
-          title="Model"
-          description="Used by workers GLaDOS starts."
+          title={gt("Model")}
+          description={gt("Used by workers GLaDOS starts.")}
           control={
             <WorkerModelPicker
               catalog={catalog}
               value={brief.workerModel}
-              label="Worker model"
+              label={gt("Worker model")}
               disabled={busy}
               onChange={(workerModel) => edit({ workerModel })}
             />
@@ -534,8 +557,8 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
         />
         <Collapsible>
           <SettingsRow
-            title="Advanced"
-            description="Workers, attempts, quality bar, fallback model"
+            title={gt("Advanced")}
+            description={gt("Workers, attempts, quality bar, fallback model")}
             control={
               <CollapsibleTrigger
                 className="group"
@@ -549,12 +572,14 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
           />
           <CollapsiblePanel>
             <SettingsRow
-              title="Concurrent workers"
-              description="Workers GLaDOS may run at once."
+              title={gt("Concurrent workers")}
+              description={gt("Workers GLaDOS may run at once.")}
               control={
                 <CountSelect
-                  label="Concurrent workers"
-                  unit={["worker", "workers"]}
+                  label={gt("Concurrent workers")}
+                  formatCount={(count) =>
+                    gt("{count, plural, one {{count} worker} other {{count} workers}}", { count })
+                  }
                   max={10}
                   value={brief.maxWorkers}
                   onChange={(maxWorkers) => edit({ maxWorkers })}
@@ -562,19 +587,24 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
               }
             />
             <SettingsRow
-              title="Attempts per task"
-              description="Tries before GLaDOS asks you."
+              title={gt("Attempts per task")}
+              description={gt("Tries before GLaDOS asks you.")}
               control={
                 <CountSelect
-                  label="Attempts per task"
-                  unit={["attempt", "attempts"]}
+                  label={gt("Attempts per task")}
+                  formatCount={(count) =>
+                    gt("{count, plural, one {{count} attempt} other {{count} attempts}}", { count })
+                  }
                   max={5}
                   value={brief.maxAttempts}
                   onChange={(maxAttempts) => edit({ maxAttempts })}
                 />
               }
             />
-            <SettingsRow title="Quality bar" description="Optional. What a good result looks like.">
+            <SettingsRow
+              title={gt("Quality bar")}
+              description={gt("Optional. What a good result looks like.")}
+            >
               <Textarea
                 className="mb-2 mt-3"
                 value={brief.quality}
@@ -583,22 +613,24 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
               />
             </SettingsRow>
             <SettingsRow
-              title="Fallback model"
-              description="An alternative GLaDOS can choose for tasks that need a different strength."
+              title={gt("Fallback model")}
+              description={gt(
+                "An alternative GLaDOS can choose for tasks that need a different strength.",
+              )}
               control={
                 brief.alternateWorkerModel ? (
                   <>
                     <WorkerModelPicker
                       catalog={catalog}
                       value={brief.alternateWorkerModel}
-                      label="Fallback model"
+                      label={gt("Fallback model")}
                       disabled={busy}
                       onChange={(alternateWorkerModel) => edit({ alternateWorkerModel })}
                     />
                     <Button
                       size="icon-sm"
                       variant="ghost-muted"
-                      aria-label="Remove fallback model"
+                      aria-label={gt("Remove fallback model")}
                       disabled={busy}
                       onClick={() => {
                         const { alternateWorkerModel: _removed, ...rest } = brief;
@@ -622,15 +654,15 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
                     }
                   >
                     <PlusIcon className="size-3.5" />
-                    Add fallback
+                    <T>Add fallback</T>
                   </Button>
                 )
               }
             />
             {brief.alternateWorkerModel && (
               <SettingsRow
-                title="How GLaDOS should choose"
-                description="Which work suits each model."
+                title={gt("How GLaDOS should choose")}
+                description={gt("Which work suits each model.")}
               >
                 <Textarea
                   className="mb-2 mt-3"
@@ -642,8 +674,8 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
             )}
             {peerList.length >= 2 && (
               <SettingsRow
-                title="Peers GLaDOS coordinates with"
-                description="Shared work still needs approval on both environments."
+                title={gt("Peers GLaDOS coordinates with")}
+                description={gt("Shared work still needs approval on both environments.")}
               >
                 <div className="mb-2 mt-3 grid gap-2">
                   {peerList.map((peer) => (
@@ -671,9 +703,11 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
 
       {draft && (
         <div className="sticky bottom-4 z-10 flex items-center gap-2 rounded-xl border border-border bg-popover px-4 py-2 shadow-lg">
-          <span className="flex-1 text-sm text-muted-foreground">Unsaved changes to the brief</span>
+          <span className="flex-1 text-sm text-muted-foreground">
+            <T>Unsaved changes to the brief</T>
+          </span>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDraft(null)}>
-            Discard
+            <T>Discard</T>
           </Button>
           <Button
             size="sm"
@@ -682,12 +716,12 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
               void command({ type: "brief", brief: draft }).then((done) => done && setDraft(null))
             }
           >
-            Save
+            <T>Save</T>
           </Button>
         </div>
       )}
 
-      <SettingsSection title="Connections">
+      <SettingsSection title={gt("Connections")}>
         <PitbossSources
           environmentId={environmentId}
           projectIds={role.brief.projectIds}
@@ -696,25 +730,31 @@ function GladosSettings({ environmentId, label }: { environmentId: EnvironmentId
         <PitbossPeers environmentId={environmentId} tasks={state.tasks} onCommand={command} />
       </SettingsSection>
 
-      <SettingsSection title="Danger zone" hideTitle>
+      <SettingsSection title={gt("Danger zone")} hideTitle>
         <ConfirmRow
-          title="Reset GLaDOS"
-          description="Close all open work and start a fresh home thread. Brief and connections are kept."
-          action="Reset…"
+          title={gt("Reset GLaDOS")}
+          description={gt(
+            "Close all open work and start a fresh home thread. Brief and connections are kept.",
+          )}
+          action={gt("Reset…")}
           icon={<RotateCcwIcon className="size-3.5" />}
-          confirmTitle="Reset GLaDOS?"
-          confirmDescription="Open work on this environment is cancelled and GLaDOS starts over in a fresh home thread. The old home thread is archived. Your brief and connections are kept."
-          confirmLabel="Reset GLaDOS"
+          confirmTitle={gt("Reset GLaDOS?")}
+          confirmDescription={gt(
+            "Open work on this environment is cancelled and GLaDOS starts over in a fresh home thread. The old home thread is archived. Your brief and connections are kept.",
+          )}
+          confirmLabel={gt("Reset GLaDOS")}
           busy={busy}
           onConfirm={() => command({ type: "reset" })}
         />
         <ConfirmRow
-          title="Dismiss GLaDOS"
-          description="Stop coordinating on this environment. You can set it up again later."
-          action="Dismiss…"
-          confirmTitle="Dismiss GLaDOS?"
-          confirmDescription="GLaDOS stops coordinating work on this environment. Its work history stays, and you can set it up again here at any time."
-          confirmLabel="Dismiss GLaDOS"
+          title={gt("Dismiss GLaDOS")}
+          description={gt("Stop coordinating on this environment. You can set it up again later.")}
+          action={gt("Dismiss…")}
+          confirmTitle={gt("Dismiss GLaDOS?")}
+          confirmDescription={gt(
+            "GLaDOS stops coordinating work on this environment. Its work history stays, and you can set it up again here at any time.",
+          )}
+          confirmLabel={gt("Dismiss GLaDOS")}
           busy={busy}
           onConfirm={() => command({ type: "dismiss" })}
         />

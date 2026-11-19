@@ -1,3 +1,5 @@
+import { msg } from "gt-react-native";
+import { m, type MessageResolver } from "../../i18n/messages";
 import {
   verificationRecipeForTask,
   workNeedsYou,
@@ -64,22 +66,32 @@ export function gladosInboxRows(
   ];
 }
 
-export function gladosReceiptStatus(task: PitbossTask, state: PitbossSnapshot, now: number) {
+export function gladosReceiptStatus(
+  task: PitbossTask,
+  state: PitbossSnapshot,
+  now: number,
+  resolve: MessageResolver = m,
+) {
   const run = task.verification;
-  if (!run) return task.evidence.length ? "Reported evidence" : "Evidence not ready yet";
-  if (run.state !== "completed") return `Verification ${run.state}`;
+  if (!run)
+    return task.evidence.length
+      ? resolve(msg("Reported evidence"))
+      : resolve(msg("Evidence not ready yet"));
+  if (run.state !== "completed") return resolve(msg("Verification {state}", { state: run.state }));
   if (run.receipt?.expiresAt && Date.parse(run.receipt.expiresAt) <= now)
-    return "Evidence expired. Check again";
+    return resolve(msg("Evidence expired. Check again"));
   if (run.receipt?.verdict !== "pass")
-    return run.receipt?.verdict === "fail" ? "Checks failed" : "Verification inconclusive";
+    return run.receipt?.verdict === "fail"
+      ? resolve(msg("Checks failed"))
+      : resolve(msg("Verification inconclusive"));
   return hasCurrentVerification(
     task,
     verificationRecipeForTask(state, task),
     task.evidence.at(-1)?.candidate ?? "",
     now,
   )
-    ? "Captured checks passed"
-    : "Evidence changed. Check again";
+    ? resolve(msg("Captured checks passed"))
+    : resolve(msg("Evidence changed. Check again"));
 }
 
 /** A modal measures its own surface: a folded cover screen must never inherit a wide parent pane. */
@@ -148,45 +160,78 @@ export function gladosToggleProject(brief: PitbossBrief, projectId: ProjectId): 
 }
 
 /** One-line status for the settings header; counts match the work board's buckets. */
-export function gladosStatus(state: PitbossSnapshot | undefined) {
+export function gladosStatus(state: PitbossSnapshot | undefined, resolve: MessageResolver = m) {
   const role = state?.role;
-  if (!state || !role) return { title: "GLaDOS is not set up", detail: null };
+  if (!state || !role) return { title: resolve(msg("GLaDOS is not set up")), detail: null };
   const working = state.tasks.filter((task) => task.status === "active").length;
   const needsYou = gladosInboxRows(state, "needs-you").length;
   return {
-    title: role.paused ? "GLaDOS is paused" : "GLaDOS is running",
+    title: role.paused ? resolve(msg("GLaDOS is paused")) : resolve(msg("GLaDOS is running")),
     detail: [
-      `${working} ${working === 1 ? "task" : "tasks"} working`,
-      ...(needsYou ? [`${needsYou} ${needsYou === 1 ? "needs" : "need"} you`] : []),
+      resolve(
+        msg("{count, plural, one {{count} task working} other {{count} tasks working}}", {
+          count: working,
+        }),
+      ),
+      ...(needsYou
+        ? [
+            resolve(
+              msg("{count, plural, one {{count} needs you} other {{count} need you}}", {
+                count: needsYou,
+              }),
+            ),
+          ]
+        : []),
     ].join(" · "),
   };
 }
 
-export function gladosWorkKind(task: PitbossTask, state: PitbossSnapshot) {
+export function gladosWorkKind(
+  task: PitbossTask,
+  state: PitbossSnapshot,
+  resolve: MessageResolver = m,
+) {
   const recipe = verificationRecipeForTask(state, task);
-  if (!recipe) return "Outcome";
+  if (!recipe) return resolve(msg("Outcome"));
   return recipe.mode === "artifact"
-    ? "Files & research"
+    ? resolve(msg("Files & research"))
     : recipe.mode === "observation"
-      ? "Host observation"
-      : "Code";
+      ? resolve(msg("Host observation"))
+      : resolve(msg("Code"));
 }
 
-export function gladosWorkStatus(task: PitbossTask, state?: PitbossSnapshot) {
+const actionLabels = {
+  "Approve verification setup": msg("Approve verification setup"),
+  "Resolve decision": msg("Resolve decision"),
+  "Waiting for worker to finish": msg("Waiting for worker to finish"),
+  "Verification in progress": msg("Verification in progress"),
+  "Run verification": msg("Run verification"),
+  "Review retained result": msg("Review retained result"),
+  "Recover or close": msg("Recover or close"),
+  "Accept reviewed result": msg("Accept reviewed result"),
+  "Ready to assign": msg("Ready to assign"),
+  "In progress": msg("In progress"),
+} satisfies Record<NonNullable<ReturnType<typeof pitbossTaskNextActionLabel>>, string>;
+
+export function gladosWorkStatus(
+  task: PitbossTask,
+  state?: PitbossSnapshot,
+  resolve: MessageResolver = m,
+) {
   const next = state && pitbossTaskNextActionLabel(pitbossTaskNextAction(state, task));
-  if (next) return next;
+  if (next) return resolve(actionLabels[next]);
   switch (task.status) {
     case "done":
-      return "Delivered";
+      return resolve(msg("Delivered"));
     case "active":
-      return "Working";
+      return resolve(msg("Working"));
     case "verifying":
-      return "In review";
+      return resolve(msg("In review"));
     case "blocked":
-      return "Waiting";
+      return resolve(msg("Waiting"));
     case "cancelled":
-      return "Closed";
+      return resolve(msg("Closed"));
     default:
-      return "Planned";
+      return resolve(msg("Planned"));
   }
 }

@@ -1,3 +1,4 @@
+import { T, Var, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 import { ChevronRightIcon, NetworkIcon } from "lucide-react";
 import {
@@ -23,9 +24,10 @@ export function PitbossPeers({
   tasks: readonly PitbossTask[];
   onCommand: (action: PitbossAction) => Promise<boolean>;
 }) {
+  const gt = useGT();
   const query = useEnvironmentQuery(serverEnvironment.pitbossPeers({ environmentId, input: {} }));
   const mutate = useAtomCommand(serverEnvironment.pitbossPeerCommand, {
-    label: "GLaDOS shared coordination",
+    label: gt("GLaDOS shared coordination"),
   });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
@@ -72,22 +74,31 @@ export function PitbossPeers({
       <summary className="flex cursor-pointer list-none items-center gap-3">
         <NetworkIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">Peers</span>
+          <span className="block text-sm font-medium">
+            <T>Peers</T>
+          </span>
           <span className="block text-sm text-muted-foreground/80">
-            Share work with GLaDOS on other environments
+            <T>Share work with GLaDOS on other environments</T>
           </span>
         </span>
         <span className="text-xs text-muted-foreground">
-          {query.data?.peers.length ? `${connected} connected` : "None"}
+          {query.data?.peers.length ? gt("Connected: {count}", { count: connected }) : gt("None")}
         </span>
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground group-open:rotate-90" />
       </summary>
       <p className="my-2 text-xs text-muted-foreground">
-        Each environment keeps its own GLaDOS. Sharing a tracker scope requires approval on both
-        environments. Offline peers keep their existing authority; there is no automatic takeover.
+        <T>
+          Each environment keeps its own GLaDOS. Sharing a tracker scope requires approval on both
+          environments. Offline peers keep their existing authority; there is no automatic takeover.
+        </T>
       </p>
       <p className="my-2 break-all text-xs">
-        This environment: <code>{self}</code>
+        <T>
+          This environment:{" "}
+          <code>
+            <Var name="environment">{self}</Var>
+          </code>
+        </T>
       </p>
       {(error || query.error) && (
         <p role="alert" className="text-sm text-destructive">
@@ -100,7 +111,9 @@ export function PitbossPeers({
             <strong className="flex-1">{peer.config.id}</strong>
             <span>
               {peer.error ??
-                (peer.lastSeenAt ? `Last contact ${peer.lastSeenAt}` : "Awaiting peer")}
+                (peer.lastSeenAt
+                  ? gt("Last contact: {time}", { time: peer.lastSeenAt })
+                  : gt("Awaiting peer"))}
             </span>
             <Button
               size="sm"
@@ -108,15 +121,16 @@ export function PitbossPeers({
               disabled={busy || !peer.config.enabled}
               onClick={() => void execute({ type: "sync", peerId: peer.config.id })}
             >
-              Reconcile now
+              <T>Reconcile now</T>
             </Button>
           </div>
           <p className="mt-2 text-muted-foreground">
-            Task home: {peer.homeEnvironmentId ?? "Chosen with the first agreement"}. Coordinator
-            changes retain that home.
+            {gt("Task home: {home}. Coordinator changes retain that home.", {
+              home: peer.homeEnvironmentId ?? gt("Chosen with the first agreement"),
+            })}
           </p>
           <p className="mt-2 text-muted-foreground">
-            {peer.pendingMessages ?? 0} messages awaiting durable receipt
+            {gt("Messages awaiting durable receipt: {count}", { count: peer.pendingMessages ?? 0 })}
           </p>
           <form
             className="mt-2 grid gap-2"
@@ -135,7 +149,7 @@ export function PitbossPeers({
             }}
           >
             <label className="grid gap-1">
-              Message to {peer.config.id}
+              {gt("Message to {peer}", { peer: peer.config.id })}
               <textarea
                 required
                 maxLength={12000}
@@ -152,7 +166,7 @@ export function PitbossPeers({
               variant="outline"
               disabled={busy || !peer.config.enabled}
             >
-              Queue message
+              <T>Queue message</T>
             </Button>
           </form>
           {peer.view.proposals.map((proposal) => {
@@ -162,25 +176,32 @@ export function PitbossPeers({
             return (
               <div key={proposal.id} className="mt-2 rounded bg-muted/40 p-2">
                 <p>
-                  {proposal.coordinator === self ? "This environment" : peer.config.id} coordinates
-                  this source · {approved ? "Approved by both" : "Awaiting approvals"}
+                  {gt("{coordinator} coordinates this source · {status}", {
+                    coordinator:
+                      proposal.coordinator === self ? gt("This environment") : peer.config.id,
+                    status: approved ? gt("Approved by both") : gt("Awaiting approvals"),
+                  })}
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  Task home: {proposal.homeEnvironmentId ?? proposal.coordinator}
+                  {gt("Task home: {home}", {
+                    home: proposal.homeEnvironmentId ?? proposal.coordinator,
+                  })}
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  Local:{" "}
-                  {self && peer.view.approvals[self] === proposal.id
-                    ? "approved"
-                    : self && peer.view.rejections?.[self]?.includes(proposal.id)
-                      ? "declined"
-                      : "pending"}{" "}
-                  · Peer:{" "}
-                  {peer.view.approvals[peer.config.environmentId] === proposal.id
-                    ? "approved"
-                    : peer.view.rejections?.[peer.config.environmentId]?.includes(proposal.id)
-                      ? "declined"
-                      : "pending"}
+                  {gt("Local: {local} · Peer: {peer}", {
+                    local:
+                      self && peer.view.approvals[self] === proposal.id
+                        ? gt("approved")
+                        : self && peer.view.rejections?.[self]?.includes(proposal.id)
+                          ? gt("declined")
+                          : gt("pending"),
+                    peer:
+                      peer.view.approvals[peer.config.environmentId] === proposal.id
+                        ? gt("approved")
+                        : peer.view.rejections?.[peer.config.environmentId]?.includes(proposal.id)
+                          ? gt("declined")
+                          : gt("pending"),
+                  })}
                 </p>
                 {self && !peer.view.rejections?.[self]?.includes(proposal.id) && (
                   <Button
@@ -196,7 +217,9 @@ export function PitbossPeers({
                       })
                     }
                   >
-                    {peer.view.approvals[self] === proposal.id ? "Withdraw approval" : "Decline"}
+                    {peer.view.approvals[self] === proposal.id
+                      ? gt("Withdraw approval")
+                      : gt("Decline")}
                   </Button>
                 )}
                 {self && peer.view.approvals[self] !== proposal.id && (
@@ -213,7 +236,7 @@ export function PitbossPeers({
                       })
                     }
                   >
-                    Approve coordination change
+                    <T>Approve coordination change</T>
                   </Button>
                 )}
               </div>
@@ -241,7 +264,9 @@ export function PitbossPeers({
                     })
                   }
                 >
-                  Propose {coordinator === self ? "this environment" : peer.config.id}
+                  {coordinator === self
+                    ? gt("Propose this environment")
+                    : gt("Propose {peer}", { peer: peer.config.id })}
                 </Button>
               ))}
             <Button
@@ -255,13 +280,15 @@ export function PitbossPeers({
                 })
               }
             >
-              {peer.config.enabled ? "Disconnect peer" : "Reconnect peer"}
+              {peer.config.enabled ? gt("Disconnect peer") : gt("Reconnect peer")}
             </Button>
           </div>
         </div>
       ))}
       <details className="mt-3" open={!query.data?.peers.length}>
-        <summary className="cursor-pointer text-xs font-medium">Connect an environment</summary>
+        <summary className="cursor-pointer text-xs font-medium">
+          <T>Connect an environment</T>
+        </summary>
         <form
           className="mt-3 grid gap-2 text-xs md:grid-cols-2"
           onSubmit={(event) => {
@@ -274,7 +301,7 @@ export function PitbossPeers({
           }}
         >
           <label className="grid gap-1">
-            Peer name
+            <T>Peer name</T>
             <input
               required
               value={id}
@@ -283,7 +310,7 @@ export function PitbossPeers({
             />
           </label>
           <label className="grid gap-1">
-            Peer environment ID
+            <T>Peer environment ID</T>
             <input
               required
               value={remote}
@@ -292,7 +319,7 @@ export function PitbossPeers({
             />
           </label>
           <label className="grid gap-1">
-            Peer server URL
+            <T>Peer server URL</T>
             <input
               required
               type="url"
@@ -302,14 +329,16 @@ export function PitbossPeers({
             />
           </label>
           <label className="grid gap-1">
-            Shared tracker scope
+            <T>Shared tracker scope</T>
             <select
               required
               value={scope}
               onChange={(event) => setScope(event.target.value)}
               className={inputClass}
             >
-              <option value="">Choose imported source</option>
+              <option value="">
+                <T>Choose imported source</T>
+              </option>
               {scopes.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -318,7 +347,7 @@ export function PitbossPeers({
             </select>
           </label>
           <label className="grid gap-1">
-            Shared peer key
+            <T>Shared peer key</T>
             <input
               required
               type="password"
@@ -330,10 +359,13 @@ export function PitbossPeers({
             />
           </label>
           <p className="self-center text-muted-foreground">
-            Configure both environments with the same dedicated random key (at least 32 characters).
+            <T>
+              Configure both environments with the same dedicated random key (at least 32
+              characters).
+            </T>
           </p>
           <Button size="sm" type="submit" disabled={busy || scopes.length === 0}>
-            Connect peer
+            <T>Connect peer</T>
           </Button>
         </form>
       </details>

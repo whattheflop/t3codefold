@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import { GladosBoard } from "./GladosBoard";
 import { isUserWorkMessage, workNeedsYou } from "@t3tools/contracts";
 import { WorkInspector } from "./WorkInspector";
@@ -77,6 +77,7 @@ export function PitbossPanel(props: {
   onComposeWork: () => void;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const query = useEnvironmentQuery(
     serverEnvironment.pitbossLive({ environmentId: props.environmentId, input: {} }),
   );
@@ -863,7 +864,7 @@ export function PitbossPanel(props: {
                         <span>
                           <T>Attempt </T>
                           {attempt.generation} · {attempt.model.model} ·{" "}
-                          {managedWorkerStateLabel(selected, attempt, state.awaitingApproval)}
+                          {managedWorkerStateLabel(selected, attempt, state.awaitingApproval, m)}
                           {" · "}
                           {attempt.runtimeMode?.replaceAll("-", " ") ??
                             gt("permissions: legacy saved default")}

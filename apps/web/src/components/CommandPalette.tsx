@@ -1374,7 +1374,7 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [
     ...useFoldVoiceActionItems(),
-    foldGladosActionItem(navigate, activeThread?.environmentId),
+    foldGladosActionItem(navigate, activeThread?.environmentId, messages),
   ];
 
   actionItems.push({

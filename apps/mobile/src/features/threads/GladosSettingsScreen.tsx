@@ -1,3 +1,4 @@
+import { useGT, useMessages } from "gt-react-native";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { type StaticScreenProps } from "@react-navigation/native";
 import {
@@ -68,6 +69,8 @@ type BriefDraft = Partial<
 
 /** The GLaDOS settings body, without its own scroll container, for routes and split panes. */
 export function GladosSettingsContent(props: GladosSettingsParams) {
+  const gt = useGT();
+  const messages = useMessages();
   const selectDetail = useSelectWorkspaceDetail();
   const { environments } = useEnvironments();
   const connectedEnvironments = environments.filter(
@@ -94,13 +97,13 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
   const [draft, setDraft] = useState<BriefDraft>({});
   const state = query.data ?? undefined;
   const role = state?.role ?? null;
-  const status = gladosStatus(state);
+  const status = gladosStatus(state, messages);
   const disabled = busy || !connected || !state;
 
   const send = async (action: PitbossAction) => {
     if (!environmentId || !state || inFlight.current) return false;
     if (!connected) {
-      setError("Reconnect to change GLaDOS.");
+      setError(gt("Reconnect to change GLaDOS."));
       return false;
     }
     inFlight.current = true;
@@ -116,7 +119,7 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
         setError(
           reason instanceof Error
             ? reason.message
-            : "The change was not applied. Check the connection and try again.",
+            : gt("The change was not applied. Check the connection and try again."),
         );
         return false;
       }
@@ -141,12 +144,12 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
   return (
     <View className="gap-6">
       {!props.environmentId && connectedEnvironments.length > 1 ? (
-        <SettingsSection title="Environment">
+        <SettingsSection title={gt("Environment")}>
           {connectedEnvironments.map((entry, index) => (
             <SettingsChoiceRow
               key={entry.environmentId}
               label={entry.label}
-              description={entry.displayUrl ?? "Each environment has its own GLaDOS."}
+              description={entry.displayUrl ?? gt("Each environment has its own GLaDOS.")}
               selected={entry.environmentId === environmentId}
               separated={index > 0}
               disabled={busy}
@@ -164,16 +167,16 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
         <View className="gap-1 p-4">
           <Text className="text-lg font-t3-medium text-foreground">
             {!environment
-              ? "No environment connected"
+              ? gt("No environment connected")
               : !state
                 ? connected
-                  ? "Loading GLaDOS…"
-                  : `${environment.label} is offline`
+                  ? gt("Loading GLaDOS…")
+                  : gt("{environment} is offline", { environment: environment.label })
                 : status.title}
           </Text>
           <Text className="text-sm text-foreground-muted">
             {[environment?.label, status.detail].filter(Boolean).join(" · ") ||
-              "Connect an environment to set up GLaDOS."}
+              gt("Connect an environment to set up GLaDOS.")}
           </Text>
           {error || query.error ? (
             <Text accessibilityRole="alert" className="text-sm text-danger-foreground">
@@ -186,14 +189,14 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
             <Separator />
             <SettingsActionRow
               icon={role.paused ? "play" : "stop.fill"}
-              label={role.paused ? "Resume GLaDOS" : "Pause new work"}
+              label={role.paused ? gt("Resume GLaDOS") : gt("Pause new work")}
               disabled={disabled}
               onPress={() => void send({ type: "pause", paused: !role.paused })}
             />
             <Separator />
             <SettingsActionRow
               icon="arrow.up.right"
-              label="Open GLaDOS"
+              label={gt("Open GLaDOS")}
               disabled={!environmentId}
               onPress={() =>
                 environmentId &&
@@ -206,7 +209,7 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
             <Separator />
             <SettingsActionRow
               icon="plus"
-              label="Set up GLaDOS"
+              label={gt("Set up GLaDOS")}
               disabled={disabled || !setupModel}
               loading={busy}
               onPress={() =>
@@ -223,23 +226,25 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
         ) : null}
       </SettingsSection>
       {state && !role && !setupModel ? (
-        <Footnote>Connect a provider on this environment to choose GLaDOS's worker model.</Footnote>
+        <Footnote>
+          {gt("Connect a provider on this environment to choose GLaDOS's worker model.")}
+        </Footnote>
       ) : null}
 
       {role ? (
         <>
-          <SettingsSection title="Brief">
+          <SettingsSection title={gt("Brief")}>
             <View className="gap-2 p-4">
-              <Text className="text-lg text-foreground android:text-base">Priorities</Text>
+              <Text className="text-lg text-foreground android:text-base">{gt("Priorities")}</Text>
               <TextInput
-                accessibilityLabel="GLaDOS priorities"
+                accessibilityLabel={gt("GLaDOS priorities")}
                 value={draft.priorities ?? role.brief.priorities}
                 onChangeText={(priorities) => setDraft((current) => ({ ...current, priorities }))}
                 editable={!disabled}
                 multiline
                 scrollEnabled
                 textAlignVertical="top"
-                placeholder="What should GLaDOS work on first?"
+                placeholder={gt("What should GLaDOS work on first?")}
                 placeholderTextColorClassName="accent-foreground-muted"
                 className="max-h-48 min-h-24 font-sans text-base text-foreground"
               />
@@ -249,7 +254,7 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
                 <Separator />
                 <SettingsActionRow
                   icon="checkmark"
-                  label="Save priorities"
+                  label={gt("Save priorities")}
                   disabled={disabled}
                   loading={busy}
                   onPress={() => saveBrief(role.brief)}
@@ -258,10 +263,10 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
             ) : null}
           </SettingsSection>
 
-          <SettingsSection title="Projects">
+          <SettingsSection title={gt("Projects")}>
             {projects.length === 0 ? (
               <Text className="p-4 text-sm text-foreground-muted">
-                No projects in this environment yet.
+                {gt("No projects in this environment yet.")}
               </Text>
             ) : (
               projects.map((project, index) => {
@@ -310,7 +315,7 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
               })
             )}
           </SettingsSection>
-          <Footnote>GLaDOS only plans and assigns work in checked projects.</Footnote>
+          <Footnote>{gt("GLaDOS only plans and assigns work in checked projects.")}</Footnote>
 
           <HowGladosWorks
             brief={role.brief}
@@ -331,20 +336,22 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
 
       {role ? (
         <>
-          <SettingsSection title="Danger zone">
+          <SettingsSection title={gt("Danger zone")}>
             <SettingsActionRow
               icon="arrow.clockwise"
-              label="Reset GLaDOS"
+              label={gt("Reset GLaDOS")}
               tone="danger"
               disabled={disabled}
               onPress={() =>
                 Alert.alert(
-                  "Reset GLaDOS?",
-                  "Open work on this environment is cancelled and GLaDOS starts again in a fresh thread. Your brief is kept and the old GLaDOS thread is archived.",
+                  gt("Reset GLaDOS?"),
+                  gt(
+                    "Open work on this environment is cancelled and GLaDOS starts again in a fresh thread. Your brief is kept and the old GLaDOS thread is archived.",
+                  ),
                   [
-                    { text: "Cancel", style: "cancel" },
+                    { text: gt("Cancel"), style: "cancel" },
                     {
-                      text: "Reset",
+                      text: gt("Reset"),
                       style: "destructive",
                       onPress: () => void send({ type: "reset" }),
                     },
@@ -355,17 +362,19 @@ export function GladosSettingsContent(props: GladosSettingsParams) {
             <Separator />
             <SettingsActionRow
               icon="xmark"
-              label="Dismiss GLaDOS"
+              label={gt("Dismiss GLaDOS")}
               tone="danger"
               disabled={disabled}
               onPress={() =>
                 Alert.alert(
-                  "Dismiss GLaDOS?",
-                  "GLaDOS stops coordinating on this environment. Tasks and history stay, and you can set GLaDOS up again later.",
+                  gt("Dismiss GLaDOS?"),
+                  gt(
+                    "GLaDOS stops coordinating on this environment. Tasks and history stay, and you can set GLaDOS up again later.",
+                  ),
                   [
-                    { text: "Cancel", style: "cancel" },
+                    { text: gt("Cancel"), style: "cancel" },
                     {
-                      text: "Dismiss",
+                      text: gt("Dismiss"),
                       style: "destructive",
                       onPress: () => void send({ type: "dismiss" }),
                     },
@@ -390,6 +399,7 @@ function HowGladosWorks(props: {
   readonly onAutonomy: (autonomy: "ask" | "full-auto") => void;
   readonly onSave: () => void;
 }) {
+  const gt = useGT();
   const autonomy = pitbossAutonomy(props.brief);
   const model = props.brief.workerModel;
   const modelLabel = useMemo(() => {
@@ -412,10 +422,12 @@ function HowGladosWorks(props: {
 
   return (
     <>
-      <SettingsSection title="How GLaDOS works">
+      <SettingsSection title={gt("How GLaDOS works")}>
         <SettingsChoiceRow
-          label="Ask me"
-          description="GLaDOS and its workers ask before acting, and you approve new evidence checks."
+          label={gt("Ask me")}
+          description={gt(
+            "GLaDOS and its workers ask before acting, and you approve new evidence checks.",
+          )}
           selected={autonomy === "ask"}
           separated={false}
           disabled={props.disabled}
@@ -424,19 +436,23 @@ function HowGladosWorks(props: {
           }}
         />
         <SettingsChoiceRow
-          label="Full auto"
-          description="GLaDOS and new workers run without approval prompts and set up their own evidence checks."
+          label={gt("Full auto")}
+          description={gt(
+            "GLaDOS and new workers run without approval prompts and set up their own evidence checks.",
+          )}
           selected={autonomy === "full-auto"}
           separated
           disabled={props.disabled}
           onPress={() => {
             if (autonomy === "full-auto") return;
             Alert.alert(
-              "Use full auto?",
-              "GLaDOS and new workers will act within the checked projects without asking first. Workers already running keep their current permissions.",
+              gt("Use full auto?"),
+              gt(
+                "GLaDOS and new workers will act within the checked projects without asking first. Workers already running keep their current permissions.",
+              ),
               [
-                { text: "Cancel", style: "cancel" },
-                { text: "Use full auto", onPress: () => props.onAutonomy("full-auto") },
+                { text: gt("Cancel"), style: "cancel" },
+                { text: gt("Use full auto"), onPress: () => props.onAutonomy("full-auto") },
               ],
             );
           }}
@@ -444,24 +460,25 @@ function HowGladosWorks(props: {
         <View className="border-t border-border-subtle">
           <ListRowLayout
             icon="brain"
-            label="Model"
-            description="Used by new workers. Change models on web or desktop."
+            label={gt("Model")}
+            description={gt("Used by new workers. Change models on web or desktop.")}
             detail={modelLabel}
           />
         </View>
       </SettingsSection>
       {autonomy === "custom" ? (
         <Footnote>
-          This brief uses a custom mix of permissions set elsewhere. Choosing Ask me or Full auto
-          replaces it.
+          {gt(
+            "This brief uses a custom mix of permissions set elsewhere. Choosing Ask me or Full auto replaces it.",
+          )}
         </Footnote>
       ) : null}
 
-      <SettingsSection title="Advanced">
+      <SettingsSection title={gt("Advanced")}>
         <Stepper
           icon="person.2"
-          label="Workers"
-          subtitle="Tasks GLaDOS runs at the same time"
+          label={gt("Workers")}
+          subtitle={gt("Tasks GLaDOS runs at the same time")}
           value={workers}
           min={1}
           max={10}
@@ -471,8 +488,8 @@ function HowGladosWorks(props: {
         <View className="border-t border-border-subtle">
           <Stepper
             icon="arrow.clockwise"
-            label="Attempts"
-            subtitle="Tries per task before GLaDOS asks you"
+            label={gt("Attempts")}
+            subtitle={gt("Tries per task before GLaDOS asks you")}
             value={attempts}
             min={1}
             max={5}
@@ -481,9 +498,9 @@ function HowGladosWorks(props: {
           />
         </View>
         <View className="gap-2 border-t border-border-subtle p-4">
-          <Text className="text-lg text-foreground android:text-base">Quality bar</Text>
+          <Text className="text-lg text-foreground android:text-base">{gt("Quality bar")}</Text>
           <TextInput
-            accessibilityLabel="GLaDOS quality bar"
+            accessibilityLabel={gt("GLaDOS quality bar")}
             value={quality}
             onChangeText={(value) => props.setDraft((current) => ({ ...current, quality: value }))}
             editable={!props.disabled}
@@ -499,7 +516,7 @@ function HowGladosWorks(props: {
           <View className="border-t border-border-subtle">
             <SettingsActionRow
               icon="checkmark"
-              label="Save advanced settings"
+              label={gt("Save advanced settings")}
               disabled={props.disabled}
               loading={props.busy}
               onPress={props.onSave}
@@ -515,6 +532,7 @@ function GladosConnections(props: {
   readonly environmentId: EnvironmentId;
   readonly connected: boolean;
 }) {
+  const gt = useGT();
   const sources = useEnvironmentQuery(
     serverEnvironment.pitbossSources({ environmentId: props.environmentId, input: {} }),
   );
@@ -540,7 +558,9 @@ function GladosConnections(props: {
       setBusy(false);
       if (result._tag === "Failure")
         setError(
-          `${type === "approve" ? "Approval" : "Decision"} could not be applied. Resolve active workers and refresh.`,
+          type === "approve"
+            ? gt("Approval could not be applied. Resolve active workers and refresh.")
+            : gt("Decision could not be applied. Resolve active workers and refresh."),
         );
       peers.refresh();
     });
@@ -548,36 +568,41 @@ function GladosConnections(props: {
 
   return (
     <>
-      <SettingsSection title="Connections">
+      <SettingsSection title={gt("Connections")}>
         <ListRowLayout
           icon="ticket"
-          label="Task sources"
+          label={gt("Task sources")}
           description={
             sources.error
               ? sources.error
               : failing
-                ? `${failing} ${failing === 1 ? "source needs" : "sources need"} attention`
+                ? gt("Sources needing attention: {count}", { count: failing })
                 : undefined
           }
           detail={
             sources.data
-              ? `${sourceList.filter((source) => source.config.enabled).length} connected`
-              : "Loading"
+              ? gt("Connected: {count}", {
+                  count: sourceList.filter((source) => source.config.enabled).length,
+                })
+              : gt("Loading")
           }
         />
         <View className="border-t border-border-subtle">
           <ListRowLayout
             icon="point.3.connected.trianglepath.dotted"
-            label="Peers"
+            label={gt("Peers")}
             description={error ?? peers.error ?? undefined}
-            detail={peers.data ? `${peerList.length} paired` : "Loading"}
+            detail={peers.data ? gt("Paired: {count}", { count: peerList.length }) : gt("Loading")}
           />
         </View>
         {peerList.map((peer) => (
           <View key={peer.config.id} className="gap-2 border-t border-border-subtle p-4">
             <Text className="text-base text-foreground">{peer.config.id}</Text>
             <Text className="text-sm text-foreground-muted">
-              {peer.error ?? "Paired"} · {peer.pendingMessages ?? 0} messages pending
+              {gt("{status} · Pending messages: {count}", {
+                status: peer.error ?? gt("Paired"),
+                count: peer.pendingMessages ?? 0,
+              })}
             </Text>
             {peer.view.proposals.map((proposal) => {
               const approved =
@@ -588,28 +613,30 @@ function GladosConnections(props: {
               return (
                 <View key={proposal.id} className="gap-2 rounded-xl bg-subtle p-3">
                   <Text className="text-sm text-foreground">
-                    Coordinator:{" "}
-                    {proposal.coordinator === localId ? "this environment" : peer.config.id} · Task
-                    home: {proposal.homeEnvironmentId ?? proposal.coordinator}
+                    {gt("Coordinator: {coordinator} · Task home: {home}", {
+                      coordinator:
+                        proposal.coordinator === localId ? gt("this environment") : peer.config.id,
+                      home: proposal.homeEnvironmentId ?? proposal.coordinator,
+                    })}
                   </Text>
                   <Text className="text-sm text-foreground-muted">
                     {proposal.participants.every((id) => peer.view.approvals[id] === proposal.id)
-                      ? "Approved by both environments"
+                      ? gt("Approved by both environments")
                       : declined
-                        ? "Declined here"
-                        : "Awaiting approvals"}
+                        ? gt("Declined here")
+                        : gt("Awaiting approvals")}
                   </Text>
                   <View className="flex-row flex-wrap gap-2">
                     {localId !== undefined && !approved ? (
                       <PeerButton
-                        label="Approve"
+                        label={gt("Approve")}
                         disabled={busy || !props.connected}
                         onPress={() => decide("approve", peer.config.id, proposal.id)}
                       />
                     ) : null}
                     {localId !== undefined && !declined ? (
                       <PeerButton
-                        label={approved ? "Withdraw approval" : "Decline"}
+                        label={approved ? gt("Withdraw approval") : gt("Decline")}
                         disabled={busy || !props.connected || !peer.config.enabled}
                         onPress={() => decide("decline", peer.config.id, proposal.id)}
                       />
@@ -623,7 +650,7 @@ function GladosConnections(props: {
         <View className="border-t border-border-subtle">
           <SettingsActionRow
             icon="arrow.clockwise"
-            label="Refresh"
+            label={gt("Refresh")}
             disabled={busy}
             onPress={() => {
               setError(null);
@@ -633,7 +660,9 @@ function GladosConnections(props: {
           />
         </View>
       </SettingsSection>
-      <Footnote>Add task sources and pair peers from GLaDOS settings on web or desktop.</Footnote>
+      <Footnote>
+        {gt("Add task sources and pair peers from GLaDOS settings on web or desktop.")}
+      </Footnote>
     </>
   );
 }
@@ -648,6 +677,7 @@ function Stepper(props: {
   readonly disabled: boolean;
   readonly onChange: (value: number) => void;
 }) {
+  const gt = useGT();
   return (
     <ListRowLayout
       icon={props.icon}
@@ -657,7 +687,7 @@ function Stepper(props: {
         <View className="flex-row items-center gap-3">
           <StepButton
             symbol="minus"
-            label={`Fewer ${props.label.toLowerCase()}`}
+            label={gt("Decrease {setting}", { setting: props.label })}
             disabled={props.disabled || props.value <= props.min}
             onPress={() => props.onChange(props.value - 1)}
           />
@@ -666,7 +696,7 @@ function Stepper(props: {
           </Text>
           <StepButton
             symbol="plus"
-            label={`More ${props.label.toLowerCase()}`}
+            label={gt("Increase {setting}", { setting: props.label })}
             disabled={props.disabled || props.value >= props.max}
             onPress={() => props.onChange(props.value + 1)}
           />

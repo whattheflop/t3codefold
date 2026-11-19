@@ -36,6 +36,7 @@ import IconServer from "@tabler/icons-react-native/IconServer";
 import IconSettings from "@tabler/icons-react-native/IconSettings";
 import IconShieldCheck from "@tabler/icons-react-native/IconShieldCheck";
 import IconShoppingBag from "@tabler/icons-react-native/IconShoppingBag";
+// oxlint-disable-next-line t3code/no-sparkles-icon -- Render the glyph selected by the project owner.
 import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStack2 from "@tabler/icons-react-native/IconStack2";
 import IconStar from "@tabler/icons-react-native/IconStar";

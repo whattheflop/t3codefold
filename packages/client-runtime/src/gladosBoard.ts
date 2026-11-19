@@ -7,16 +7,17 @@ import {
   type PitbossAttempt,
   type PitbossTask,
 } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
 
 // Like t3code-custom's agent board, lanes follow live state rather than manual moves.
 const GLADOS_BOARD_LANES = [
-  { id: "needs-you", label: "Chat input", tone: "attention" },
-  { id: "queued", label: "Up next", tone: "muted" },
-  { id: "working", label: "Working", tone: "working" },
-  { id: "review", label: "Verifying", tone: "review" },
-  { id: "waiting", label: "Waiting", tone: "muted" },
-  { id: "done", label: "Delivered", tone: "done" },
-  { id: "closed", label: "Closed", tone: "muted" },
+  { id: "needs-you", label: msg("Chat input"), tone: "attention" },
+  { id: "queued", label: msg("Up next"), tone: "muted" },
+  { id: "working", label: msg("Working"), tone: "working" },
+  { id: "review", label: msg("Verifying"), tone: "review" },
+  { id: "waiting", label: msg("Waiting"), tone: "muted" },
+  { id: "done", label: msg("Delivered"), tone: "done" },
+  { id: "closed", label: msg("Closed"), tone: "muted" },
 ] as const;
 export type GladosBoardLaneId = (typeof GLADOS_BOARD_LANES)[number]["id"];
 export type GladosBoardItem =
@@ -33,21 +34,32 @@ export interface ManagedWorkerRow {
   readonly threadId: PitbossAttempt["threadId"];
 }
 
+const WORKER_STATE_LABELS: Record<PitbossAttempt["state"], string> = {
+  pending: msg("pending"),
+  running: msg("running"),
+  submitted: msg("submitted"),
+  stop_requested: msg("stop requested"),
+  stopped: msg("stopped"),
+  failed: msg("failed"),
+};
+
 /** The label says what the user must do, not what the run status happens to be. */
 export function managedWorkerStateLabel(
   task: Pick<PitbossTask, "attempts">,
   attempt: Pick<PitbossAttempt, "id" | "state">,
   awaitingApproval?: PitbossSnapshot["awaitingApproval"],
+  resolve: (text: string) => string = mFallback,
 ) {
   return task.attempts.at(-1)?.id === attempt.id && taskAwaitingApproval(task, awaitingApproval)
-    ? "waiting for your approval"
-    : attempt.state;
+    ? resolve(msg("waiting for your approval"))
+    : resolve(WORKER_STATE_LABELS[attempt.state]);
 }
 
 /** Current worker first, while retaining prior attempts as navigable history. */
 export function managedWorkerRows(
   task: PitbossTask,
   awaitingApproval?: PitbossSnapshot["awaitingApproval"],
+  resolve: (text: string) => string = mFallback,
 ): ManagedWorkerRow[] {
   const current = task.attempts.at(-1)?.id;
   return [...task.attempts].reverse().map((attempt) => ({
@@ -55,7 +67,7 @@ export function managedWorkerRows(
     current: attempt.id === current,
     generation: attempt.generation,
     model: attempt.model.model,
-    state: managedWorkerStateLabel(task, attempt, awaitingApproval),
+    state: managedWorkerStateLabel(task, attempt, awaitingApproval, resolve),
     threadId: attempt.threadId,
   }));
 }
@@ -88,13 +100,18 @@ export function gladosTaskLane(
 export function buildGladosBoard(
   state: Pick<PitbossSnapshot, "tasks" | "messages" | "awaitingApproval">,
   filter: { query?: string; projectId?: string } = {},
+  resolve: (text: string) => string = mFallback,
 ) {
   const query = filter.query?.trim().toLocaleLowerCase() ?? "";
   const questions = new Set(
     state.messages.filter(isUserWorkMessage).map((message) => message.taskId),
   );
   const ids = new Set(state.tasks.map((task) => task.id));
-  const lanes = GLADOS_BOARD_LANES.map((lane) => ({ ...lane, items: [] as GladosBoardItem[] }));
+  const lanes = GLADOS_BOARD_LANES.map((lane) => ({
+    ...lane,
+    label: resolve(lane.label),
+    items: [] as GladosBoardItem[],
+  }));
   const add = (laneId: GladosBoardLaneId, item: GladosBoardItem) => {
     lanes.find((lane) => lane.id === laneId)!.items.push(item);
   };

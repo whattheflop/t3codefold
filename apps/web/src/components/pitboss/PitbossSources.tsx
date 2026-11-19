@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 import { ChevronRightIcon, InboxIcon } from "lucide-react";
 import type {
@@ -25,11 +26,12 @@ export function PitbossSources({
   projectIds: ReadonlyArray<ProjectId>;
   projectName: (id: ProjectId) => string;
 }) {
+  const gt = useGT();
   const sources = useEnvironmentQuery(
     serverEnvironment.pitbossSources({ environmentId, input: {} }),
   );
   const mutate = useAtomCommand(serverEnvironment.pitbossSourceCommand, {
-    label: "GLaDOS task sources",
+    label: gt("GLaDOS task sources"),
   });
   const refreshSources = sources.refresh;
   const [open, setOpen] = useState(false);
@@ -70,19 +72,23 @@ export function PitbossSources({
       <summary className="flex cursor-pointer list-none items-center gap-3">
         <InboxIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">Task sources</span>
+          <span className="block text-sm font-medium">
+            <T>Task sources</T>
+          </span>
           <span className="block text-sm text-muted-foreground/80">
-            Pull issues from Linear, Jira or Vikunja
+            <T>Pull issues from Linear, Jira or Vikunja</T>
           </span>
         </span>
         <span className="truncate text-xs text-muted-foreground">
-          {connected.length ? connected.map((source) => source.config.id).join(", ") : "None"}
+          {connected.length ? connected.map((source) => source.config.id).join(", ") : gt("None")}
         </span>
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground group-open:rotate-90" />
       </summary>
       <p className="my-2 text-xs text-muted-foreground">
-        Imports become candidates for review. Tracker status and accepted T3 work stay separate.
-        Connections refresh every minute while enabled.
+        <T>
+          Imports become candidates for review. Tracker status and accepted T3 work stay separate.
+          Connections refresh every minute while enabled.
+        </T>
       </p>
       {(error || sources.error) && (
         <p role="alert" className="text-sm text-destructive">
@@ -96,7 +102,10 @@ export function PitbossSources({
         >
           <span className="flex-1">
             {source.config.id} · {source.config.kind} · {projectName(source.config.projectId)} ·{" "}
-            {source.error ?? (source.lastSyncAt ? `Last sync ${source.lastSyncAt}` : "Not synced")}
+            {source.error ??
+              (source.lastSyncAt
+                ? gt("Last sync {time}", { time: source.lastSyncAt })
+                : gt("Not synced"))}
           </span>
           <Button
             size="xs"
@@ -104,7 +113,7 @@ export function PitbossSources({
             disabled={busy || !source.config.enabled}
             onClick={() => void execute({ type: "sync", id: source.config.id })}
           >
-            Sync now
+            <T>Sync now</T>
           </Button>
           <Button
             size="xs"
@@ -117,15 +126,17 @@ export function PitbossSources({
               })
             }
           >
-            {source.config.enabled ? "Disable" : "Enable"}
+            {source.config.enabled ? gt("Disable") : gt("Enable")}
           </Button>
         </div>
       ))}
       <details className="mt-3" open={!connected.length}>
-        <summary className="cursor-pointer text-xs font-medium">Add or update a source</summary>
+        <summary className="cursor-pointer text-xs font-medium">
+          <T>Add or update a source</T>
+        </summary>
         {!targetProjectId ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Add a project to the brief first. Imported work lands in one of its projects.
+            <T>Add a project to the brief first. Imported work lands in one of its projects.</T>
           </p>
         ) : (
           <form
@@ -153,7 +164,7 @@ export function PitbossSources({
             }}
           >
             <label className="grid gap-1">
-              Tracker
+              <T>Tracker</T>
               <select
                 value={kind}
                 onChange={(event) => {
@@ -165,13 +176,19 @@ export function PitbossSources({
                 }}
                 className={inputClass}
               >
-                <option value="linear">Linear</option>
-                <option value="jira">Jira</option>
-                <option value="vikunja">Vikunja</option>
+                <option value="linear">
+                  <T>Linear</T>
+                </option>
+                <option value="jira">
+                  <T>Jira</T>
+                </option>
+                <option value="vikunja">
+                  <T>Vikunja</T>
+                </option>
               </select>
             </label>
             <label className="grid gap-1">
-              Server URL
+              <T>Server URL</T>
               <input
                 required
                 type="url"
@@ -182,7 +199,7 @@ export function PitbossSources({
               />
             </label>
             <label className="grid gap-1">
-              {kind === "linear" ? "Team ID" : "Project ID or key"}
+              {kind === "linear" ? gt("Team ID") : gt("Project ID or key")}
               <input
                 required
                 value={scope}
@@ -191,7 +208,7 @@ export function PitbossSources({
               />
             </label>
             <label className="grid gap-1">
-              Read credential
+              <T>Read credential</T>
               <input
                 required
                 type="password"
@@ -203,7 +220,7 @@ export function PitbossSources({
             </label>
             {projectIds.length > 1 && (
               <label className="grid gap-1">
-                Import into
+                <T>Import into</T>
                 <select
                   value={targetProjectId}
                   onChange={(event) =>
@@ -222,7 +239,7 @@ export function PitbossSources({
               </label>
             )}
             <label className="grid gap-1">
-              Connection name (optional)
+              <T>Connection name (optional)</T>
               <input
                 pattern={"[a-zA-Z0-9_\\-]{1,80}"}
                 value={id}
@@ -236,7 +253,7 @@ export function PitbossSources({
             </label>
             <div className="flex items-end md:col-span-2">
               <Button size="sm" type="submit" disabled={busy}>
-                Connect source
+                <T>Connect source</T>
               </Button>
             </div>
           </form>

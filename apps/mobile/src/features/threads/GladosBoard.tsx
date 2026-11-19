@@ -1,5 +1,8 @@
+import { useGT, useMessages } from "gt-react-native";
+import { LegendList } from "@legendapp/list/react-native";
+import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useMemo } from "react";
-import { FlatList, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import {
   buildGladosBoard,
   gladosBoardColumnWidth,
@@ -36,13 +39,19 @@ export function GladosBoard(props: {
   onOpenWorker: (task: PitbossTask, threadId: ThreadId) => void;
   onTalkToGlados: () => void;
 }) {
+  const gt = useGT();
+  const resolve = useMessages();
   const lanes = useMemo(
     () =>
-      buildGladosBoard(props.state, {
-        query: props.search,
-        projectId: props.projectFilter,
-      }),
-    [props.state, props.search, props.projectFilter],
+      buildGladosBoard(
+        props.state,
+        {
+          query: props.search,
+          projectId: props.projectFilter,
+        },
+        resolve,
+      ),
+    [props.state, props.search, props.projectFilter, resolve],
   );
   const task = props.state.tasks.find((value) => `task:${value.id}` === props.selectedKey);
   const talk = (
@@ -51,7 +60,9 @@ export function GladosBoard(props: {
       onPress={props.onTalkToGlados}
       className="min-h-12 justify-center rounded-xl bg-primary px-4 py-3"
     >
-      <Text className="text-center font-semibold text-primary-foreground">Talk to GLaDOS</Text>
+      <Text className="text-center font-semibold text-primary-foreground">
+        {gt("Talk to GLaDOS")}
+      </Text>
     </Pressable>
   );
   if (task)
@@ -62,7 +73,7 @@ export function GladosBoard(props: {
           onPress={() => props.onSelect(null)}
           className="min-h-12 justify-center"
         >
-          <Text className="text-primary">Back to board</Text>
+          <Text className="text-primary">{gt("Back to board")}</Text>
         </Pressable>
         <Text accessibilityRole="header" className="text-xl font-semibold">
           {task.title}
@@ -72,24 +83,30 @@ export function GladosBoard(props: {
         </Text>
         <Text>{task.outcome}</Text>
         {!!task.note && <Text className="text-foreground-muted">{task.note}</Text>}
-        {managedWorkerRows(task, props.state.awaitingApproval).length > 0 && (
+        {managedWorkerRows(task, props.state.awaitingApproval, resolve).length > 0 && (
           <View className="gap-2">
             <Text accessibilityRole="header" className="font-semibold">
-              Managed workers
+              {gt("Managed workers")}
             </Text>
-            {managedWorkerRows(task, props.state.awaitingApproval).map((worker) => (
+            {managedWorkerRows(task, props.state.awaitingApproval, resolve).map((worker) => (
               <Pressable
                 key={worker.attemptId}
                 accessibilityRole="button"
-                accessibilityLabel={`Open worker ${worker.generation}, ${worker.state}`}
+                accessibilityLabel={gt("Open worker {generation}, {state}", {
+                  generation: worker.generation,
+                  state: worker.state,
+                })}
                 onPress={() => props.onOpenWorker(task, worker.threadId)}
                 className="min-h-12 justify-center rounded-xl border border-border px-3"
               >
                 <Text>
-                  Worker {worker.generation} · {worker.state}
+                  {gt("Worker {generation} · {state}", {
+                    generation: worker.generation,
+                    state: worker.state,
+                  })}
                 </Text>
                 <Text numberOfLines={1} className="text-xs text-foreground-muted">
-                  {worker.model} · {worker.current ? "current" : "history"}
+                  {worker.model} · {worker.current ? gt("current") : gt("history")}
                 </Text>
               </Pressable>
             ))}
@@ -103,11 +120,13 @@ export function GladosBoard(props: {
             </Text>
           ))}
         <Text className="text-sm text-foreground-muted">
-          GLaDOS coordinates workers and verification. Give direction or answer questions in chat.
+          {gt(
+            "GLaDOS coordinates workers and verification. Give direction or answer questions in chat.",
+          )}
         </Text>
         {talk}
         <Text accessibilityRole="header" className="font-semibold">
-          Evidence · {task.evidence.length}
+          {gt("Evidence · {count}", { count: task.evidence.length })}
         </Text>
         {task.evidence.map((evidence) => (
           <View key={evidence.id} className="gap-2 rounded-xl border border-border p-3">
@@ -123,11 +142,11 @@ export function GladosBoard(props: {
     <View className="flex-1">
       <View className="gap-2 border-b border-border px-4 py-3">
         <Text className="text-sm text-foreground-muted">
-          GLaDOS manages the work. Follow progress here; give direction in chat.
+          {gt("GLaDOS manages the work. Follow progress here; give direction in chat.")}
         </Text>
         <TextInput
-          accessibilityLabel="Search Glados board"
-          placeholder="Find an outcome…"
+          accessibilityLabel={gt("Search Glados board")}
+          placeholder={gt("Find an outcome…")}
           value={props.search}
           onChangeText={props.onSearch}
           className="min-h-12 rounded-xl border border-input-border px-3 text-foreground"
@@ -145,7 +164,7 @@ export function GladosBoard(props: {
               onPress={() => props.onProjectFilter(id)}
               className={`min-h-12 justify-center rounded-xl px-3 ${props.projectFilter === id ? "bg-secondary" : "bg-subtle"}`}
             >
-              <Text>{id ? props.projectName(id) : "All projects"}</Text>
+              <Text>{id ? props.projectName(id) : gt("All projects")}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -168,17 +187,16 @@ export function GladosBoard(props: {
                 {lane.label} · {lane.items.length}
               </Text>
             </View>
-            <FlatList
+            <LegendList
               data={lane.items}
               keyExtractor={(item) => item.key}
               className="flex-1"
               nestedScrollEnabled
-              initialNumToRender={8}
-              maxToRenderPerBatch={8}
-              windowSize={5}
+              renderScrollComponent={NativeScrollView}
+              extraData={{ props, laneLabel: lane.label, gt, resolve }}
               contentContainerStyle={{ padding: 8, gap: 8 }}
               ListEmptyComponent={
-                <Text className="p-3 text-sm text-foreground-muted">No work here</Text>
+                <Text className="p-3 text-sm text-foreground-muted">{gt("No work here")}</Text>
               }
               renderItem={({ item }) =>
                 item.task ? (
@@ -193,31 +211,43 @@ export function GladosBoard(props: {
                         {item.task.title}
                       </Text>
                       <Text numberOfLines={1} className="text-xs text-foreground-muted">
-                        {props.projectName(item.task.projectId)}
-                        {item.task.workspaceStrategy.type === "worktree" ? " · Worktree" : ""}
+                        {item.task.workspaceStrategy.type === "worktree"
+                          ? gt("{project} · Worktree", {
+                              project: props.projectName(item.task.projectId),
+                            })
+                          : props.projectName(item.task.projectId)}
                       </Text>
                       <Text numberOfLines={3} className="text-sm text-foreground-muted">
                         {item.task.note || item.task.outcome}
                       </Text>
                       <Text className="text-xs text-foreground-muted">
-                        {item.task.evidence.length} evidence · {item.task.attempts.length} attempts
+                        {gt("Evidence: {evidence} · Attempts: {attempts}", {
+                          evidence: item.task.evidence.length,
+                          attempts: item.task.attempts.length,
+                        })}
                       </Text>
                       <Text numberOfLines={1} className="text-xs text-foreground-muted">
                         {item.task.attempts.at(-1)?.model.model ?? "GLaDOS"}
                       </Text>
                     </Pressable>
-                    {managedWorkerRows(item.task, props.state.awaitingApproval)
+                    {managedWorkerRows(item.task, props.state.awaitingApproval, resolve)
                       .slice(0, 1)
                       .map((worker) => (
                         <Pressable
                           key={worker.attemptId}
                           accessibilityRole="button"
-                          accessibilityLabel={`Open worker ${worker.generation}, ${worker.state}`}
+                          accessibilityLabel={gt("Open worker {generation}, {state}", {
+                            generation: worker.generation,
+                            state: worker.state,
+                          })}
                           onPress={() => props.onOpenWorker(item.task, worker.threadId)}
                           className="mx-2 mb-2 min-h-12 justify-center rounded-lg bg-subtle px-3"
                         >
                           <Text className="text-sm">
-                            Worker {worker.generation} · {worker.state}
+                            {gt("Worker {generation} · {state}", {
+                              generation: worker.generation,
+                              state: worker.state,
+                            })}
                           </Text>
                         </Pressable>
                       ))}

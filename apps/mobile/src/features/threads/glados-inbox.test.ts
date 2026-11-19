@@ -259,9 +259,9 @@ it("surfaces unsaved verification proposals in Needs you without claiming approv
   expect(gladosInboxRows(snapshot([proposed]), "needs-you").map((row) => row.key)).toEqual([
     "task:setup",
   ]);
-  expect(gladosReceiptStatus(proposed, snapshot([proposed]), Date.now())).toBe(
-    "Evidence not ready yet",
-  );
+  expect(
+    gladosReceiptStatus(proposed, snapshot([proposed]), Date.parse("2026-09-14T00:05:00Z")),
+  ).toBe("Evidence not ready yet");
 });
 
 it("combines project and text filters without losing cancelled work or waiting decisions", () => {

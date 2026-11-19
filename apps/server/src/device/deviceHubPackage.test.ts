@@ -33,7 +33,6 @@ it.effect.skipIf(process.env.T3_TEST_DEVICE_HUB_INSTALL !== "1")(
       Effect.scoped,
       Effect.provide(ProcessRunner.layer.pipe(Layer.provideMerge(NodeServices.layer))),
     ),
-  120_000,
 );
 
 // Use the package's real transport and input encoder, substituting only ADB and sockets.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { mFallback } from "gt-i18n";
 import {
   ProjectId,
   ProviderInstanceId,
@@ -179,6 +180,13 @@ describe("GLaDOS board", () => {
     const waiting = contents([blocked], [], ["attempt-blocked"]);
     expect(waiting["needs-you"]).toEqual(["task:blocked"]);
     expect(waiting.working).toEqual([]);
+    const resolve = (text: string) => `translated: ${mFallback(text)}`;
+    const [lane] = buildGladosBoard({ tasks: [blocked], messages: [] }, {}, resolve);
+    expect(lane).toMatchObject({ id: "needs-you", label: "translated: Chat input" });
+    expect(managedWorkerRows(blocked, ["attempt-blocked"], resolve)[0]?.state).toBe(
+      "translated: waiting for your approval",
+    );
+    expect(managedWorkerRows(blocked, [], resolve)[0]?.state).toBe("translated: running");
   });
   it("labels the current worker row with what the user owes it", () => {
     const blocked = task("blocked", "active");

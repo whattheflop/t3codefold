@@ -1,3 +1,4 @@
+import { useGT, useMessages } from "gt-react-native";
 import { LegendList } from "@legendapp/list/react-native";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
@@ -59,6 +60,7 @@ function VerificationArtifact({
   environmentId: EnvironmentId;
   artifact: { name: string; attachmentId: string };
 }) {
+  const gt = useGT();
   const asset = useAssetUrlState(environmentId, {
     _tag: "attachment",
     attachmentId: artifact.attachmentId,
@@ -72,7 +74,7 @@ function VerificationArtifact({
         if (asset._tag === "Success") void Linking.openURL(asset.url);
       }}
     >
-      <Text className="text-sm underline">Download {artifact.name}</Text>
+      <Text className="text-sm underline">{gt("Download {name}", { name: artifact.name })}</Text>
     </Pressable>
   );
 }
@@ -84,6 +86,8 @@ export function PitbossWork(props: {
   connected?: boolean;
   onComposeWork?: () => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const {
     refresh,
     data: state,
@@ -173,7 +177,7 @@ export function PitbossWork(props: {
     if (!state) return false;
     if (inFlight.current) return false;
     if (queryError || props.connected === false) {
-      setError("Reconnect to send this change. Your draft is still here.");
+      setError(gt("Reconnect to send this change. Your draft is still here."));
       return false;
     }
     inFlight.current = true;
@@ -189,7 +193,9 @@ export function PitbossWork(props: {
         setError(
           reason instanceof Error
             ? reason.message
-            : "The action was not applied. Check the connection and current work before retrying.",
+            : gt(
+                "The action was not applied. Check the connection and current work before retrying.",
+              ),
         );
         return false;
       }
@@ -237,13 +243,13 @@ export function PitbossWork(props: {
         }}
         className="flex-row items-center justify-between border-b border-primary/20 bg-primary/5 px-4 py-2"
       >
-        <Text className="font-semibold text-primary">♛ {isBoss ? "GLaDOS" : "GLaDOS work"}</Text>
+        <Text className="font-semibold text-primary">♛ {gt("GLaDOS")}</Text>
         <Text className="text-xs text-foreground-muted">
-          {isBoss
-            ? role.paused
-              ? "Paused"
-              : `${state.tasks.filter((task) => task.status === "active").length} working`
-            : "Manage"}
+          {role.paused
+            ? gt("Paused")
+            : gt("{count} working", {
+                count: state.tasks.filter((task) => task.status === "active").length,
+              })}
         </Text>
       </Pressable>
       {/* Android modal surfaces retain their creation density; rebuild the surface, not the draft. */}
@@ -268,33 +274,41 @@ export function PitbossWork(props: {
         >
           <View className="flex-row items-center justify-between border-b border-border px-4 py-2">
             <View className="flex-1">
-              <Text className="text-xl font-semibold">GLaDOS</Text>
+              <Text className="text-xl font-semibold">{gt("GLaDOS")}</Text>
               <Text className="text-xs text-foreground-muted">
-                {role?.paused ? "New work paused" : "Your projects, one conversation"}
+                {role?.paused ? gt("New work paused") : gt("Your projects, one conversation")}
               </Text>
             </View>
-            <WorkButton label="Back to chat" onPress={() => setVisible(false)} disabled={busy} />
+            <WorkButton
+              label={gt("Back to chat")}
+              onPress={() => setVisible(false)}
+              disabled={busy}
+            />
           </View>
           {(error || queryError || props.connected === false) && (
             <View className="border-b border-border px-4 py-3">
               <Text accessibilityRole="alert" className="text-red-500">
                 {queryError || props.connected === false
-                  ? "Disconnected – showing retained work. Actions resume when reconnected."
+                  ? gt("Disconnected – showing retained work. Actions resume when reconnected.")
                   : error}
               </Text>
               {props.connected !== false && queryError && (
-                <WorkButton label="Reconnect work" onPress={refresh} disabled={busy} />
+                <WorkButton label={gt("Reconnect work")} onPress={refresh} disabled={busy} />
               )}
             </View>
           )}
           {panel === "inbox" ? (
             <>
               <View className="flex-row flex-wrap items-center justify-between gap-2 px-4 py-2">
-                <WorkButton label="Team" onPress={() => setPanel("settings")} disabled={busy} />
-                <WorkButton label="Settings" onPress={openSettings} disabled={busy} />
+                <WorkButton
+                  label={gt("Team")}
+                  onPress={() => setPanel("settings")}
+                  disabled={busy}
+                />
+                <WorkButton label={gt("Settings")} onPress={openSettings} disabled={busy} />
                 {isBoss && (
                   <WorkButton
-                    label="Talk to GLaDOS"
+                    label={gt("Talk to GLaDOS")}
                     onPress={() => {
                       composeAfterDismiss.current = true;
                       setVisible(false);
@@ -304,7 +318,7 @@ export function PitbossWork(props: {
                 )}
                 {isBoss && (
                   <WorkButton
-                    label={role.paused ? "Resume" : "Pause"}
+                    label={role.paused ? gt("Resume") : gt("Pause")}
                     onPress={() => void command({ type: "pause", paused: !role.paused })}
                     disabled={busy}
                   />
@@ -322,7 +336,7 @@ export function PitbossWork(props: {
                     }}
                     className={`min-h-12 justify-center rounded-xl px-4 ${workView === view ? "bg-secondary" : "bg-subtle"}`}
                   >
-                    <Text>{view === "board" ? "Board" : "Advanced"}</Text>
+                    <Text>{view === "board" ? gt("Board") : gt("Advanced")}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -362,10 +376,10 @@ export function PitbossWork(props: {
                   >
                     {(
                       [
-                        ["all", "All"],
-                        ["needs-you", "Needs you"],
-                        ["working", "Working"],
-                        ["delivered", "Delivered"],
+                        ["all", gt("All")],
+                        ["needs-you", gt("Needs you")],
+                        ["working", gt("Working")],
+                        ["delivered", gt("Delivered")],
                       ] as const
                     ).map(([key, label]) => (
                       <Pressable
@@ -405,8 +419,8 @@ export function PitbossWork(props: {
                       >
                         <View className="gap-2 border-b border-border px-3 py-2">
                           <TextInput
-                            accessibilityLabel="Search outcomes"
-                            placeholder="Search outcomes"
+                            accessibilityLabel={gt("Search outcomes")}
+                            placeholder={gt("Search outcomes")}
                             value={search}
                             onChangeText={setSearch}
                             clearButtonMode="while-editing"
@@ -418,7 +432,7 @@ export function PitbossWork(props: {
                             keyboardShouldPersistTaps="handled"
                           >
                             <View className="flex-row gap-2">
-                              {[{ id: undefined, title: "All projects" }, ...projects].map(
+                              {[{ id: undefined, title: gt("All projects") }, ...projects].map(
                                 (project) => (
                                   <Pressable
                                     key={project.id ?? "all"}
@@ -445,16 +459,17 @@ export function PitbossWork(props: {
                             <View className="gap-2 p-5">
                               <Text className="font-semibold">
                                 {search.trim() || projectFilter
-                                  ? "No matching outcomes"
+                                  ? gt("No matching outcomes")
                                   : tab === "needs-you"
-                                    ? "Nothing needs your attention"
+                                    ? gt("Nothing needs your attention")
                                     : tab === "working"
-                                      ? "Ready for your next outcome"
-                                      : "Completed outcomes will appear here"}
+                                      ? gt("Ready for your next outcome")
+                                      : gt("Completed outcomes will appear here")}
                               </Text>
                               <Text className="text-sm text-foreground-muted">
-                                Describe the outcome in chat. GLaDOS prepares the task, success
-                                criteria and checks, then reports back here.
+                                {gt(
+                                  "Describe the outcome in chat. GLaDOS prepares the task, success criteria and checks, then reports back here.",
+                                )}
                               </Text>
                             </View>
                           }
@@ -463,8 +478,10 @@ export function PitbossWork(props: {
                               accessibilityRole="button"
                               accessibilityLabel={
                                 item.task
-                                  ? `Review ${item.task.title}`
-                                  : `Read ${pitbossMessageHeadline(item.message)}`
+                                  ? gt("Review {title}", { title: item.task.title })
+                                  : gt("Read {title}", {
+                                      title: pitbossMessageHeadline(item.message),
+                                    })
                               }
                               accessibilityState={{ selected: selectedKey === item.key }}
                               onPress={() => {
@@ -479,8 +496,8 @@ export function PitbossWork(props: {
                             >
                               <Text className="text-xs text-foreground-muted">
                                 {item.task
-                                  ? `${projectName(item.task.projectId)} · ${gladosWorkStatus(item.task, state)}`
-                                  : `GLaDOS · ${item.message.kind}`}
+                                  ? `${projectName(item.task.projectId)} · ${gladosWorkStatus(item.task, state, messages)}`
+                                  : gt("GLaDOS · {kind}", { kind: item.message.kind })}
                               </Text>
                               <Text className="font-semibold" numberOfLines={2}>
                                 {item.task ? item.task.title : pitbossMessageHeadline(item.message)}
@@ -488,7 +505,7 @@ export function PitbossWork(props: {
                               <Text className="text-sm text-foreground-muted" numberOfLines={2}>
                                 {item.task?.note ||
                                   item.task?.outcome ||
-                                  "A decision from your team"}
+                                  gt("A decision from your team")}
                               </Text>
                             </Pressable>
                           )}
@@ -503,16 +520,16 @@ export function PitbossWork(props: {
                       >
                         {selectedKey && (
                           <WorkButton
-                            label="Back to outcomes"
+                            label={gt("Back to outcomes")}
                             onPress={leaveDetail}
                             disabled={busy}
                           />
                         )}
                         {!selectedRow && (
                           <View className="gap-2 py-8">
-                            <Text className="text-xl font-semibold">Choose an outcome</Text>
+                            <Text className="text-xl font-semibold">{gt("Choose an outcome")}</Text>
                             <Text className="text-foreground-muted">
-                              See the recommendation, evidence and next decision together.
+                              {gt("See the recommendation, evidence and next decision together.")}
                             </Text>
                           </View>
                         )}
@@ -523,7 +540,7 @@ export function PitbossWork(props: {
                             </Text>
                             <Text selectable>{selectedRow.message.text}</Text>
                             <WorkButton
-                              label="Acknowledge"
+                              label={gt("Acknowledge")}
                               onPress={() => {
                                 void command({
                                   type: "acknowledge",
@@ -542,48 +559,61 @@ export function PitbossWork(props: {
                                 <Text className="text-xs text-foreground-muted">
                                   {projectName(task.projectId)} ·{" "}
                                   {task.leadId
-                                    ? `Project lead ${task.leadId}`
-                                    : "Managed by GLaDOS"}{" "}
+                                    ? gt("Project lead {lead}", { lead: task.leadId })
+                                    : gt("Managed by GLaDOS")}{" "}
                                   ·{" "}
                                   {task.homeEnvironmentId
-                                    ? `Task home ${task.homeEnvironmentId}`
-                                    : "This environment"}
+                                    ? gt("Task home {environment}", {
+                                        environment: task.homeEnvironmentId,
+                                      })
+                                    : gt("This environment")}
                                 </Text>
                                 <Text className="text-xl font-semibold">{task.title}</Text>
                                 <Text className="text-xs text-foreground-muted">
-                                  {gladosWorkKind(task, state)} · {gladosWorkStatus(task, state)}
+                                  {gladosWorkKind(task, state, messages)} ·{" "}
+                                  {gladosWorkStatus(task, state, messages)}
                                 </Text>
                                 {task.proposedVerificationRecipe && (
                                   <View className="rounded-xl border border-primary p-3">
                                     <Text className="font-semibold">
-                                      Verification setup proposed
+                                      {gt("Verification setup proposed")}
                                     </Text>
                                     <Text>{task.proposedVerificationRecipe.name}</Text>
                                     <Text className="text-sm text-foreground-muted">
-                                      Review the checks GLaDOS prepared. Saving approves this
-                                      profile for the outcome.
+                                      {gt(
+                                        "Review the checks GLaDOS prepared. Saving approves this profile for the outcome.",
+                                      )}
                                     </Text>
                                     {[
                                       [
-                                        "Work type",
+                                        gt("Work type"),
                                         task.proposedVerificationRecipe.mode ?? "commit",
                                       ],
                                       [
-                                        "Environment",
+                                        gt("Environment"),
                                         task.proposedVerificationRecipe.environmentId,
                                       ],
-                                      ["Target", task.proposedVerificationRecipe.target],
-                                      ["Input files", task.proposedVerificationRecipe.inputPath],
-                                      ["Allowed effects", task.proposedVerificationRecipe.effects],
+                                      [gt("Target"), task.proposedVerificationRecipe.target],
                                       [
-                                        "Evidence lifetime",
+                                        gt("Input files"),
+                                        task.proposedVerificationRecipe.inputPath,
+                                      ],
+                                      [
+                                        gt("Allowed effects"),
+                                        task.proposedVerificationRecipe.effects,
+                                      ],
+                                      [
+                                        gt("Evidence lifetime"),
                                         task.proposedVerificationRecipe.maxAgeSeconds
-                                          ? `${task.proposedVerificationRecipe.maxAgeSeconds} seconds`
+                                          ? gt("{seconds} s", {
+                                              seconds:
+                                                task.proposedVerificationRecipe.maxAgeSeconds,
+                                            })
                                           : undefined,
                                       ],
-                                      ["Readiness", task.proposedVerificationRecipe.doctor],
-                                      ["Verification", task.proposedVerificationRecipe.verify],
-                                      ["Cleanup", task.proposedVerificationRecipe.cleanup],
+                                      [gt("Readiness"), task.proposedVerificationRecipe.doctor],
+                                      [gt("Verification"), task.proposedVerificationRecipe.verify],
+                                      [gt("Cleanup"), task.proposedVerificationRecipe.cleanup],
                                     ]
                                       .filter(([, value]) => value)
                                       .map(([label, value]) => (
@@ -595,16 +625,19 @@ export function PitbossWork(props: {
                                         </View>
                                       ))}
                                     <Text className="text-xs text-foreground-muted">
-                                      {task.proposedVerificationRecipe.timeoutSeconds}s limit ·{" "}
-                                      {task.proposedVerificationRecipe.artifacts.join(", ") ||
-                                        "No captured files"}
+                                      {gt("{seconds}s limit · {files}", {
+                                        seconds: task.proposedVerificationRecipe.timeoutSeconds,
+                                        files:
+                                          task.proposedVerificationRecipe.artifacts.join(", ") ||
+                                          gt("No captured files"),
+                                      })}
                                     </Text>
                                     {verificationProposalSaveAction(task) && (
                                       <WorkButton
                                         label={
                                           verificationProposalApprovalAction(task)
-                                            ? "Approve and save exact proposal"
-                                            : "Save evidence profile"
+                                            ? gt("Approve and save exact proposal")
+                                            : gt("Save evidence profile")
                                         }
                                         onPress={() => {
                                           const action = verificationProposalSaveAction(task);
@@ -623,21 +656,26 @@ export function PitbossWork(props: {
                                         key={decision.id}
                                         className="gap-3 rounded-xl border border-primary bg-primary/5 p-4"
                                       >
-                                        <Text className="text-lg font-semibold">Your decision</Text>
+                                        <Text className="text-lg font-semibold">
+                                          {gt("Your decision")}
+                                        </Text>
                                         <Text>{decision.question}</Text>
-                                        <Text className="font-semibold">Recommendation</Text>
+                                        <Text className="font-semibold">
+                                          {gt("Recommendation")}
+                                        </Text>
                                         <Text>
-                                          {decision.recommendation || "No recommendation yet."}
+                                          {decision.recommendation || gt("No recommendation yet.")}
                                         </Text>
                                         <Text className="text-sm text-foreground-muted">
-                                          This decision pauses this outcome. Independent work can
-                                          continue.
+                                          {gt(
+                                            "This decision pauses this outcome. Independent work can continue.",
+                                          )}
                                         </Text>
                                         {verificationProposalApprovalAction(task)?.decisionId ===
                                           decision.id && (
                                           <View className="gap-2">
                                             <WorkButton
-                                              label="Approve and save evidence profile"
+                                              label={gt("Approve and save evidence profile")}
                                               onPress={() => {
                                                 const action =
                                                   verificationProposalApprovalAction(task);
@@ -646,8 +684,9 @@ export function PitbossWork(props: {
                                               disabled={busy || !!task.homeEnvironmentId}
                                             />
                                             <Text className="text-xs text-foreground-muted">
-                                              Other choices and written replies do not change proof
-                                              requirements.
+                                              {gt(
+                                                "Other choices and written replies do not change proof requirements.",
+                                              )}
                                             </Text>
                                           </View>
                                         )}
@@ -668,8 +707,8 @@ export function PitbossWork(props: {
                                           </View>
                                         ))}
                                         <TextInput
-                                          accessibilityLabel="Your decision answer"
-                                          placeholder="Or give your own direction"
+                                          accessibilityLabel={gt("Your decision answer")}
+                                          placeholder={gt("Or give your own direction")}
                                           multiline
                                           value={decisionDrafts[decision.id] ?? ""}
                                           onChangeText={(value) =>
@@ -681,7 +720,7 @@ export function PitbossWork(props: {
                                           className="min-h-12 rounded-lg border border-border p-3 text-foreground"
                                         />
                                         <WorkButton
-                                          label="Send decision"
+                                          label={gt("Send decision")}
                                           onPress={() => {
                                             if (decisionDrafts[decision.id]?.trim())
                                               void command({
@@ -704,7 +743,7 @@ export function PitbossWork(props: {
                                           }
                                         />
                                         <WorkButton
-                                          label="Decide later"
+                                          label={gt("Decide later")}
                                           onPress={leaveDetail}
                                           disabled={busy}
                                         />
@@ -713,7 +752,9 @@ export function PitbossWork(props: {
                                 <Text>{task.outcome}</Text>
                                 {task.dependencies.length > 0 && (
                                   <View className="gap-2">
-                                    <Text className="text-sm font-semibold">Depends on</Text>
+                                    <Text className="text-sm font-semibold">
+                                      {gt("Depends on")}
+                                    </Text>
                                     {task.dependencies.map((id) => {
                                       const dependency = state.tasks.find(
                                         (candidate) => candidate.id === id,
@@ -732,7 +773,9 @@ export function PitbossWork(props: {
                                 )}
                                 <WorkButton
                                   label={
-                                    showCriteria ? "Hide success criteria" : "What success means"
+                                    showCriteria
+                                      ? gt("Hide success criteria")
+                                      : gt("What success means")
                                   }
                                   onPress={() => setShowCriteria(!showCriteria)}
                                   disabled={busy}
@@ -743,14 +786,17 @@ export function PitbossWork(props: {
                                   </Text>
                                 )}
                                 <Text className="font-semibold">
-                                  {gladosReceiptStatus(task, state, now)}
+                                  {gladosReceiptStatus(task, state, now, messages)}
                                 </Text>
                                 <Text>
-                                  {task.note || "The team has not reported a recommendation yet."}
+                                  {task.note ||
+                                    gt("The team has not reported a recommendation yet.")}
                                 </Text>
                                 {task.closedReason && (
                                   <Text className="text-xs text-foreground-muted">
-                                    Closure history · {task.closedReason}
+                                    {gt("Closure history · {reason}", {
+                                      reason: task.closedReason,
+                                    })}
                                     {task.closedAt
                                       ? ` · ${new Date(task.closedAt).toLocaleString()}`
                                       : ""}
@@ -777,7 +823,7 @@ export function PitbossWork(props: {
                                       </Text>
                                       <Text selectable>{message.text}</Text>
                                       <WorkButton
-                                        label="Acknowledge"
+                                        label={gt("Acknowledge")}
                                         onPress={() =>
                                           void command({
                                             type: "acknowledge",
@@ -790,40 +836,53 @@ export function PitbossWork(props: {
                                   ))}
                                 {task.source && (
                                   <Text className="text-xs text-foreground-muted">
-                                    {task.source.kind} · {task.source.key} · Source:{" "}
-                                    {task.source.status} · T3 work: {task.status}
+                                    {gt("{kind} · {key} · Source: {source} · T3 work: {status}", {
+                                      kind: task.source.kind,
+                                      key: task.source.key,
+                                      source: task.source.status,
+                                      status: task.status,
+                                    })}
                                   </Text>
                                 )}
 
                                 {task.verification && (
                                   <View className="gap-2 rounded-lg bg-subtle p-3">
                                     <Text className="font-semibold">
-                                      Captured verification · {task.verification.state}
+                                      {gt("Captured verification · {state}", {
+                                        state: task.verification.state,
+                                      })}
                                     </Text>
                                     <Text>
                                       {task.verification.receipt?.summary ??
-                                        "Waiting for the environment runner."}
+                                        gt("Waiting for the environment runner.")}
                                     </Text>
                                     <Text className="text-xs">
-                                      {task.verification.candidate} · recipe v
-                                      {task.verification.recipe.version}
+                                      {gt("{candidate} · recipe v{version}", {
+                                        candidate: task.verification.candidate,
+                                        version: task.verification.recipe.version,
+                                      })}
                                     </Text>
                                     {task.verification.receipt?.expiresAt && (
                                       <Text className="text-sm">
-                                        Valid until{" "}
-                                        {new Date(
-                                          task.verification.receipt.expiresAt,
-                                        ).toLocaleString()}
+                                        {gt("Valid until {date}", {
+                                          date: new Date(
+                                            task.verification.receipt.expiresAt,
+                                          ).toLocaleString(),
+                                        })}
                                       </Text>
                                     )}
                                     {task.verification.receipt?.target && (
-                                      <Text>Target: {task.verification.receipt.target}</Text>
+                                      <Text>
+                                        {gt("Target: {target}", {
+                                          target: task.verification.receipt.target,
+                                        })}
+                                      </Text>
                                     )}
                                     <WorkButton
                                       label={
                                         showHistory
-                                          ? "Hide logs and history"
-                                          : "Show logs and history"
+                                          ? gt("Hide logs and history")
+                                          : gt("Show logs and history")
                                       }
                                       onPress={() => setShowHistory(!showHistory)}
                                       disabled={busy}
@@ -833,7 +892,9 @@ export function PitbossWork(props: {
                                         <View key={check.name}>
                                           <Text>
                                             {check.name}:{" "}
-                                            {check.timedOut ? "timed out" : `exit ${check.code}`}
+                                            {check.timedOut
+                                              ? gt("timed out")
+                                              : gt("exit {code}", { code: check.code })}
                                           </Text>
                                           <Text selectable className="text-xs">
                                             {check.stdout}
@@ -846,7 +907,7 @@ export function PitbossWork(props: {
                                 {verificationRecipeForTask(state, task) &&
                                   verificationRecipeForTask(state, task)?.enabled !== false && (
                                     <WorkButton
-                                      label="Run captured verification"
+                                      label={gt("Run captured verification")}
                                       onPress={() => {
                                         const latest = task.evidence.at(-1);
                                         if (latest)
@@ -880,7 +941,9 @@ export function PitbossWork(props: {
                                       key={decision.id}
                                       className="gap-1 rounded-lg bg-subtle p-3"
                                     >
-                                      <Text className="font-semibold">Your decision recorded</Text>
+                                      <Text className="font-semibold">
+                                        {gt("Your decision recorded")}
+                                      </Text>
                                       <Text>{decision.question}</Text>
                                       <Text>{decision.answer}</Text>
                                     </View>
@@ -888,16 +951,18 @@ export function PitbossWork(props: {
                                 <WorkButton
                                   label={
                                     showProfiles
-                                      ? "Close profile choices"
-                                      : "Change evidence profile"
+                                      ? gt("Close profile choices")
+                                      : gt("Change evidence profile")
                                   }
                                   onPress={() => setShowProfiles(!showProfiles)}
                                   disabled={busy}
                                 />
                                 <Text className="text-xs">
-                                  Evidence profile:{" "}
-                                  {verificationRecipeForTask(state, task)?.name ??
-                                    "Reported evidence"}
+                                  {gt("Evidence profile: {profile}", {
+                                    profile:
+                                      verificationRecipeForTask(state, task)?.name ??
+                                      gt("Reported evidence"),
+                                  })}
                                 </Text>
                                 {showProfiles &&
                                   (state.verificationRecipes ?? [])
@@ -909,7 +974,7 @@ export function PitbossWork(props: {
                                     .map((recipe) => (
                                       <View key={recipe.profileId ?? "default"}>
                                         <WorkButton
-                                          label={`Use ${recipe.name}`}
+                                          label={gt("Use {name}", { name: recipe.name })}
                                           onPress={() => {
                                             void command({
                                               type: "verification-profile",
@@ -927,7 +992,7 @@ export function PitbossWork(props: {
                                     ))}
                                 {showProfiles && (
                                   <WorkButton
-                                    label="Use reported evidence"
+                                    label={gt("Use reported evidence")}
                                     onPress={() => {
                                       void command({
                                         type: "verification-profile",
@@ -973,7 +1038,7 @@ export function PitbossWork(props: {
                                             now,
                                           )) && (
                                           <WorkButton
-                                            label="Accept inspected evidence"
+                                            label={gt("Accept inspected evidence")}
                                             onPress={() =>
                                               void command({
                                                 type: "accept",
@@ -989,7 +1054,9 @@ export function PitbossWork(props: {
                                   ),
                                 )}
                                 <WorkButton
-                                  label={showManagement ? "Close work controls" : "Manage work"}
+                                  label={
+                                    showManagement ? gt("Close work controls") : gt("Manage work")
+                                  }
                                   onPress={() => setShowManagement(!showManagement)}
                                   disabled={busy}
                                 />
@@ -997,7 +1064,7 @@ export function PitbossWork(props: {
                                   <View className="gap-2">
                                     {task.status === "queued" && task.attempts.length === 0 && (
                                       <WorkButton
-                                        label="Assign worker"
+                                        label={gt("Assign worker")}
                                         onPress={() =>
                                           void command({ type: "assign", taskId: task.id })
                                         }
@@ -1008,7 +1075,7 @@ export function PitbossWork(props: {
                                       !task.revisionRequest &&
                                       (task.attempts.length > 0 || task.evidence.length > 0) && (
                                         <WorkButton
-                                          label="Revise result"
+                                          label={gt("Revise result")}
                                           onPress={() =>
                                             void command({
                                               type: "revise-result",
@@ -1021,7 +1088,7 @@ export function PitbossWork(props: {
                                       )}
                                     {task.status === "cancelled" && (
                                       <WorkButton
-                                        label="Restore to queue"
+                                        label={gt("Restore to queue")}
                                         onPress={() =>
                                           void command({ type: "reopen", taskId: task.id })
                                         }
@@ -1030,7 +1097,7 @@ export function PitbossWork(props: {
                                     )}
                                     {task.status !== "cancelled" && (
                                       <WorkButton
-                                        label="Close outcome"
+                                        label={gt("Close outcome")}
                                         onPress={() =>
                                           void command({
                                             type: "close",
@@ -1055,8 +1122,19 @@ export function PitbossWork(props: {
                                             serverConfigs.has(
                                               task.homeEnvironmentId ?? props.environmentId,
                                             )
-                                              ? `Worker ${attempt.generation} · ${managedWorkerStateLabel(task, attempt, state.awaitingApproval)}${attempt.workspacePath ? ` · ${attempt.workspacePath}` : ""}`
-                                              : "Connect task home first"
+                                              ? gt("Worker {generation} · {status}{path}", {
+                                                  generation: attempt.generation,
+                                                  status: managedWorkerStateLabel(
+                                                    task,
+                                                    attempt,
+                                                    state.awaitingApproval,
+                                                    messages,
+                                                  ),
+                                                  path: attempt.workspacePath
+                                                    ? ` · ${attempt.workspacePath}`
+                                                    : "",
+                                                })
+                                              : gt("Connect task home first")
                                           }
                                           onPress={() => {
                                             setVisible(false);
@@ -1095,19 +1173,20 @@ export function PitbossWork(props: {
               keyboardShouldPersistTaps="handled"
             >
               <WorkButton
-                label="Back to outcomes"
+                label={gt("Back to outcomes")}
                 onPress={() => setPanel("inbox")}
                 disabled={busy}
               />
               {panel === "settings" && (
                 <>
                   <Text className="text-sm text-foreground-muted">
-                    Tell GLaDOS what you want in chat. Use these controls when you want to manage
-                    the details yourself.
+                    {gt(
+                      "Tell GLaDOS what you want in chat. Use these controls when you want to manage the details yourself.",
+                    )}
                   </Text>
                   {isBoss && (
                     <WorkButton
-                      label="Add outcome manually"
+                      label={gt("Add outcome manually")}
                       onPress={() => setPanel("create")}
                       disabled={busy}
                     />
@@ -1117,20 +1196,29 @@ export function PitbossWork(props: {
                     return (
                       <View key={lead.id} className="gap-2 rounded-xl border border-border p-3">
                         <Text className="font-semibold">
-                          {lead.id} · {active ? "Managing" : "Dormant"}
+                          {lead.id} · {active ? gt("Managing") : gt("Dormant")}
                         </Text>
                         <Text className="text-sm text-foreground-muted">
-                          {lead.model.model} · up to {lead.maxWorkers} shared workers
+                          {gt("{model} · up to {count} shared workers", {
+                            model: lead.model.model,
+                            count: lead.maxWorkers,
+                          })}
                         </Text>
                         <Text className="text-sm">{lead.charter}</Text>
                         <Text className="text-xs text-foreground-muted">
-                          {projectName(lead.projectId)} · this environment · thread {lead.threadId}
+                          {gt("{project} · this environment · thread {thread}", {
+                            project: projectName(lead.projectId),
+                            thread: lead.threadId,
+                          })}
                         </Text>
                         <Text className="text-sm">
-                          Context v{lead.contextRevision}: {lead.context || "Not recorded yet"}
+                          {gt("Context v{version}: {context}", {
+                            version: lead.contextRevision,
+                            context: lead.context || gt("Not recorded yet"),
+                          })}
                         </Text>
                         <WorkButton
-                          label="Open lead thread"
+                          label={gt("Open lead thread")}
                           onPress={() => {
                             setVisible(false);
                             selectDetail({
@@ -1145,7 +1233,7 @@ export function PitbossWork(props: {
                         />
                         {role?.brief.projectIds.includes(lead.projectId) && (
                           <WorkButton
-                            label={active ? "Return to GLaDOS" : "Reactivate lead"}
+                            label={active ? gt("Return to GLaDOS") : gt("Reactivate lead")}
                             onPress={() =>
                               void command({
                                 type: "lead-status",
@@ -1160,31 +1248,36 @@ export function PitbossWork(props: {
                     );
                   })}
                   <Text className="text-sm text-foreground-muted">
-                    Priorities, projects, autonomy, models, sources and peers live in GLaDOS
-                    settings.
+                    {gt(
+                      "Priorities, projects, autonomy, models, sources and peers live in GLaDOS settings.",
+                    )}
                   </Text>
-                  <WorkButton label="Open GLaDOS settings" onPress={openSettings} disabled={busy} />
+                  <WorkButton
+                    label={gt("Open GLaDOS settings")}
+                    onPress={openSettings}
+                    disabled={busy}
+                  />
                 </>
               )}
               {panel === "create" && isBoss && (
                 <>
-                  <Text className="mt-3 font-semibold">Add an outcome</Text>
+                  <Text className="mt-3 font-semibold">{gt("Add an outcome")}</Text>
                   <TextInput
-                    accessibilityLabel="Task title"
+                    accessibilityLabel={gt("Task title")}
                     value={title}
                     onChangeText={setTitle}
                     className="rounded-xl border border-border p-3 text-foreground"
-                    placeholder="What should get done?"
+                    placeholder={gt("What should get done?")}
                   />
                   <TextInput
-                    accessibilityLabel="Acceptance criteria"
+                    accessibilityLabel={gt("Acceptance criteria")}
                     value={criteria}
                     onChangeText={setCriteria}
                     multiline
                     className="rounded-xl border border-border p-3 text-foreground"
-                    placeholder="How will we prove it works?"
+                    placeholder={gt("How will we prove it works?")}
                   />
-                  <Text className="font-semibold">Project</Text>
+                  <Text className="font-semibold">{gt("Project")}</Text>
                   <View className="flex-row flex-wrap gap-2">
                     {projects
                       .filter((project) => role.brief.projectIds.includes(project.id))
@@ -1201,19 +1294,23 @@ export function PitbossWork(props: {
                         </Pressable>
                       ))}
                   </View>
-                  <Text className="font-semibold">Workspace</Text>
+                  <Text className="font-semibold">{gt("Workspace")}</Text>
                   <WorkButton
-                    label={isolatedCode ? "Use project files" : "Use isolated code checkout"}
+                    label={
+                      isolatedCode ? gt("Use project files") : gt("Use isolated code checkout")
+                    }
                     onPress={() => setIsolatedCode(!isolatedCode)}
                     disabled={busy}
                   />
                   <Text className="text-sm text-foreground-muted">
                     {isolatedCode
-                      ? "Creates a Git worktree for code changes."
-                      : "Uses this project's files. Suitable for research and home-server work; Git is not required."}
+                      ? gt("Creates a Git worktree for code changes.")
+                      : gt(
+                          "Uses this project's files. Suitable for research and home-server work; Git is not required.",
+                        )}
                   </Text>
                   <WorkButton
-                    label="Create outcome"
+                    label={gt("Create outcome")}
                     onPress={() => {
                       if (title.trim() && criteria.trim())
                         void command(

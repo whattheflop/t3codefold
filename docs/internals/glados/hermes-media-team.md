@@ -2,7 +2,7 @@
 
 The supplied media-company example contributes an editorial workflow rather than a fundamentally new orchestration architecture. Its strongest additions are the quality of the handoff contract, deliberate rejection of weak work, review of the whole output package, and a controlled path from feedback to shared knowledge. These are useful beyond publishing: GLaDOS manages outputs whose quality cannot always be reduced to passing tests.
 
-Source: the full article supplied in conversation, **“How to Build a One-Person Media Company With Hermes Bots,” attributed in its closing text to @vibemarketer_**. No original article URL or publication date was supplied. Article claims are labeled separately from official Hermes documentation. The reported 5.8 million X impressions in four weeks is unverified and does not establish causation, business value, review cost, or reliability. “Trained” is interpreted here as configured context, instructions and examples; the article does not demonstrate model-weight training.
+Source: the full article supplied in conversation, **“How to Build a One-Person Media Company With Hermes Bots,” attributed in its closing text to @vibemarketer\_**. No original article URL or publication date was supplied. Article claims are labeled separately from official Hermes documentation. The reported 5.8 million X impressions in four weeks is unverified and does not establish causation, business value, review cost, or reliability. “Trained” is interpreted here as configured context, instructions and examples; the article does not demonstrate model-weight training.
 
 ## What changes our thinking
 

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useEffect, useEffectEvent, useState } from "react";
 import { View, type AccessibilityActionEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -28,6 +29,7 @@ interface WorkspacePaneDividerProps {
 
 // Move only the handle while dragging; resizing chat and terminals every frame causes repaint spikes.
 export function FoldWorkspacePaneDivider(props: WorkspacePaneDividerProps) {
+  const gt = useGT();
   const translationX = useSharedValue(0);
   const active = useSharedValue(0);
 
@@ -121,15 +123,17 @@ export function FoldWorkspacePaneDivider(props: WorkspacePaneDividerProps) {
         )}
         accessible
         accessibilityActions={[
-          { name: "increment", label: "Make pane wider" },
-          { name: "decrement", label: "Make pane narrower" },
-          { name: "activate", label: props.maximized ? "Restore pane" : "Maximize pane" },
+          { name: "increment", label: gt("Make pane wider") },
+          { name: "decrement", label: gt("Make pane narrower") },
+          { name: "activate", label: props.maximized ? gt("Restore pane") : gt("Maximize pane") },
         ]}
         accessibilityLabel={props.accessibilityLabel}
         accessibilityRole="adjustable"
         accessibilityValue={{
           now: Math.round(props.width),
-          text: props.maximized ? "Maximized" : `${Math.round(props.width)} points wide`,
+          text: props.maximized
+            ? gt("Maximized")
+            : gt("{width} points wide", { width: Math.round(props.width) }),
         }}
         onAccessibilityAction={handleAccessibilityAction}
         style={handleStyle}

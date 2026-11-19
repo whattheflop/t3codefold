@@ -39,8 +39,8 @@ jobs:
     timeout-minutes: 90
     env:
       APP_VARIANT: preview
-      EXPO_NO_GIT_STATUS: '1'
-      CI: '1'
+      EXPO_NO_GIT_STATUS: "1"
+      CI: "1"
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v6
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools

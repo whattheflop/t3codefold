@@ -765,7 +765,7 @@ export function decide(
           threadId: actor.type === "agent" ? actor.threadId : null,
           kind: "decision",
           text: `Proposed ${action.coordinator} to coordinate shared work with ${action.peerId}. User approval on both environments is required.`,
-          headline: `Coordination proposed with ${action.peerId} — needs your approval`,
+          headline: `Coordination proposed with ${action.peerId}. Your approval is required.`,
           createdAt: now,
           acknowledged: false,
         },

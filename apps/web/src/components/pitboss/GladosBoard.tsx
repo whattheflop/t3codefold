@@ -1,4 +1,4 @@
-import { T, useGT } from "gt-react";
+import { T, useGT, useMessages } from "gt-react";
 import { useState } from "react";
 import { FolderIcon, GitBranchIcon, BotIcon, ArrowUpRightIcon } from "lucide-react";
 import { buildGladosBoard, managedWorkerRows } from "@t3tools/client-runtime/glados-board";
@@ -33,10 +33,15 @@ export function GladosBoard(props: {
   onTalkToGlados: () => void;
 }) {
   const gt = useGT();
-  const lanes = buildGladosBoard(props.state, {
-    query: props.search,
-    projectId: props.projectFilter,
-  });
+  const m = useMessages();
+  const lanes = buildGladosBoard(
+    props.state,
+    {
+      query: props.search,
+      projectId: props.projectFilter,
+    },
+    m,
+  );
   const [limits, setLimits] = useState<Record<string, number>>({});
   const count = lanes.reduce((total, lane) => total + lane.items.length, 0);
   return (
@@ -152,7 +157,7 @@ export function GladosBoard(props: {
                         </span>
                       </span>
                     </button>
-                    {managedWorkerRows(item.task, props.state.awaitingApproval)
+                    {managedWorkerRows(item.task, props.state.awaitingApproval, m)
                       .slice(0, 1)
                       .map((worker) => (
                         <Button

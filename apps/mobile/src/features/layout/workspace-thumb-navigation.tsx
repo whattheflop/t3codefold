@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelectWorkspaceDetail } from "./workspace/useSelectWorkspaceDetail";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -24,6 +25,13 @@ function createThumbGesture(dispatch: (x: number, y: number) => void) {
 export function WorkspaceThumbNavigation(props: {
   readonly onAction: (action: WorkspaceThumbAction) => void;
 }) {
+  const gt = useGT();
+  const labels = {
+    previous: gt("Previous recent thread"),
+    next: gt("Next recent thread"),
+    sidebar: gt("Toggle sidebar"),
+    inspector: gt("Toggle inspector"),
+  };
   const { onAction } = props;
   const insets = useSafeAreaInsets();
   const dispatch = useCallback(
@@ -42,13 +50,15 @@ export function WorkspaceThumbNavigation(props: {
       <GestureDetector gesture={gesture}>
         <View
           accessible
-          accessibilityLabel="Workspace navigation"
-          accessibilityHint="Swipe left or right for recent threads, up for sidebar, down for inspector."
+          accessibilityLabel={gt("Workspace navigation")}
+          accessibilityHint={gt(
+            "Swipe left or right for recent threads, up for sidebar, down for inspector.",
+          )}
           accessibilityActions={[
-            { name: "previous", label: "Previous recent thread" },
-            { name: "next", label: "Next recent thread" },
-            { name: "sidebar", label: "Toggle sidebar" },
-            { name: "inspector", label: "Toggle inspector" },
+            { name: "previous", label: labels.previous },
+            { name: "next", label: labels.next },
+            { name: "sidebar", label: labels.sidebar },
+            { name: "inspector", label: labels.inspector },
           ]}
           onAccessibilityAction={(event) => {
             const action = event.nativeEvent.actionName;
@@ -67,11 +77,7 @@ export function WorkspaceThumbNavigation(props: {
             <Pressable
               key={action}
               accessibilityRole="button"
-              accessibilityLabel={
-                action === "previous" || action === "next"
-                  ? `${action} recent thread`
-                  : `Toggle ${action}`
-              }
+              accessibilityLabel={labels[action]}
               onPress={() => props.onAction(action)}
               className="size-12 items-center justify-center rounded-xl active:bg-subtle"
             >
