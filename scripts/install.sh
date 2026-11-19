@@ -171,7 +171,7 @@ case "$(uname -m)" in
   *) fail "unsupported architecture $(uname -m)" ;;
 esac
 if [ "${platform}-${arch}" = darwin-x64 ]; then
-  fail "there is no t3 CLI for Intel Macs. Install the desktop app from https://t3.codes/download, or run a server from source: https://github.com/${repo}/blob/main/docs/user/install.md#intel-macs"
+  fail "there is no t3 CLI for Intel Macs. Install the desktop app from https://github.com/${repo}/releases, or run a server from source: https://github.com/${repo}/blob/main/docs/user/install.md#intel-macs"
 fi
 command -v tar >/dev/null 2>&1 || fail "tar is required"
 if command -v sha256sum >/dev/null 2>&1; then
@@ -191,20 +191,13 @@ if [ -z "$version" ]; then
     *) fail "T3CODE_CHANNEL must be stable, nightly, or preview" ;;
   esac
   tmp_index="$(mktemp)"
-  if [ "$channel" = stable ]; then
-    # release.yml marks only plain stable releases latest. This is a github.com
-    # page, so it is not cut off by a page of newer nightlies or the API quota.
-    fetch "https://github.com/${repo}/releases/latest" "$tmp_index" application/json
+  page=1
+  while [ -z "$version" ] && [ "$page" -le 10 ]; do
+    fetch "https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}" "$tmp_index"
     version="$(sed -n "s/.*\"tag_name\": *\"${tag_pattern}\".*/\1/p" "$tmp_index" | head -n 1)"
-  else
-    page=1
-    while [ -z "$version" ] && [ "$page" -le 10 ]; do
-      fetch "https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}" "$tmp_index"
-      version="$(sed -n "s/.*\"tag_name\": *\"${tag_pattern}\".*/\1/p" "$tmp_index" | head -n 1)"
-      grep -q '"tag_name"' "$tmp_index" || break
-      page=$((page + 1))
-    done
-  fi
+    grep -q '"tag_name"' "$tmp_index" || break
+    page=$((page + 1))
+  done
   rm -f "$tmp_index"
   [ -n "$version" ] || fail "could not find a ${channel} release; set T3CODE_VERSION"
 fi
@@ -262,6 +255,8 @@ else
 
   rm -rf "$target_dir"
   mv "$staging" "$target_dir"
+  # When a concurrent install published first, mv moved this copy inside it; keep only theirs.
+  rm -rf "${target_dir}/${staging##*/}"
   trap - EXIT
 fi
 

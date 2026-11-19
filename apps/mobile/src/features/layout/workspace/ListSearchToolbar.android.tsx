@@ -1,50 +1,55 @@
-import { useWorkspacePaneState } from "../AdaptiveWorkspaceLayout";
 import { MOBILE_APP_NAME } from "../../../lib/mobileBranding";
+import { useWorkspacePaneState } from "../AdaptiveWorkspaceLayout";
 import { useNavigation } from "@react-navigation/native";
+import { useGT } from "gt-react-native";
 import { useEffect, useEffectEvent } from "react";
 import { BackHandler, Keyboard } from "react-native";
 import { AppBar } from "../../../components/ui/AppBar";
 import { appBarMenuItemsFromActions } from "../../../components/ui/menuActionItems";
 import { useHardwareKeyboardCommand } from "../../keyboard/hardwareKeyboardCommands";
-import { WorkspaceBrandTitle } from "./WorkspaceBrandTitle";
+import { WorkspaceConnectionTitle } from "../../home/WorkspaceConnectionTitle";
+import type { SharedSlotTab } from "./navigation-tab-order";
+import { SharedSlotTitle } from "./SharedSlotTitle";
 import { useWorkspaceTabs } from "./WorkspaceTabsContext";
 import type { PullRequestFilterMenu } from "../../pull-requests/PullRequestListFilters";
 import { openSettings } from "../../settings/settings-navigation";
 
-/** PR search shares the thread list's Android header. */
-export function PullRequestToolbar(props: {
-  readonly filters: PullRequestFilterMenu | null;
+/** Pull request and issue search share the thread list's Android header. */
+export function ListSearchToolbar(props: {
+  readonly tab: SharedSlotTab;
+  readonly filters?: PullRequestFilterMenu | null;
   readonly onRequestVisibility?: () => void;
 }) {
+  const gt = useGT();
   const navigation = useNavigation();
   const { panes } = useWorkspacePaneState();
-  const { filters } = props;
+  const { filters, tab: section } = props;
   const workspace = useWorkspaceTabs()!;
   const { dispatch, getScrollOffset, recordScrollOffset, isTabActive } = workspace;
   const { onRequestVisibility } = props;
-  const tab = workspace.state.tabs.pullRequests;
+  const tab = workspace.state.tabs[section];
   const searching = tab.searchMode !== "resting";
   const openSearch = () => {
     onRequestVisibility?.();
     dispatch({
       type: "scroll",
-      tab: "pullRequests",
-      offset: getScrollOffset("pullRequests"),
+      tab: section,
+      offset: getScrollOffset(section),
     });
-    dispatch({ type: "search", tab: "pullRequests" });
+    dispatch({ type: "search", tab: section });
     return true;
   };
   useHardwareKeyboardCommand("focusSearch", openSearch);
   const closeSearch = () => {
     Keyboard.dismiss();
-    recordScrollOffset("pullRequests", tab.searchEntryOffset);
-    dispatch({ type: "cancel", tab: "pullRequests" });
+    recordScrollOffset(section, tab.searchEntryOffset);
+    dispatch({ type: "cancel", tab: section });
   };
   const onBack = useEffectEvent(() => {
     const state = navigation.getState();
     if (
       (!panes.primarySidebarVisible && state?.routes[state.index]?.name !== "Home") ||
-      !isTabActive("pullRequests")
+      !isTabActive(section)
     )
       return false;
     if (Keyboard.isVisible()) Keyboard.dismiss();
@@ -61,15 +66,16 @@ export function PullRequestToolbar(props: {
     <AppBar
       title={MOBILE_APP_NAME}
       titleContent={
-        <WorkspaceBrandTitle
-          accessibilityLabel={`${MOBILE_APP_NAME}, Pull requests`}
-          onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
+        <WorkspaceConnectionTitle
+          grow
+          onPress={() => openSettings(navigation, "SettingsEnvironments")}
+          brand={<SharedSlotTitle tab={section} />}
         />
       }
       search={{
         value: tab.query,
-        onChangeText: (query) => dispatch({ type: "query", tab: "pullRequests", query }),
-        placeholder: "Search pull requests",
+        onChangeText: (query) => dispatch({ type: "query", tab: section, query }),
+        placeholder: section === "issues" ? gt("Search issues") : gt("Search pull requests"),
         active: searching,
         onOpen: openSearch,
         onClose: closeSearch,
@@ -78,7 +84,7 @@ export function PullRequestToolbar(props: {
         filters
           ? [
               {
-                title: "Filter pull requests",
+                title: section === "issues" ? gt("Filter issues") : gt("Filter pull requests"),
                 icon: filters.customized
                   ? "line.3.horizontal.decrease.circle.fill"
                   : "line.3.horizontal.decrease.circle",

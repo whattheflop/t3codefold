@@ -1,0 +1,72 @@
+diff --git a/react-native.js b/react-native.js
+--- a/react-native.js
++++ b/react-native.js
+@@ -3530,7 +3530,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });
+diff --git a/react-native.mjs b/react-native.mjs
+--- a/react-native.mjs
++++ b/react-native.mjs
+@@ -3509,7 +3509,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });
+diff --git a/react-native.web.js b/react-native.web.js
+--- a/react-native.web.js
++++ b/react-native.web.js
+@@ -3579,7 +3579,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });
+diff --git a/react-native.web.mjs b/react-native.web.mjs
+--- a/react-native.web.mjs
++++ b/react-native.web.mjs
+@@ -3558,7 +3558,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });
+diff --git a/react.js b/react.js
+--- a/react.js
++++ b/react.js
+@@ -3579,7 +3579,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });
+diff --git a/react.mjs b/react.mjs
+--- a/react.mjs
++++ b/react.mjs
+@@ -3558,7 +3558,7 @@
+     clearBootstrapInitialScrollSession(state);
+     dispatchInitialScroll(ctx, {
+       forceScroll: true,
+-      resolvedOffset: bootstrapInitialScroll.scroll,
++      resolvedOffset: resolveInitialScrollOffset(ctx, initialScroll),
+       target: initialScroll,
+       waitForCompletionFrame: Platform.OS === "web"
+     });

@@ -2,6 +2,7 @@ import * as NodeModule from "node:module";
 
 import { assert, describe, it } from "@effect/vitest";
 import { DESKTOP_UPDATE_RESTART_MARKER_FILE, DesktopUpdateStateSchema } from "@t3tools/contracts";
+import { foldDesktopFeed } from "@t3tools/shared/foldRelease";
 import { computeReleaseNotes } from "electron-updater/out/providers/GitHubProvider.js";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
@@ -1013,7 +1014,10 @@ describe("DesktopUpdates", () => {
   });
 
   it.effect("persists channel changes through the settings service", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({
+      env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      appUpdateYml: "provider: generic\nurl: https://example.com/feed",
+    });
 
     return Effect.scoped(
       Effect.gen(function* () {
@@ -1027,6 +1031,10 @@ describe("DesktopUpdates", () => {
         assert.equal(state.channel, "nightly");
         assert.equal(persistedSettings.updateChannel, "nightly");
         assert.equal(persistedSettings.updateChannelConfiguredByUser, true);
+        assert.deepEqual(harness.feedUrls(), [
+          foldDesktopFeed("latest"),
+          foldDesktopFeed("nightly"),
+        ]);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
@@ -1356,24 +1364,27 @@ describe("DesktopUpdates under a managed policy", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("updates from the administrator's feed", () => {
-    const harness = makeHarness({
-      // Any user can set the mock flag; it must not redirect a managed feed.
-      env: { T3CODE_DESKTOP_MOCK_UPDATES: "true" },
-      policy: managed({ feedUrl: "https://updates.example.com/t3code" }),
-    });
+  it.effect.each(["false", "true"])(
+    "keeps the administrator's feed across channel changes with mock updates %s",
+    (mockUpdates) => {
+      const feed = { provider: "generic", url: "https://updates.example.com/t3code" } as const;
+      const harness = makeHarness({
+        env: { T3CODE_DESKTOP_MOCK_UPDATES: mockUpdates },
+        policy: managed({ feedUrl: feed.url }),
+      });
 
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-        assert.equal((yield* updates.getState).status, "idle");
-        assert.deepEqual(harness.feedUrls(), [
-          { provider: "generic", url: "https://updates.example.com/t3code" },
-        ]);
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          assert.equal((yield* updates.getState).status, "idle");
+          assert.deepEqual(harness.feedUrls(), [feed]);
+          assert.equal((yield* updates.setChannel("nightly")).channel, "nightly");
+          assert.deepEqual(harness.feedUrls().at(-1), feed);
+        }),
+      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+    },
+  );
 
   it.effect("refuses the nightly channel without nightly", () => {
     const harness = makeHarness({ policy: managed({ allowNightly: false }) });

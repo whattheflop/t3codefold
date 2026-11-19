@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import Animated, {
@@ -43,6 +44,7 @@ export function FoldWorkspaceInspectorPane(props: {
   readonly onDividerRelease: (release: PaneDividerRelease) => void;
   readonly onToggleMaximized: () => void;
 }) {
+  const gt = useGT();
   const { panes } = props;
   const width = panes.auxiliaryPaneWidth;
   const visible = props.renderInspector !== undefined && panes.auxiliaryPaneVisible;
@@ -83,7 +85,7 @@ export function FoldWorkspaceInspectorPane(props: {
     <View nativeID="t3-controller-pane:inspector" className="shrink-0 flex-row">
       {visible && !props.fixedDivider && panes.auxiliaryPaneWidthRange !== null ? (
         <FoldWorkspacePaneDivider
-          accessibilityLabel="Resize detail pane"
+          accessibilityLabel={gt("Resize detail pane")}
           width={width}
           range={panes.auxiliaryPaneWidthRange}
           maximized={panes.auxiliaryPaneMaximized}
@@ -127,7 +129,9 @@ export function FoldWorkspaceInspectorPane(props: {
             <View className="h-12 flex-row items-center justify-end bg-header px-2">
               <AndroidHeaderIconButton
                 accessibilityLabel={
-                  panes.auxiliaryPaneMaximized ? "Restore detail pane" : "Maximize detail pane"
+                  panes.auxiliaryPaneMaximized
+                    ? gt("Restore detail pane")
+                    : gt("Maximize detail pane")
                 }
                 icon={
                   panes.auxiliaryPaneMaximized
@@ -141,7 +145,7 @@ export function FoldWorkspaceInspectorPane(props: {
           <RenderErrorBoundary
             resetKeys={[props.pathname]}
             renderFallback={(fallback) => (
-              <RenderFailureView {...fallback} title="The inspector couldn't be displayed" />
+              <RenderFailureView {...fallback} title={gt("The inspector couldn't be displayed")} />
             )}
           >
             <InspectorRenderer render={retainedInspector.render} />

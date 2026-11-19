@@ -1,4 +1,5 @@
 import { useControllerRegionId } from "../controller/ControllerRegion";
+import { useGT } from "gt-react-native";
 import { View } from "react-native";
 
 import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderErrorBoundary";
@@ -16,13 +17,14 @@ function PaneContent(props: {
   readonly pane: InspectorPane;
   readonly resetKeys: ReadonlyArray<unknown> | undefined;
 }) {
+  const gt = useGT();
   const { slot } = useInspectorBarSlot();
   return (
     <WorkspaceSlotOptionsContext value={slot}>
       <RenderErrorBoundary
         resetKeys={props.resetKeys}
         renderFallback={(fallback) => (
-          <RenderFailureView {...fallback} title="The inspector couldn't be displayed" />
+          <RenderFailureView {...fallback} title={gt("The inspector couldn't be displayed")} />
         )}
       >
         {props.pane.render()}

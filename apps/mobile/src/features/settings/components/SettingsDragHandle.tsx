@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useEffectEvent, useState } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector, type GestureType } from "react-native-gesture-handler";
@@ -64,16 +65,17 @@ function JSThreadSettingsDragHandle(props: SettingsDragHandleProps) {
 function SettingsDragHandleView(
   props: SettingsDragHandleProps & { readonly gesture: GestureType },
 ) {
+  const gt = useGT();
   return (
     <GestureDetector gesture={props.gesture}>
       <View
         collapsable={false}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={`Reorder ${props.title}`}
+        accessibilityLabel={gt("Reorder {item}", { item: props.title })}
         accessibilityActions={[
-          ...(props.canMoveUp ? [{ name: "decrement", label: "Move up" }] : []),
-          ...(props.canMoveDown ? [{ name: "increment", label: "Move down" }] : []),
+          ...(props.canMoveUp ? [{ name: "decrement", label: gt("Move up") }] : []),
+          ...(props.canMoveDown ? [{ name: "increment", label: gt("Move down") }] : []),
         ]}
         onAccessibilityAction={({ nativeEvent }) => {
           if (nativeEvent.actionName === "decrement" && props.canMoveUp) props.onStep("up");

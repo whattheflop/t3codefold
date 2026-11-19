@@ -1,5 +1,6 @@
 import { ControllerPressable } from "../controller/ControllerPressable";
 import type { VoiceInputPhase, VoiceInputState } from "@t3tools/client-runtime/voice-input";
+import { useGT } from "gt-react-native";
 import { memo, use, useState, type ReactNode } from "react";
 import { Linking, Text as SystemText, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
@@ -337,6 +338,7 @@ export function ComposerDictationError(props: {
   readonly error: string | null;
   readonly onDismiss: () => void;
 }) {
+  const gt = useGT();
   if (!props.error) return null;
   return (
     <View className="min-w-0 flex-row items-center gap-2 px-4 py-3">
@@ -344,7 +346,7 @@ export function ComposerDictationError(props: {
         {props.error}
       </Text>
       <ControllerPressable
-        accessibilityLabel="Dismiss voice input error"
+        accessibilityLabel={gt("Dismiss voice input error")}
         accessibilityRole="button"
         className="size-7 items-center justify-center active:opacity-70"
         hitSlop={8}
@@ -407,11 +409,12 @@ export function ComposerDictationCancelAction(props: {
   readonly presentation: VoiceComposerPresentation;
   readonly onCancel: () => void;
 }) {
+  const gt = useGT();
   if (props.presentation.leadingAction !== "cancel") return null;
   return (
     <VoiceActionButton
       size={props.size}
-      accessibilityLabel="Cancel dictation"
+      accessibilityLabel={gt("Cancel dictation")}
       icon="xmark"
       onPress={props.onCancel}
     />
@@ -428,14 +431,15 @@ export function ComposerDictationPrimaryAction(props: {
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }) {
+  const gt = useGT();
   if (props.presentation.trailingAction === "confirm") {
     return (
       <VoiceActionButton
         size={props.size}
         accessibilityLabel={
           props.presentation.confirmationEnabled
-            ? "Finish dictation"
-            : (props.presentation.statusLabel ?? "Preparing voice input")
+            ? gt("Finish dictation")
+            : (props.presentation.statusLabel ?? gt("Preparing voice input"))
         }
         disabled={!props.presentation.confirmationEnabled}
         icon="checkmark"
@@ -457,12 +461,13 @@ export function ComposerDictationStartAction(props: {
   readonly onStart: () => void;
   readonly onCancel: () => void;
 }) {
+  const gt = useGT();
   if (!props.isAvailable) return null;
   const openSettings = props.state.phase === "error" && props.state.errorAction === "settings";
   return (
     <VoiceActionButton
       size={props.size}
-      accessibilityLabel={openSettings ? "Open microphone settings" : "Start dictation"}
+      accessibilityLabel={openSettings ? gt("Open microphone settings") : gt("Start dictation")}
       disabled={props.disabled}
       icon="mic"
       onPress={

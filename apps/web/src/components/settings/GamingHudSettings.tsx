@@ -1,16 +1,20 @@
+import { msg, useGT, useMessages } from "gt-react";
 import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { SettingsRow } from "./settingsLayout";
 import { Switch } from "../ui/switch";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
 const positions = {
-  "top-right": "Top right",
-  "top-left": "Top left",
-  "bottom-right": "Bottom right",
-  "bottom-left": "Bottom left",
+  "top-right": msg("Top right"),
+  "top-left": msg("Top left"),
+  "bottom-right": msg("Bottom right"),
+  "bottom-left": msg("Bottom left"),
 };
 export function GamingHudSettings() {
+  const gt = useGT();
+  const m = useMessages();
+  const searchableSetting = useSearchableSetting();
   const enabled = useClientSettings((settings) => settings.gamingHudEnabled);
   const position = useClientSettings((settings) => settings.gamingHudPosition);
   if (!window.desktopBridge?.setGamingHud) return null;
@@ -18,19 +22,21 @@ export function GamingHudSettings() {
     <>
       <SettingsRow
         {...searchableSetting("gaming-hud")}
-        description="Keep agent activity above other apps without capturing clicks or keyboard input. Use borderless or windowed games. Turn this off here to hide the HUD."
+        description={gt(
+          "Keep agent activity above other apps without capturing clicks or keyboard input. Use borderless or windowed games. Turn this off here to hide the HUD.",
+        )}
         control={
           <Switch
             checked={enabled}
             onCheckedChange={(checked) => updateClientSettings({ gamingHudEnabled: checked })}
-            aria-label="Gaming HUD"
+            aria-label={gt("Gaming HUD")}
           />
         }
       />
       {enabled ? (
         <SettingsRow
           {...searchableSetting("gaming-hud-corner")}
-          description="Shown on the display containing the T3 Code window."
+          description={gt("Shown on the display containing the T3 Code window.")}
           control={
             <Select
               value={position}
@@ -44,13 +50,13 @@ export function GamingHudSettings() {
                   updateClientSettings({ gamingHudPosition: value });
               }}
             >
-              <SelectTrigger size="sm" aria-label="HUD corner">
-                <SelectValue>{positions[position]}</SelectValue>
+              <SelectTrigger size="sm" aria-label={gt("HUD corner")}>
+                <SelectValue>{m(positions[position])}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
                 {Object.entries(positions).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
-                    {label}
+                    {m(label)}
                   </SelectItem>
                 ))}
               </SelectPopup>

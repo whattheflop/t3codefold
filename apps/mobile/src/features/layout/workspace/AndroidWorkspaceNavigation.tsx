@@ -12,10 +12,6 @@ export function AndroidWorkspaceNavigation(_props: {
 
 export const ANDROID_WORKSPACE_RAIL_WIDTH = 72;
 
-export function WorkspaceTabSwitcher(_props: { readonly className?: string }) {
-  return null;
-}
-
 export function FloatingWorkspaceTabs(_props: {
   readonly fillWidth?: boolean;
   readonly onNewThread: () => void;

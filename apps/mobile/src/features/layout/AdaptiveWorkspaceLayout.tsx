@@ -1,4 +1,5 @@
 import { WindowHingeContext } from "../../native/window-hinge-context";
+import { useGT } from "gt-react-native";
 import {
   WorkspaceColumnsRendererContext,
   WorkspacePresentationHostContext,
@@ -252,6 +253,7 @@ function AdaptiveWorkspaceLayoutContent(props: {
   /** Pane preferences are read once; the workspace owns them while mounted. */
   readonly initialPreferences: Preferences;
 }) {
+  const gt = useGT();
   const floatingTabsEnabled = useAndroidFloatingTabs();
   const projectGroupingMode = props.projectGroupingMode;
   const nativeWorkspace = use(NativeWorkspaceModeContext);
@@ -941,8 +943,8 @@ function AdaptiveWorkspaceLayoutContent(props: {
               renderFallback={(fallback) => (
                 <RenderFailureView
                   {...fallback}
-                  title="The sidebar couldn't be displayed"
-                  exit={{ label: "Open settings", onPress: handleOpenSettings }}
+                  title={gt("The sidebar couldn't be displayed")}
+                  exit={{ label: gt("Open settings"), onPress: handleOpenSettings }}
                 />
               )}
             >

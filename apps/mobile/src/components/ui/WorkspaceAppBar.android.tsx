@@ -1,5 +1,6 @@
 import { ControllerPressable } from "../../features/controller/ControllerPressable";
 import { useControllerRegionId } from "../../features/controller/ControllerRegion";
+import { useGT } from "gt-react-native";
 import { Box, Icon, IconButton, RNHostView } from "@expo/ui/jetpack-compose";
 import { size } from "@expo/ui/jetpack-compose/modifiers";
 import type { MenuAction } from "@react-native-menu/menu";
@@ -131,6 +132,7 @@ export function WorkspaceAppBar(props: WorkspaceAppBarProps) {
  */
 function WorkspaceAppBarView(props: WorkspaceAppBarProps) {
   const regionId = useControllerRegionId("header");
+  const gt = useGT();
   const { search, filter } = props;
   const searching = search?.active === true;
   const { colors } = useControlTheme();
@@ -245,7 +247,7 @@ function WorkspaceAppBarView(props: WorkspaceAppBarProps) {
         >
           <View className="flex-1 flex-row items-center gap-1">
             <AndroidHeaderIconButton
-              accessibilityLabel="Close search"
+              accessibilityLabel={gt("Close search")}
               icon="arrow.left"
               onPress={androidKeyboardFirst(search.onClose)}
             />

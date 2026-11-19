@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { ControllerPressable } from "../../controller/ControllerPressable";
 import { useControllerRegionId } from "../../controller/ControllerRegion";
 import { selectedNavigationTab, visibleNavigationTabs } from "./navigation-tab-order";
@@ -14,7 +15,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAndroidControlSizing } from "../../../components/ui/useAndroidControlSizing";
-import { SegmentedControl } from "../../../components/ui/SegmentedControl";
 import { useToolbarLayout } from "../../../components/ui/useToolbarLayout";
 import { rootNavigationRef } from "../../../lib/rootNavigation";
 import { useWorkspaceConnectionState } from "../../../state/workspace";
@@ -27,8 +27,6 @@ import { useAppearancePreferences } from "../../settings/appearance/AppearancePr
 import { useSoftKeyboardShowing } from "../../keyboard/useSoftKeyboardShowing";
 import { useAdaptiveWorkspaceLayout } from "../adaptive-workspace-context";
 import { useAndroidWorkspaceRoot } from "./AndroidWorkspaceTabsProvider";
-import type { WorkspaceTab } from "./workspace-tabs-state";
-import { resetAndroidWorkspace } from "../../../lib/android-workspace-navigation";
 import { useNavigationTabOrder, useHiddenNavigationTabs } from "./navigation-tabs";
 import { useWorkspaceTabs } from "./WorkspaceTabsContext";
 import { FLOATING_TABS, floatingTabsMetrics } from "./floating-workspace-tabs";
@@ -67,17 +65,6 @@ function nativeColor(value: string) {
   return typeof color === "number" ? color : 0;
 }
 
-/** Switches the workspace tab and returns to its list, keeping the selection in one place. */
-function useSelectWorkspaceTab(workspace: ReturnType<typeof useWorkspaceTabs>) {
-  const navigation = useNavigation();
-  return (tab: WorkspaceTab) => {
-    Keyboard.dismiss();
-    if (!workspace || tab === workspace.state.selectedTab) return;
-    workspace.dispatch({ type: "select", tab });
-    resetAndroidWorkspace(navigation);
-  };
-}
-
 export function AndroidWorkspaceNavigation(props: {
   readonly onNewThread: () => void;
   readonly rail?: boolean;
@@ -88,6 +75,7 @@ export function AndroidWorkspaceNavigation(props: {
   /** The rail needs the whole workspace while it widens over the list. */
   readonly onOverlayChange?: (overlay: boolean) => void;
 }) {
+  const gt = useGT();
   const regionId = useControllerRegionId("navigation");
   const workspace = useWorkspaceTabs()!;
   const order = useNavigationTabOrder();
@@ -208,12 +196,14 @@ export function AndroidWorkspaceNavigation(props: {
               accessibilityRole="tab"
               accessibilityLabel={
                 tab === "settings"
-                  ? "Settings"
+                  ? gt("Settings")
                   : tab === "threads"
-                    ? "Chats"
+                    ? gt("Chats")
                     : tab === "pullRequests"
-                      ? "Pull requests"
-                      : "Usage"
+                      ? gt("Pull requests")
+                      : tab === "issues"
+                        ? gt("Issues")
+                        : gt("Usage")
               }
               accessibilityState={{ selected: selectedTab === tab }}
               onActivate={() => selectTab(tab)}
@@ -223,27 +213,6 @@ export function AndroidWorkspaceNavigation(props: {
         </View>
       ) : null}
     </View>
-  );
-}
-
-const WORKSPACE_TAB_OPTIONS = [
-  { value: "threads", label: "Chats" },
-  { value: "pullRequests", label: "PRs", accessibilityLabel: "Pull requests" },
-] as const;
-
-/** Chats/PRs switcher at the top of the split-view sidebar. */
-export function WorkspaceTabSwitcher(props: { readonly className?: string }) {
-  const workspace = useWorkspaceTabs();
-  const selectTab = useSelectWorkspaceTab(workspace);
-  if (!workspace) return null;
-  return (
-    <SegmentedControl
-      role="tab"
-      options={WORKSPACE_TAB_OPTIONS}
-      selected={workspace.state.selectedTab}
-      onSelect={selectTab}
-      className={props.className}
-    />
   );
 }
 

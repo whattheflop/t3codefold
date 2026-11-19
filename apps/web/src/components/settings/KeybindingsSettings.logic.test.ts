@@ -1,3 +1,4 @@
+import { decodeMsg } from "gt-react";
 import { assert, describe, expect, it } from "vite-plus/test";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import {
@@ -265,6 +266,12 @@ describe("KeybindingsSettings.logic", () => {
     ] satisfies ResolvedKeybindingsConfig);
 
     expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
+    const disabledRows = buildKeybindingRows([
+      rows[0]!.binding,
+      { ...rows[1]!.binding, whenAst: { type: "identifier", name: "false" } },
+    ]);
+    expect(disabledRows.map((row) => row.conflicts)).toEqual([[], []]);
+
     expect(
       keybindingConflictLabels(rows, {
         rowId: rows[0]?.id ?? "",
@@ -317,6 +324,6 @@ it("offers voice commands as a separate editable group", () => {
     ]),
   );
   const group = groupKeybindingRows(rows).find((group) => group.id === "voice");
-  expect(group?.title).toBe("Voice");
+  expect(group && decodeMsg(group.title)).toBe("Voice");
   expect(group?.rows.map((row) => row.command)).toEqual(["voice.toggle"]);
 });

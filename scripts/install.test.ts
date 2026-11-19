@@ -172,7 +172,12 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer home
 });
 
 // regression: #22490
-describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer channel lookup", () => {
+describe.skipIf(
+  HostProcess.Platform.defaultValue() === "darwin" &&
+    HostProcess.Architecture.defaultValue() === "x64",
+)("installer channel lookup", () => {
+  const windows = HostProcess.Platform.defaultValue() === "win32";
+  const script = windows ? "install.ps1" : "install.sh";
   it.each([
     // regression: #32897
     ["stable", "1.2.3", 1],
@@ -184,15 +189,16 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
       if (failures-- > 0) return response.writeHead(504).end();
       const url = new URL(request.url ?? "/", "http://fixture");
       const body =
-        url.pathname === "/BreakTheBeta/T3codefold/releases/latest" &&
-        request.headers.accept === "application/json"
-          ? { tag_name: "fold-server-v1.2.3" }
-          : url.pathname === "/repos/BreakTheBeta/T3codefold/releases"
-            ? {
-                "1": nightlies,
-                "2": [{ tag_name: `fold-server-v${version}` }, { tag_name: "fold-server-v1.2.3" }],
-              }[url.searchParams.get("page") ?? ""]
-            : undefined;
+        url.pathname === "/repos/whattheflop/T3codefold/releases"
+          ? {
+              "1": nightlies,
+              "2": [
+                { tag_name: "fold-preview-v9.0.0", prerelease: false },
+                { tag_name: "fold-server-v1.2.4-preview.20261019.50", prerelease: true },
+                { tag_name: "fold-server-v1.2.3", prerelease: true },
+              ],
+            }[url.searchParams.get("page") ?? ""]
+          : undefined;
       if (body === undefined) response.statusCode = 404;
       // The API pretty-prints and the installer reads it line by line.
       response.end(JSON.stringify(body ?? [], null, 2));
@@ -205,26 +211,29 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chan
       const address = server.address();
       if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
       const origin = `http://127.0.0.1:${address.port}`;
-      const source = await NodeFSP.readFile(
-        NodePath.resolve(import.meta.dirname, "install.sh"),
-        "utf8",
-      );
-      const installer = NodePath.join(root, "install.sh");
+      const source = await NodeFSP.readFile(NodePath.resolve(import.meta.dirname, script), "utf8");
+      const installer = NodePath.join(root, script);
       await NodeFSP.writeFile(installer, source.replace(/https:\/\/(api\.)?github\.com/g, origin));
       const { code, output } = await new Promise<{ code: number | null; output: string }>(
         (resolve, reject) => {
-          const child = NodeChildProcess.spawn("sh", [installer], {
-            env: {
-              ...process.env,
-              T3CODE_VERSION: "",
-              T3CODE_CHANNEL: channel,
-              T3CODE_HOME: NodePath.join(root, "home"),
-              T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
-              // A wrong version must fail here instead of downloading a real release.
-              T3CODE_RELEASE_BASE_URL: origin,
+          const child = NodeChildProcess.spawn(
+            windows ? "powershell.exe" : "sh",
+            windows
+              ? ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer]
+              : [installer],
+            {
+              env: {
+                ...process.env,
+                T3CODE_VERSION: "",
+                T3CODE_CHANNEL: channel,
+                T3CODE_HOME: NodePath.join(root, "home"),
+                T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin"),
+                // A wrong version must fail here instead of downloading a real release.
+                T3CODE_RELEASE_BASE_URL: origin,
+              },
+              stdio: ["ignore", "pipe", "pipe"],
             },
-            stdio: ["ignore", "pipe", "pipe"],
-          });
+          );
           let output = "";
           child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
           child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
@@ -640,4 +649,100 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("installer chec
       }
     },
   );
+});
+
+// regression: #38234
+describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("concurrent installers", () => {
+  it("publishes one runtime without nesting the other install's staging directory", async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-install-concurrent-"));
+    const version = "1.2.3";
+    const stem = `t3-${version}-linux-${HostProcess.Architecture.defaultValue()}`;
+    const archiveName = `${stem}.tar.gz`;
+    const target = NodePath.join(root, "home/runtime/versions", version);
+    const waiting = new Map<string, NodeHttp.ServerResponse>();
+    const server = NodeHttp.createServer();
+    try {
+      const tools = NodePath.join(root, "tools");
+      await NodeFSP.mkdir(tools);
+      await NodeFSP.mkdir(NodePath.join(root, stem));
+      await NodeFSP.writeFile(NodePath.join(root, stem, "t3"), "#!/bin/sh\necho 't3 v1.2.3'\n", {
+        mode: 0o755,
+      });
+      const archivePath = NodePath.join(root, archiveName);
+      NodeChildProcess.execFileSync("tar", ["-czf", archivePath, "-C", root, stem]);
+      const archive = await NodeFSP.readFile(archivePath);
+      const digest = NodeCrypto.createHash("sha256").update(archive).digest("hex");
+      server.on("request", (request, response) => {
+        if (request.url?.startsWith("/ready/")) {
+          waiting.set(request.url.slice(7), response);
+          if (waiting.size === 2) waiting.get("first")!.end("go");
+        } else if (request.url === "/published") {
+          waiting.get("second")!.end("go");
+          response.end("ok");
+        } else {
+          response.end(
+            request.url?.endsWith("/SHA256SUMS") ? `${digest}  ${archiveName}\n` : archive,
+          );
+        }
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP listener");
+      const origin = `http://127.0.0.1:${address.port}`;
+      const realMv = NodeChildProcess.execFileSync("sh", ["-c", "command -v mv"], {
+        encoding: "utf8",
+      }).trim();
+      // Hold publication until both installers have removed the destination, then let them rename in order.
+      const wrapper = NodePath.join(tools, "mv.mjs");
+      await NodeFSP.writeFile(
+        wrapper,
+        `
+import { execFileSync } from 'node:child_process';
+await fetch(process.env.T3_TEST_ORIGIN + '/ready/' + process.env.T3_TEST_INSTALLER);
+execFileSync(${JSON.stringify(realMv)}, process.argv.slice(2));
+if (process.env.T3_TEST_INSTALLER === 'first') await fetch(process.env.T3_TEST_ORIGIN + '/published');
+`,
+      );
+      await NodeFSP.writeFile(
+        NodePath.join(tools, "mv"),
+        `#!/bin/sh\nexec '${process.execPath}' '${wrapper}' "$@"\n`,
+        { mode: 0o755 },
+      );
+      const install = (id: string) =>
+        new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+          const child = NodeChildProcess.spawn(
+            "sh",
+            [NodePath.join(import.meta.dirname, "install.sh")],
+            {
+              env: {
+                ...process.env,
+                PATH: `${tools}:${process.env.PATH}`,
+                T3CODE_VERSION: version,
+                T3CODE_HOME: NodePath.join(root, "home"),
+                T3CODE_INSTALL_BIN_DIR: NodePath.join(root, "bin", id),
+                T3CODE_RELEASE_BASE_URL: origin,
+                T3_TEST_ORIGIN: origin,
+                T3_TEST_INSTALLER: id,
+              },
+              stdio: ["ignore", "pipe", "pipe"],
+            },
+          );
+          let output = "";
+          child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
+          child.on("error", reject);
+          child.on("close", (code) => resolve({ code, output }));
+        });
+      const results = await Promise.all([install("first"), install("second")]);
+      for (const result of results) expect(result.code, result.output).toBe(0);
+      expect(
+        (await NodeFSP.readdir(target)).filter((name) => name.startsWith(".staging-")),
+        "concurrent installs must not leave a nested runtime",
+      ).toEqual([]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  });
 });

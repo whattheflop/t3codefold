@@ -34,6 +34,8 @@ import {
   pickedQuery,
   threadRecentUse,
 } from "@t3tools/shared/paletteSearch";
+import { searchMatchHintLabel } from "@t3tools/shared/paletteSearchCopy";
+import { T, useGT, useMessages } from "gt-react-native";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -140,6 +142,7 @@ function PaletteRow(props: {
   const mutedForegroundClassName = props.selected
     ? "text-thread-selected-foreground-muted"
     : "text-foreground-muted";
+  const m = useMessages();
   return (
     <RowPressable
       accessibilityRole="button"
@@ -193,8 +196,8 @@ function PaletteRow(props: {
               lives, unless the hint already names it. */}
           {(props.searchMatch ||
             (props.item.matchHint &&
-              props.item.matchHint.label !== "Project" &&
-              props.item.matchHint.label !== "Environment")) &&
+              props.item.matchHint.field !== "project" &&
+              props.item.matchHint.field !== "environment")) &&
           props.item.detail ? (
             <Text
               numberOfLines={1}
@@ -213,7 +216,7 @@ function PaletteRow(props: {
           />
         ) : props.item.matchHint ? (
           <Text numberOfLines={1} className={cn("text-sm", mutedForegroundClassName)}>
-            {props.item.matchHint.label}:{" "}
+            {searchMatchHintLabel(props.item.matchHint.field, m)}:{" "}
             {splitSearchText(props.item.matchHint.text, props.item.matchHint.ranges).map((part) => (
               <Text key={part.start} className={cn("text-sm", part.highlighted && "font-t3-bold")}>
                 {part.text}
@@ -249,6 +252,7 @@ export function CommandPalette(props: {
 }) {
   const navigation = useNavigation();
   const workspaceTabs = useWorkspaceTabs();
+  const gt = useGT();
   const selectTab = useSelectWorkspaceTab();
   const { themeVariables } = useAppearancePreferences();
   const selectDetail = useSelectWorkspaceDetail();
@@ -270,7 +274,7 @@ export function CommandPalette(props: {
   const [dictationSelection, setDictationSelection] = useState({ start: 0, end: 0 });
   const paletteVoice = useVoiceInputController({
     ownerKey: `palette:${dictationId}`,
-    label: "Search commands, projects, and threads",
+    label: gt("Search commands, projects, and threads"),
     readDraftMessage: () => queryText.current,
     selection: dictationSelection,
     onChangeDraftMessage: (value) => {
@@ -359,56 +363,56 @@ export function CommandPalette(props: {
       {
         key: "newTask",
         kind: "action",
-        title: "New thread in…",
+        title: gt("New thread in…"),
         searchTerms: ["new task", "chat", "create", "project"],
         run: () => runCommand("newTask"),
       },
       {
         key: "addProject",
         kind: "action",
-        title: "Add project",
+        title: gt("Add project"),
         searchTerms: ["folder", "clone", "repository", "git"],
         run: () => navigation.navigate("AddProject"),
       },
       {
         key: "settings",
         kind: "action",
-        title: "Open settings",
+        title: gt("Open settings"),
         searchTerms: ["preferences", "configuration"],
         run: () => selectTab("settings"),
       },
       {
         key: "appearance",
         kind: "action",
-        title: "Appearance",
+        title: gt("Appearance"),
         searchTerms: ["theme", "colors", "dark", "light"],
         run: () => openSettings(navigation, "SettingsAppearance"),
       },
       {
         key: "environments",
         kind: "action",
-        title: "Manage environments",
+        title: gt("Manage environments"),
         searchTerms: ["connections", "server", "remote"],
         run: () => openSettings(navigation, "SettingsEnvironments"),
       },
       {
         key: "scheduledTasks",
         kind: "action",
-        title: "Scheduled tasks",
+        title: gt("Scheduled tasks"),
         searchTerms: ["schedule", "automations", "recurring"],
         run: () => openSettings(navigation, "SettingsScheduledTasks"),
       },
       {
         key: "usage",
         kind: "action",
-        title: "Usage",
+        title: gt("Usage", { $context: "command, opens usage settings" }),
         searchTerms: ["limits", "accounts", "quota"],
         run: () => openSettings(navigation, "SettingsUsage"),
       },
       {
         key: "pullRequests",
         kind: "action",
-        title: "Pull requests",
+        title: gt("Pull requests"),
         searchTerms: ["pr", "review", "code review", "github"],
         // Android shows pull requests as a workspace tab, like its navigation rail.
         run: () => {
@@ -422,18 +426,22 @@ export function CommandPalette(props: {
       {
         key: "archive",
         kind: "action",
-        title: "Archived threads",
+        title: gt("Archived threads"),
         searchTerms: ["restore", "history"],
         run: () => openSettings(navigation, "SettingsArchive"),
       },
     ];
     if (canTriage) {
+      const triageEnvironmentLabel = savedConnectionsById[triageEnvironmentId]?.environmentLabel;
       actions.push({
         key: "triage",
         kind: "action",
-        title: "Triage an issue",
+        title: gt("Triage an issue"),
         // Mobile has no triage hero, so name the machine before it starts.
-        detail: `On ${savedConnectionsById[triageEnvironmentId]?.environmentLabel ?? "this machine"}`,
+        detail:
+          triageEnvironmentLabel !== undefined
+            ? gt("On {environment}", { environment: triageEnvironmentLabel })
+            : gt("On this machine"),
         searchTerms: ["triage", "bug", "issue", "report", "broken", "debug", "help", "support"],
         run: () => void startTriage(triageEnvironmentId),
       });
@@ -448,7 +456,7 @@ export function CommandPalette(props: {
       actions.unshift({
         key: "newThread",
         kind: "action",
-        title: `New thread in ${activeProject.title}`,
+        title: gt("New thread in {project}", { project: activeProject.title }),
         searchTerms: ["new task", "chat", "create"],
         run: () =>
           selectDetail({
@@ -466,10 +474,10 @@ export function CommandPalette(props: {
     }
     if (activeThreadRef) {
       const threadActions = [
-        ["files", "Go to file", ["open", "files", "browse", "search"]],
-        ["terminal", "Open terminal", ["shell", "console"]],
-        ["review", "Review changes", ["diff", "git", "pull request"]],
-        ["copyThreadReference", "Copy PR link or thread", ["reference", "clipboard"]],
+        ["files", gt("Go to file"), ["open", "files", "browse", "search"]],
+        ["terminal", gt("Open terminal"), ["shell", "console"]],
+        ["review", gt("Review changes"), ["diff", "git", "pull request"]],
+        ["copyThreadReference", gt("Copy PR link or thread"), ["reference", "clipboard"]],
       ] as const;
       actions.push(
         ...threadActions.map(([command, title, searchTerms]) => ({
@@ -485,7 +493,7 @@ export function CommandPalette(props: {
       actions.push({
         key: "disableController",
         kind: "action",
-        title: "Disable controller",
+        title: gt("Disable controller"),
         searchTerms: ["gamepad", "controller", "off"],
         run: () => void disableAndroidController(),
       });
@@ -498,7 +506,10 @@ export function CommandPalette(props: {
       kind: "project",
       project,
       title: project.title,
-      detail: `New thread · ${savedConnectionsById[project.environmentId]?.environmentLabel ?? project.environmentId}`,
+      detail: gt("New thread · {environment}", {
+        environment:
+          savedConnectionsById[project.environmentId]?.environmentLabel ?? project.environmentId,
+      }),
       searchTerms: [project.workspaceRoot, "new thread", "project"],
       run: () =>
         selectDetail({
@@ -530,7 +541,7 @@ export function CommandPalette(props: {
         return {
           key: scopedThreadKey(thread.environmentId, thread.id),
           kind: "thread",
-          title: thread.title || "Untitled thread",
+          title: thread.title || gt("Untitled thread"),
           detail: [project?.title, environment].filter(Boolean).join(" · "),
           searchTerms: [],
           threadSearch: threadSearchSubject(
@@ -576,7 +587,7 @@ export function CommandPalette(props: {
       actions.push({
         key: "nextAttentionThread",
         kind: "action",
-        title: "Next thread needing attention",
+        title: gt("Next thread needing attention"),
         searchTerms: ["next", "approval", "question", "failed", "unread"],
         run: () => {
           const thread = threadByKey.get(attentionThread.key);
@@ -596,13 +607,13 @@ export function CommandPalette(props: {
       actions.push({
         key: "discardReply",
         kind: "action",
-        title: "Discard current composed reply…",
+        title: gt("Discard current composed reply…"),
         searchTerms: ["discard", "clear", "draft", "reply"],
         run: () =>
           Dialog.confirm({
-            title: "Discard current composed reply?",
-            message: "The text and attachments in this reply will be removed.",
-            confirmText: "Discard reply",
+            title: gt("Discard current composed reply?"),
+            message: gt("The text and attachments in this reply will be removed."),
+            confirmText: gt("Discard reply"),
             destructive: true,
             onConfirm: () => {
               controllerVoice.session.cancel(composedReplyKey);
@@ -632,6 +643,7 @@ export function CommandPalette(props: {
     workspaceTabs,
     delegatedUnderParent,
     triageEnvironmentId,
+    gt,
   ]);
   const rankedMessageKeys = useMemo(() => {
     const subjectByKey = new Map(
@@ -793,7 +805,7 @@ export function CommandPalette(props: {
           >
             <Pressable
               className="absolute inset-0 bg-backdrop"
-              accessibilityLabel="Close command palette"
+              accessibilityLabel={gt("Close command palette")}
               onPress={() => close()}
             />
             <GlassSurface
@@ -821,8 +833,8 @@ export function CommandPalette(props: {
                     onSelectionChange={(event) =>
                       setDictationSelection(event.nativeEvent.selection)
                     }
-                    accessibilityLabel="Search commands, projects, and threads"
-                    placeholder="Search commands, projects, and threads…"
+                    accessibilityLabel={gt("Search commands, projects, and threads")}
+                    placeholder={gt("Search commands, projects, and threads…")}
                     placeholderTextColorClassName="accent-placeholder"
                     autoCorrect={false}
                     autoCapitalize="none"
@@ -865,14 +877,18 @@ export function CommandPalette(props: {
                 contentContainerStyle={{ paddingBottom: 8 }}
                 ListEmptyComponent={
                   <Text className="p-5 text-center text-foreground-muted">
-                    {search.isPending ? "Searching…" : "No results"}
+                    {search.isPending
+                      ? gt("Searching…")
+                      : search.failed
+                        ? gt("Couldn't search messages")
+                        : gt("No results")}
                   </Text>
                 }
                 // Message results from slower environments may still arrive below.
                 ListFooterComponent={
                   results.length > 0 && search.isPending && !query.startsWith(">") ? (
                     <Text className="px-5 pt-2 text-xs text-foreground-muted">
-                      Searching messages…
+                      <T>Searching messages…</T>
                     </Text>
                   ) : undefined
                 }
@@ -883,7 +899,7 @@ export function CommandPalette(props: {
                         className="px-5 pt-2 text-xs text-foreground-muted"
                         style={{ height: SECTION_LABEL_HEIGHT }}
                       >
-                        In messages
+                        <T>In messages</T>
                       </Text>
                     ) : null}
                     <PaletteRow

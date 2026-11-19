@@ -1,3 +1,4 @@
+import { T, useGT, useMessages } from "gt-react-native";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomValue } from "@effect/atom-react";
@@ -7,7 +8,7 @@ import {
   connectionRouteAddress,
   connectionRouteId,
   connectionRouteKind,
-  connectionRouteLabel,
+  connectionRouteLabelText,
   connectionRoutes,
   isLearned,
   pendingRouteOrder,
@@ -19,7 +20,7 @@ import {
 } from "@t3tools/shared/authScopeOptions";
 import { AsyncResult } from "effect/reactivity";
 import * as Option from "effect/Option";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import Reanimated, {
   ReduceMotion,
@@ -34,6 +35,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { StatusPill } from "../../components/StatusPill";
 import { environmentCatalog } from "../../connection/catalog";
 import { cn } from "../../lib/cn";
+import { environmentPresentations } from "../../state/presentation";
 import { environmentSession } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { connectionTone } from "../connection/connectionTone";
@@ -63,16 +65,18 @@ export function EnvironmentRoutesSection({
   readonly connected: boolean;
   readonly onAddRoute: () => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const entry = useAtomValue(environmentCatalog.catalogValueAtom).entries.get(environmentId);
   const prepared = useAtomValue(environmentSession.preparedConnectionValueAtom(environmentId));
+  const refusedRouteIds =
+    useAtomValue(environmentPresentations.presentationAtom(environmentId))?.refusedRouteIds ?? [];
   const sessionResult = useAtomValue(environmentSession.sessionStateAtom(environmentId));
   const session = AsyncResult.getOrElse(sessionResult, () => null);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const reorder = useAtomCommand(environmentCatalog.reorderRoutes, "route reorder");
   const removeRoute = useAtomCommand(environmentCatalog.removeRoute, "route removal");
   const window = useWindowDimensions();
-  const translation = useSharedValue(0);
-  const dragId = useRef<string | null>(null);
   const [editing, setEditing] = useState(false);
   const saved = entry === undefined ? [] : connectionRoutes(entry);
   const savedIds = saved.map((route) => connectionRouteId(route.target));
@@ -81,19 +85,6 @@ export function EnvironmentRoutesSection({
   // Dropped during render so a stale order never outlives the save it was for.
   if (pending !== null && shownPending === null) setPending(null);
   const order = shownPending ?? savedIds;
-  const [drag, setDrag] = useState<{ readonly id: string; readonly translation: number } | null>(
-    null,
-  );
-  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(() => new Map());
-  // Remount dropped rows so data order and cleared drag offsets change together without flashing.
-  const [drops, setDrops] = useState(0);
-  const orderVersion = savedIds.join("|");
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels an in-flight route drag when the saved order, edit mode or window changes
-  useEffect(() => {
-    dragId.current = null;
-    setDrag(null);
-    translation.set(0);
-  }, [orderVersion, editing, window.width, window.height, translation]);
   if (entry === undefined) return null;
 
   const byId = new Map(saved.map((route) => [connectionRouteId(route.target), route]));
@@ -114,6 +105,122 @@ export function EnvironmentRoutesSection({
     next.splice(to, 0, moved!);
     commit(next);
   };
+  const confirmRemove = (route: ConnectionRoute) =>
+    Dialog.alert(
+      gt("Remove {route}?", { route: connectionRouteLabelText(route, messages) }),
+      connectionRouteAddress(route) ?? undefined,
+      [
+        { text: gt("Cancel"), style: "cancel" },
+        {
+          text: gt("Remove"),
+          style: "destructive",
+          onPress: () =>
+            void removeRoute({ environmentId, routeId: connectionRouteId(route.target) }),
+        },
+      ],
+    );
+
+  return (
+    <SettingsSection
+      title={gt("Routes")}
+      trailing={
+        routes.length > 1 ? (
+          <Button
+            label={editing ? gt("Done") : gt("Edit")}
+            tone="text"
+            onPress={() => setEditing((value) => !value)}
+          />
+        ) : undefined
+      }
+    >
+      <SettingsActionRow
+        icon="checkmark.circle"
+        label={gt("Your permissions")}
+        onPress={() => setPermissionsOpen((open) => !open)}
+      />
+      {permissionsOpen ? (
+        <View className="gap-2 px-4 py-3">
+          {activeRouteId !== null &&
+          sessionResult._tag !== "Failure" &&
+          !sessionResult.waiting &&
+          session?.authenticated ? (
+            <>
+              <Text className="text-sm text-foreground-muted">
+                <T>
+                  Applies to the route marked In use. Other routes may have different permissions
+                  and have not been checked.
+                </T>
+              </Text>
+              {AUTH_SCOPE_OPTIONS.map(({ scope, title }) => (
+                <Text key={scope} className="text-sm text-foreground">
+                  {sessionGrantsScope(session, scope)
+                    ? gt("{scope}: Allowed", { scope: messages(title) })
+                    : gt("{scope}: Not granted", { scope: messages(title) })}
+                </Text>
+              ))}
+            </>
+          ) : (
+            <Text className="text-sm text-foreground-muted">
+              {sessionPermissionsUnavailableMessage(
+                {
+                  connected: activeRouteId !== null,
+                  failed: sessionResult._tag === "Failure",
+                  rejected:
+                    sessionResult._tag !== "Failure" &&
+                    !sessionResult.waiting &&
+                    session?.authenticated === false,
+                },
+                messages,
+              )}
+            </Text>
+          )}
+        </View>
+      ) : null}
+      <RouteRows
+        key={JSON.stringify([environmentId, savedIds, editing, window.width, window.height])}
+        routes={routes}
+        editing={editing}
+        activeRouteId={activeRouteId}
+        refusedRouteIds={refusedRouteIds}
+        onMove={move}
+        onRemove={confirmRemove}
+      />
+      <SettingsActionRow icon="plus" label={gt("Add route")} onPress={onAddRoute} />
+    </SettingsSection>
+  );
+}
+
+function RouteRows({
+  routes,
+  editing,
+  activeRouteId,
+  refusedRouteIds,
+  onMove,
+  onRemove,
+}: {
+  readonly routes: ReadonlyArray<ConnectionRoute>;
+  readonly editing: boolean;
+  readonly activeRouteId: string | null;
+  readonly refusedRouteIds: ReadonlyArray<string>;
+  readonly onMove: (from: number, to: number) => void;
+  readonly onRemove: (route: ConnectionRoute) => void;
+}) {
+  const order = routes.map((route) => connectionRouteId(route.target));
+  const translation = useSharedValue(0);
+  const dragId = useRef<string | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ignore late native drag callbacks after the route list has remounted.
+  useLayoutEffect(
+    () => () => {
+      dragId.current = null;
+    },
+    [],
+  );
+  const [drag, setDrag] = useState<{ readonly id: string; readonly translation: number } | null>(
+    null,
+  );
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(() => new Map());
+  // Remount dropped rows so data order and cleared drag offsets change together without flashing.
+  const [drops, setDrops] = useState(0);
   const dropIndex = (from: number, translation: number) => {
     const step = translation > 0 ? 1 : -1;
     let to = from;
@@ -126,125 +233,57 @@ export function EnvironmentRoutesSection({
     }
     return to;
   };
-  const confirmRemove = (route: ConnectionRoute) =>
-    Dialog.alert(
-      `Remove ${connectionRouteLabel(route)}?`,
-      connectionRouteAddress(route) ?? undefined,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () =>
-            void removeRoute({ environmentId, routeId: connectionRouteId(route.target) }),
-        },
-      ],
-    );
-
   const dragFrom = drag === null ? -1 : order.indexOf(drag.id);
   const dragTo = drag === null ? -1 : dropIndex(dragFrom, drag.translation);
 
-  return (
-    <SettingsSection
-      title="Routes"
-      trailing={
-        routes.length > 1 ? (
-          <Button
-            label={editing ? "Done" : "Edit"}
-            tone="text"
-            onPress={() => setEditing((value) => !value)}
-          />
-        ) : undefined
-      }
-    >
-      <SettingsActionRow
-        icon="checkmark.circle"
-        label="Your permissions"
-        onPress={() => setPermissionsOpen((open) => !open)}
+  return routes.map((route, index) => {
+    const id = connectionRouteId(route.target);
+    const lifted = drag === null ? 0 : (heights.get(drag.id) ?? 0);
+    const shift =
+      dragFrom === -1 || index === dragFrom
+        ? 0
+        : dragFrom < dragTo && index > dragFrom && index <= dragTo
+          ? -lifted
+          : dragFrom > dragTo && index < dragFrom && index >= dragTo
+            ? lifted
+            : 0;
+    return (
+      <RouteRow
+        key={`${id}:${drops}`}
+        translation={translation}
+        route={route}
+        position={index + 1}
+        count={routes.length}
+        inUse={id === activeRouteId}
+        refused={refusedRouteIds.includes(id)}
+        editing={editing}
+        offset={index === dragFrom ? (drag?.translation ?? 0) : shift}
+        lifted={index === dragFrom}
+        onHeight={(height) =>
+          setHeights((current) =>
+            current.get(id) === height ? current : new Map(current).set(id, height),
+          )
+        }
+        onDragStart={() => {
+          dragId.current = id;
+          setDrag({ id, translation: 0 });
+        }}
+        onDragMove={(translation) => {
+          if (dragId.current === id) setDrag({ id, translation });
+        }}
+        onDragEnd={(translation, cancelled) => {
+          if (dragId.current !== id) return;
+          dragId.current = null;
+          setDrag(null);
+          setDrops((count) => count + 1);
+          if (!cancelled) onMove(index, dropIndex(index, translation));
+        }}
+        onStep={(direction) => onMove(index, direction === "up" ? index - 1 : index + 1)}
+        // A learned route would be learned again, so it is only reordered.
+        onRemove={routes.length > 1 && !isLearned(route) ? () => onRemove(route) : undefined}
       />
-      {permissionsOpen ? (
-        <View className="gap-2 px-4 py-3">
-          {activeRouteId !== null &&
-          sessionResult._tag !== "Failure" &&
-          !sessionResult.waiting &&
-          session?.authenticated ? (
-            <>
-              <Text className="text-sm text-foreground-muted">
-                Applies to the route marked In use. Other routes may have different permissions and
-                have not been checked.
-              </Text>
-              {AUTH_SCOPE_OPTIONS.map(({ scope, title }) => (
-                <Text key={scope} className="text-sm text-foreground">
-                  {title}: {sessionGrantsScope(session, scope) ? "Allowed" : "Not granted"}
-                </Text>
-              ))}
-            </>
-          ) : (
-            <Text className="text-sm text-foreground-muted">
-              {sessionPermissionsUnavailableMessage({
-                connected: activeRouteId !== null,
-                failed: sessionResult._tag === "Failure",
-                rejected:
-                  sessionResult._tag !== "Failure" &&
-                  !sessionResult.waiting &&
-                  session?.authenticated === false,
-              })}
-            </Text>
-          )}
-        </View>
-      ) : null}
-      {routes.map((route, index) => {
-        const id = connectionRouteId(route.target);
-        const lifted = drag === null ? 0 : (heights.get(drag.id) ?? 0);
-        const shift =
-          dragFrom === -1 || index === dragFrom
-            ? 0
-            : dragFrom < dragTo && index > dragFrom && index <= dragTo
-              ? -lifted
-              : dragFrom > dragTo && index < dragFrom && index >= dragTo
-                ? lifted
-                : 0;
-        return (
-          <RouteRow
-            key={`${id}:${drops}`}
-            translation={translation}
-            route={route}
-            position={index + 1}
-            count={routes.length}
-            inUse={id === activeRouteId}
-            editing={editing}
-            offset={index === dragFrom ? (drag?.translation ?? 0) : shift}
-            lifted={index === dragFrom}
-            onHeight={(height) =>
-              setHeights((current) =>
-                current.get(id) === height ? current : new Map(current).set(id, height),
-              )
-            }
-            onDragStart={() => {
-              dragId.current = id;
-              setDrag({ id, translation: 0 });
-            }}
-            onDragMove={(translation) => {
-              if (dragId.current === id) setDrag({ id, translation });
-            }}
-            onDragEnd={(translation, cancelled) => {
-              if (dragId.current !== id) return;
-              dragId.current = null;
-              setDrag(null);
-              setDrops((count) => count + 1);
-              if (!cancelled) move(index, dropIndex(index, translation));
-            }}
-            onStep={(direction) => move(index, direction === "up" ? index - 1 : index + 1)}
-            // A learned route would be learned again, so it is only reordered.
-            onRemove={
-              routes.length > 1 && !isLearned(route) ? () => confirmRemove(route) : undefined
-            }
-          />
-        );
-      })}
-      <SettingsActionRow icon="plus" label="Add route" onPress={onAddRoute} />
-    </SettingsSection>
-  );
+    );
+  });
 }
 
 function RouteRow(props: {
@@ -253,6 +292,7 @@ function RouteRow(props: {
   readonly position: number;
   readonly count: number;
   readonly inUse: boolean;
+  readonly refused: boolean;
   readonly editing: boolean;
   readonly offset: number;
   readonly lifted: boolean;
@@ -263,9 +303,15 @@ function RouteRow(props: {
   readonly onStep: (direction: "up" | "down") => void;
   readonly onRemove: (() => void) | undefined;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { route, lifted, offset } = props;
-  const label = connectionRouteLabel(route);
+  const label = connectionRouteLabelText(route, messages);
   const address = connectionRouteAddress(route);
+  const refusedHint =
+    props.refused && address !== null
+      ? gt("The host refused this device's sign-in. Pair this address again with Add route.")
+      : null;
   const style = useAnimatedStyle(() => ({
     transform: [
       {
@@ -285,7 +331,7 @@ function RouteRow(props: {
       {props.editing && props.onRemove ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${label} route`}
+          accessibilityLabel={gt("Remove {route} route", { route: label })}
           hitSlop={8}
           onPress={props.onRemove}
           className="active:opacity-70"
@@ -305,9 +351,11 @@ function RouteRow(props: {
         accessibilityLabel={[
           label,
           address,
-          isLearned(route) ? "Found automatically" : null,
-          props.inUse ? "In use" : null,
-          `Route ${props.position} of ${props.count}`,
+          isLearned(route) ? gt("Found automatically") : null,
+          props.inUse ? gt("In use") : null,
+          props.refused ? gt("Sign-in refused") : null,
+          gt("Route {position} of {count}", { position: props.position, count: props.count }),
+          refusedHint,
         ]
           .filter((part) => part !== null)
           .join(", ")}
@@ -330,13 +378,23 @@ function RouteRow(props: {
               {label}
             </Text>
             {props.inUse ? (
-              <StatusPill {...connectionTone("connected")} label="In use" size="compact" />
+              <StatusPill {...connectionTone("connected")} label={gt("In use")} size="compact" />
+            ) : null}
+            {props.refused ? (
+              <StatusPill
+                {...connectionTone("error")}
+                label={gt("Sign-in refused")}
+                size="compact"
+              />
             ) : null}
           </View>
           {address !== null ? (
             <Text numberOfLines={1} className="text-sm text-foreground-muted">
-              {isLearned(route) ? `${address} · found automatically` : address}
+              {isLearned(route) ? gt("{address} · found automatically", { address }) : address}
             </Text>
+          ) : null}
+          {refusedHint !== null ? (
+            <Text className="text-sm text-foreground-muted">{refusedHint}</Text>
           ) : null}
         </View>
       </View>

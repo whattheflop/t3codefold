@@ -16,7 +16,6 @@ const metroConfig: Promise<{ transformer: { babelTransformerPath: string } }> =
 const KNOWN_BAILOUTS: Record<string, string> = {
   // Fold pane refs, UI-thread gestures and cleanup paths still need manual memoization.
   "src/features/keyboard/useWorkspaceVimNavigation.tsx": "ref read during render",
-  "src/features/layout/fold-workspace-pane-divider.tsx": "mutates a frozen value",
   "src/features/layout/use-fold-workspace-android-back.ts": "ref read during render",
   "src/features/threads/thread-list-drag.tsx": "ref read during render",
   "src/features/threads/use-ui-thread-drag.ts": "mutates a frozen value",

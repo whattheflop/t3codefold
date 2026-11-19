@@ -75,6 +75,7 @@ export function formatStartupCrashReport(
   app: { readonly version: string; readonly build: string },
 ): string {
   const header = `T3 Code ${app.version} (${app.build})`;
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- crash report text shared with maintainers
   if (records.length === 0) return `${header}\nNo crashes or recording failures recorded.`;
   return [
     header,

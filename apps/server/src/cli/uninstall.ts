@@ -22,6 +22,7 @@ import {
 } from "../cloud/pinnedRuntime.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 import * as CliService from "./service.ts";
+import { awaitDetachedSpawn } from "../process/windowsVerbatimSpawn.ts";
 import { findWindowsShim } from "./update.ts";
 
 export class CliUninstallError extends Schema.TaggedError<CliUninstallError>()(
@@ -63,7 +64,7 @@ export const findOwnedLauncher = Effect.fn("cli.uninstall.find_launcher")(functi
   return yield* findPosixLauncher({ launchedAs: input.launchedAs, versionsDir: input.versionsDir });
 });
 
-/** Whether `launcher` is a link, unedited `t3` script, or unedited `t3.cmd` into this home's runtime/versions. */
+/** Whether `launcher` is a link, unedited `t3` script, or unedited `t3.cmd` into this home's runtime/fold/versions. */
 const ownsLauncher = Effect.fn("cli.uninstall.owns_launcher")(function* (
   launcher: string,
   versionsDir: string,
@@ -102,16 +103,17 @@ const ownsLauncher = Effect.fn("cli.uninstall.owns_launcher")(function* (
 
 /**
  * Launchers recorded in `runtime/launchers` by the install scripts and `t3 install` that still
- * point into this home's runtime/versions. npx can run a different version than the installed
+ * point into this home's runtime/fold/versions. npx can run a different version than the installed
  * one, so the launcher this process started from does not always name them.
  */
 export const findRecordedLaunchers = Effect.fn("cli.uninstall.find_recorded_launchers")(function* (
-  versionsDir: string,
+  baseDir: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const versionsDir = pinnedRuntimeVersionsDir(path, baseDir);
   const recorded = yield* fs
-    .readFileString(path.join(path.dirname(versionsDir), "launchers"))
+    .readFileString(path.join(baseDir, "runtime", "launchers"))
     .pipe(Effect.orElseSucceed(() => ""));
   const owned: Array<string> = [];
   for (const launcher of recorded.split(/\r?\n/).filter(Boolean)) {
@@ -164,7 +166,7 @@ const planUninstall = Effect.fn("cli.uninstall.plan")(function* (input: {
     launchers: [
       ...new Set([
         ...(launchedFrom === undefined ? [] : [launchedFrom]),
-        ...(yield* findRecordedLaunchers(versionsDir)),
+        ...(yield* findRecordedLaunchers(input.baseDir)),
       ]),
     ],
     runtimeDir: (yield* fs.exists(runtimeDir).pipe(Effect.orElseSucceed(() => false)))
@@ -277,13 +279,13 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
     if (platform === "win32") {
       const runtimeDir = plan.runtimeDir;
       const comspec = environment["ComSpec"] ?? environment["COMSPEC"] ?? "cmd.exe";
-      yield* Effect.try({
-        try: () => spawnWindowsRemoval(comspec, runtimeDir).unref(),
-        catch: () =>
-          new CliUninstallError({
-            reason: `Could not schedule removal of ${runtimeDir}. Delete it yourself once this window is closed.`,
-          }),
-      });
+      const notScheduled = () =>
+        new CliUninstallError({
+          reason: `Could not schedule removal of ${runtimeDir}. Delete it yourself once this window is closed.`,
+        });
+      yield* awaitDetachedSpawn(() => spawnWindowsRemoval(comspec, runtimeDir)).pipe(
+        Effect.mapError(notScheduled),
+      );
       yield* Console.log(`${runtimeDir} will be removed once t3 exits.`);
     } else {
       yield* fs

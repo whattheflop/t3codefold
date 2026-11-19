@@ -1,3 +1,4 @@
+import { T, Var, msg, useGT, useMessages } from "gt-react";
 import {
   MAX_THEME_BACKDROP_AMOUNT,
   MAX_THEME_BACKDROP_INTENSITY,
@@ -23,14 +24,18 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { VoiceSettings } from "../voice/VoiceWorkspaceProvider";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { SplatterPatternGallery } from "./SplatterPatternGallery";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 
 // Fold's settings rows and their part in "Restore defaults". SettingsPanels
 // mounts each component where the row belongs and spreads the restore pieces.
 
-const THEME_BACKDROP_COLOR_ROLES = ["Lead", "Second", "Accent"] as const;
+const THEME_BACKDROP_COLOR_LABELS = [
+  msg("Lead splatter color"),
+  msg("Second splatter color"),
+  msg("Accent splatter color"),
+] as const;
 
 const THEME_BACKDROP_DEFAULTS = {
   themeBackdropEnabled: DEFAULT_UNIFIED_SETTINGS.themeBackdropEnabled,
@@ -83,6 +88,9 @@ export function getFoldChangedSettingLabels(settings: UnifiedSettings): Readonly
 
 /** Appearance: splatter backdrop and its options. */
 export function ThemeBackdropSettingsRows() {
+  const m = useMessages();
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const { resolvedTheme } = useTheme();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -106,11 +114,13 @@ export function ThemeBackdropSettingsRows() {
     <>
       <SettingsRow
         {...searchableSetting("theme-backdrop")}
-        description="Paint splatter and grain behind the conversation on every theme, in its own colors."
+        description={gt(
+          "Paint splatter and grain behind the conversation on every theme, in its own colors.",
+        )}
         resetAction={
           isThemeBackdropCustomized(settings) ? (
             <SettingResetButton
-              label="splatter backdrop"
+              ariaLabel={gt("Reset splatter backdrop to default")}
               onClick={() => updateSettings(THEME_BACKDROP_DEFAULTS)}
             />
           ) : null
@@ -121,7 +131,7 @@ export function ThemeBackdropSettingsRows() {
             onCheckedChange={(checked) =>
               updateSettings({ themeBackdropEnabled: Boolean(checked) })
             }
-            aria-label="Show the splatter backdrop"
+            aria-label={gt("Show the splatter backdrop")}
           />
         }
       />
@@ -130,14 +140,14 @@ export function ThemeBackdropSettingsRows() {
         <>
           <SettingsRow
             {...searchableSetting("theme-backdrop-colors")}
-            description="Match the active theme's accent colors, or pick your own paint."
+            description={gt("Match the active theme's accent colors, or pick your own paint.")}
             control={
               <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
                 {settings.themeBackdropColors
                   ? settings.themeBackdropColors.map((color, index) => (
                       <input
-                        key={THEME_BACKDROP_COLOR_ROLES[index]}
-                        aria-label={`${THEME_BACKDROP_COLOR_ROLES[index]} splatter color`}
+                        key={THEME_BACKDROP_COLOR_LABELS[index]}
+                        aria-label={m(THEME_BACKDROP_COLOR_LABELS[index]!)}
                         className="size-7 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
                         type="color"
                         value={color}
@@ -166,15 +176,21 @@ export function ThemeBackdropSettingsRows() {
                     <SelectTrigger
                       size="sm"
                       className="w-full min-w-0"
-                      aria-label="Splatter colors"
+                      aria-label={gt("Splatter colors")}
                     >
                       <SelectValue>
-                        {settings.themeBackdropColors ? "Custom" : "Match theme"}
+                        {settings.themeBackdropColors
+                          ? gt("Custom", { $context: "color scheme" })
+                          : gt("Match theme")}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup align="end" alignItemWithTrigger={false}>
-                      <SelectItem value="theme">Match theme (default)</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
+                      <SelectItem value="theme">
+                        <T>Match theme (default)</T>
+                      </SelectItem>
+                      <SelectItem value="custom">
+                        <T>Custom</T>
+                      </SelectItem>
                     </SelectPopup>
                   </Select>
                 </div>
@@ -184,7 +200,7 @@ export function ThemeBackdropSettingsRows() {
 
           <SettingsRow
             {...searchableSetting("theme-backdrop-intensity")}
-            description="How strongly the paint shows through."
+            description={gt("How strongly the paint shows through.")}
             control={
               <div className="flex w-full items-center gap-3 sm:w-52">
                 <output
@@ -194,7 +210,7 @@ export function ThemeBackdropSettingsRows() {
                   {settings.themeBackdropIntensity}%
                 </output>
                 <input
-                  aria-label="Splatter intensity"
+                  aria-label={gt("Splatter intensity")}
                   className="settings-slider min-w-0 flex-1"
                   id="theme-backdrop-intensity-input"
                   max={MAX_THEME_BACKDROP_INTENSITY}
@@ -220,7 +236,7 @@ export function ThemeBackdropSettingsRows() {
 
           <SettingsRow
             {...searchableSetting("theme-backdrop-amount")}
-            description="How much paint is scattered across the canvas, beyond the corners."
+            description={gt("How much paint is scattered across the canvas, beyond the corners.")}
             control={
               <div className="flex w-full items-center gap-3 sm:w-52">
                 <output
@@ -230,7 +246,7 @@ export function ThemeBackdropSettingsRows() {
                   {settings.themeBackdropAmount}%
                 </output>
                 <input
-                  aria-label="Splatter amount"
+                  aria-label={gt("Splatter amount")}
                   className="settings-slider min-w-0 flex-1"
                   id="theme-backdrop-amount-input"
                   max={MAX_THEME_BACKDROP_AMOUNT}
@@ -256,7 +272,9 @@ export function ThemeBackdropSettingsRows() {
 
           <SettingsRow
             {...searchableSetting("theme-backdrop-seed")}
-            description="Grows a different splatter pattern. 0 is the original; scroll the previews to browse."
+            description={gt(
+              "Grows a different splatter pattern. 0 is the original; scroll the previews to browse.",
+            )}
             control={
               <div className="flex items-center gap-2">
                 <NumberField
@@ -277,15 +295,15 @@ export function ThemeBackdropSettingsRows() {
                   }}
                 >
                   <NumberFieldGroup>
-                    <NumberFieldDecrement aria-label="Previous splatter pattern" />
-                    <NumberFieldInput aria-label="Splatter pattern seed" />
-                    <NumberFieldIncrement aria-label="Next splatter pattern" />
+                    <NumberFieldDecrement aria-label={gt("Previous splatter pattern")} />
+                    <NumberFieldInput aria-label={gt("Splatter pattern seed")} />
+                    <NumberFieldIncrement aria-label={gt("Next splatter pattern")} />
                   </NumberFieldGroup>
                 </NumberField>
                 <Button
                   size="icon-sm"
                   variant="outline"
-                  aria-label="Shuffle splatter pattern"
+                  aria-label={gt("Shuffle splatter pattern")}
                   onClick={() =>
                     updateSettings({
                       themeBackdropSeed: 1 + Math.floor(Math.random() * MAX_THEME_BACKDROP_SEED),
@@ -312,28 +330,30 @@ export function ThemeBackdropSettingsRows() {
 
           <SettingsRow
             {...searchableSetting("theme-backdrop-glow")}
-            description="Brighter bloom and a soft halo around every splat."
+            description={gt("Brighter bloom and a soft halo around every splat.")}
             control={
               <Switch
                 checked={settings.themeBackdropGlow}
                 onCheckedChange={(checked) =>
                   updateSettings({ themeBackdropGlow: Boolean(checked) })
                 }
-                aria-label="Neon glow"
+                aria-label={gt("Neon glow")}
               />
             }
           />
 
           <SettingsRow
             {...searchableSetting("theme-backdrop-dynamic")}
-            description="Every merged pull request adds a splat in its project's color. Wipes clean at 6am."
+            description={gt(
+              "Every merged pull request adds a splat in its project's color. Wipes clean at 6am.",
+            )}
             control={
               <Switch
                 checked={settings.themeBackdropDynamic}
                 onCheckedChange={(checked) =>
                   updateSettings({ themeBackdropDynamic: Boolean(checked) })
                 }
-                aria-label="Dynamic splatter"
+                aria-label={gt("Dynamic splatter")}
               />
             }
           />
@@ -345,19 +365,23 @@ export function ThemeBackdropSettingsRows() {
 
 /** Appearance: connected columns for long threads on wide screens. */
 export function ThreadWrapSettingsRow() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <>
       <SettingsRow
         {...searchableSetting("thread-wrap")}
-        description="On wide screens, scroll threads through linked columns, from the bottom of one into the top of the next."
+        description={gt(
+          "On wide screens, scroll threads through linked columns, from the bottom of one into the top of the next.",
+        )}
         resetAction={
           settings.threadWrapEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapEnabled ||
           settings.threadWrapPortalsEnabled !== DEFAULT_UNIFIED_SETTINGS.threadWrapPortalsEnabled ||
           settings.threadWrapMaxColumns !== DEFAULT_UNIFIED_SETTINGS.threadWrapMaxColumns ? (
             <SettingResetButton
-              label="thread wrapping"
+              ariaLabel={gt("Reset thread wrapping to default")}
               onClick={() =>
                 updateSettings({
                   threadWrapEnabled: DEFAULT_UNIFIED_SETTINGS.threadWrapEnabled,
@@ -383,14 +407,24 @@ export function ThreadWrapSettingsRow() {
                   <SelectTrigger
                     size="sm"
                     className="w-full min-w-0"
-                    aria-label="Maximum thread columns"
+                    aria-label={gt("Maximum thread columns")}
                   >
-                    <SelectValue>Up to {settings.threadWrapMaxColumns} columns</SelectValue>
+                    <SelectValue>
+                      <T>
+                        Up to <Var>{settings.threadWrapMaxColumns}</Var> columns
+                      </T>
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectPopup align="end" alignItemWithTrigger={false}>
-                    <SelectItem value="2">Up to 2 columns</SelectItem>
-                    <SelectItem value="3">Up to 3 columns (default)</SelectItem>
-                    <SelectItem value="4">Up to 4 columns</SelectItem>
+                    <SelectItem value="2">
+                      <T>Up to 2 columns</T>
+                    </SelectItem>
+                    <SelectItem value="3">
+                      <T>Up to 3 columns (default)</T>
+                    </SelectItem>
+                    <SelectItem value="4">
+                      <T>Up to 4 columns</T>
+                    </SelectItem>
                   </SelectPopup>
                 </Select>
               </div>
@@ -398,7 +432,7 @@ export function ThreadWrapSettingsRow() {
             <Switch
               checked={settings.threadWrapEnabled}
               onCheckedChange={(checked) => updateSettings({ threadWrapEnabled: Boolean(checked) })}
-              aria-label="Wrap long threads into columns on wide screens"
+              aria-label={gt("Wrap long threads into columns on wide screens")}
             />
           </div>
         }
@@ -406,15 +440,15 @@ export function ThreadWrapSettingsRow() {
       {settings.threadWrapEnabled ? (
         <div className="pl-6">
           <SettingsRow
-            title="Portals"
-            description="Show orange and blue markers where the columns connect."
+            title={gt("Portals")}
+            description={gt("Show orange and blue markers where the columns connect.")}
             control={
               <Switch
                 checked={settings.threadWrapPortalsEnabled}
                 onCheckedChange={(checked) =>
                   updateSettings({ threadWrapPortalsEnabled: Boolean(checked) })
                 }
-                aria-label="Show portals between thread columns"
+                aria-label={gt("Show portals between thread columns")}
               />
             }
           />
@@ -426,16 +460,20 @@ export function ThreadWrapSettingsRow() {
 
 /** General: the optional Cite bubble on assistant text selection. */
 export function CiteSelectionSettingsRow() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
       {...searchableSetting("cite-selection")}
-      description="Show a Cite bubble when selecting assistant text to quote it in the composer."
+      description={gt(
+        "Show a Cite bubble when selecting assistant text to quote it in the composer.",
+      )}
       resetAction={
         settings.citeSelectionEnabled !== DEFAULT_UNIFIED_SETTINGS.citeSelectionEnabled ? (
           <SettingResetButton
-            label="Cite on text selection"
+            ariaLabel={gt("Reset Cite on text selection to default")}
             onClick={() =>
               updateSettings({
                 citeSelectionEnabled: DEFAULT_UNIFIED_SETTINGS.citeSelectionEnabled,
@@ -448,7 +486,7 @@ export function CiteSelectionSettingsRow() {
         <Switch
           checked={settings.citeSelectionEnabled}
           onCheckedChange={(checked) => updateSettings({ citeSelectionEnabled: Boolean(checked) })}
-          aria-label="Show Cite on text selection"
+          aria-label={gt("Show Cite on text selection")}
         />
       }
     />
@@ -457,17 +495,21 @@ export function CiteSelectionSettingsRow() {
 
 /** General: Vim keyboard mode and sidebar thread previews. */
 export function VimKeyboardSettingsRows() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <>
       <SettingsRow
         {...searchableSetting("vim-keyboard-mode")}
-        description="Use Vim-style navigation in conversations and modal editing in the composer. Press ? in conversation Normal mode for help."
+        description={gt(
+          "Use Vim-style navigation in conversations and modal editing in the composer. Press ? in conversation Normal mode for help.",
+        )}
         resetAction={
           settings.vimModeEnabled !== DEFAULT_UNIFIED_SETTINGS.vimModeEnabled ? (
             <SettingResetButton
-              label="Vim keyboard mode"
+              ariaLabel={gt("Reset Vim keyboard mode to default")}
               onClick={() =>
                 updateSettings({
                   vimModeEnabled: DEFAULT_UNIFIED_SETTINGS.vimModeEnabled,
@@ -480,18 +522,20 @@ export function VimKeyboardSettingsRows() {
           <Switch
             checked={settings.vimModeEnabled}
             onCheckedChange={(checked) => updateSettings({ vimModeEnabled: Boolean(checked) })}
-            aria-label="Vim keyboard mode"
+            aria-label={gt("Vim keyboard mode")}
           />
         }
       />
 
       <SettingsRow
         {...searchableSetting("vim-thread-preview")}
-        description="In Vim mode, preview threads as you move through the sidebar with j / k. Focus stays in the sidebar; press i to open the selection."
+        description={gt(
+          "In Vim mode, preview threads as you move through the sidebar with j / k. Focus stays in the sidebar; press i to open the selection.",
+        )}
         resetAction={
           settings.vimThreadPreviewEnabled !== DEFAULT_UNIFIED_SETTINGS.vimThreadPreviewEnabled ? (
             <SettingResetButton
-              label="Preview threads while navigating"
+              ariaLabel={gt("Reset Preview threads while navigating to default")}
               onClick={() =>
                 updateSettings({
                   vimThreadPreviewEnabled: DEFAULT_UNIFIED_SETTINGS.vimThreadPreviewEnabled,
@@ -507,7 +551,7 @@ export function VimKeyboardSettingsRows() {
             onCheckedChange={(checked) =>
               updateSettings({ vimThreadPreviewEnabled: Boolean(checked) })
             }
-            aria-label="Preview threads while navigating"
+            aria-label={gt("Preview threads while navigating")}
           />
         }
       />
@@ -517,6 +561,7 @@ export function VimKeyboardSettingsRows() {
 
 /** General: live voice settings, anchored for settings search. */
 export function LiveVoiceSettingsSection() {
+  const searchableSetting = useSearchableSetting();
   return (
     <div id={searchableSetting("live-voice").id}>
       <VoiceSettings />

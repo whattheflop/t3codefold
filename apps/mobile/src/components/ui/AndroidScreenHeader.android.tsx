@@ -2,6 +2,7 @@ import { useControllerRegionId } from "../../features/controller/ControllerRegio
 import { androidKeyboardFirst } from "../../lib/android-back";
 import { AppActivityIndicator } from "./AppActivityIndicator";
 import { Column, Text as NativeText, RNHostView } from "@expo/ui/jetpack-compose";
+import { useGT } from "gt-react-native";
 import { use, useState, type ReactNode } from "react";
 import { View } from "react-native";
 
@@ -49,6 +50,7 @@ export function AndroidScreenHeader(props: {
   readonly hideBottomBorder?: boolean;
 }) {
   const regionId = useControllerRegionId("header");
+  const gt = useGT();
   const { colors } = useControlTheme();
   const titleTypography = useScaledTextRole("title");
   const subtitleTypography = useScaledTextRole("label");
@@ -84,7 +86,7 @@ export function AndroidScreenHeader(props: {
             <View collapsable={false} className="flex-row items-center">
               {props.onBack ? (
                 <IconButton
-                  accessibilityLabel="Navigate up"
+                  accessibilityLabel={gt("Navigate up")}
                   icon="arrow.left"
                   tintColorClassName="accent-header-foreground"
                   onPress={androidKeyboardFirst(props.onBack)}
@@ -173,7 +175,7 @@ export function AndroidScreenHeader(props: {
                 >
                   {(open) => (
                     <IconButton
-                      accessibilityLabel="More actions"
+                      accessibilityLabel={gt("More actions")}
                       icon="ellipsis"
                       tintColorClassName="accent-header-foreground"
                       onPress={open}

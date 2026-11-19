@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - The test observes a real cleanup-shell spawn failure.
+import * as NodeChildProcess from "node:child_process";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Config from "effect/Config";
@@ -10,7 +12,7 @@ import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/cli";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NetService from "@t3tools/shared/Net";
-import { afterEach, vi } from "vite-plus/test";
+import { afterEach, expect, vi } from "vite-plus/test";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as BootService from "../cloud/bootService.ts";
@@ -22,7 +24,69 @@ import {
   uninstallCommand,
 } from "./uninstall.ts";
 
+vi.mock("node:child_process", { spy: true });
+
 afterEach(() => vi.restoreAllMocks());
+
+it.live("reports failure when the Windows cleanup shell cannot start", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-uninstall-shell-" });
+    const runtimeDir = path.join(baseDir, "runtime", "fold");
+    yield* fs.makeDirectory(runtimeDir, { recursive: true });
+    vi.spyOn(BootService, "layer").mockReturnValue(
+      Layer.succeed(
+        BootService.BootService,
+        BootService.BootService.of({
+          status: Effect.succeed({
+            supported: false,
+            installed: false,
+            current: false,
+            unitPath: "",
+            logPath: "",
+          }),
+          withStopped: (operation) => operation,
+          restart: Effect.die("unexpected restart"),
+          install: () => Effect.die("unexpected install"),
+          uninstall: Effect.die("unexpected uninstall"),
+        }),
+      ),
+    );
+    const actual = yield* Effect.promise(() =>
+      vi.importActual<typeof import("node:child_process")>("node:child_process"),
+    );
+    const spawn = actual.spawn;
+    const failedSpawn = new Promise<Error>((resolve) => {
+      vi.spyOn(NodeChildProcess, "spawn").mockImplementation((...args) => {
+        const child = spawn(...args);
+        // Observe the real spawn error without letting it terminate the test runner.
+        child.once("error", resolve);
+        return child;
+      });
+    });
+    const result = yield* Command.runWith(uninstallCommand, { version: packageJson.version })([
+      "--base-dir",
+      baseDir,
+      "--yes",
+    ]).pipe(
+      Effect.result,
+      Effect.provideService(HostProcess.Environment, {
+        ComSpec: path.join(baseDir, "missing-cmd.exe"),
+      }),
+      Effect.provideService(HostProcess.Platform, "win32"),
+      Effect.provideService(HostProcess.IsExecutable, false),
+      Effect.provide(
+        Layer.mergeAll(
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+          Layer.fresh(TestConsole.layer),
+        ),
+      ),
+    );
+    yield* Effect.promise(() => failedSpawn);
+    expect(result._tag, "an unavailable cleanup shell must fail uninstall").toBe("Failure");
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NetService.layer))),
+);
 
 it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("t3 uninstall command", (it) => {
   it.effect("names another home's service it leaves installed", () =>
@@ -84,9 +148,9 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       const root = yield* fs
         .makeTempDirectoryScoped({ prefix: "t3-uninstall-" })
         .pipe(Effect.flatMap(fs.realPath));
-      const versionsDir = path.join(root, "runtime/versions");
+      const versionsDir = path.join(root, "runtime/fold/versions");
       const exe = path.join(versionsDir, "1.0.0/t3");
-      const otherExe = path.join(root, "other/runtime/versions/1.0.0/t3");
+      const otherExe = path.join(root, "other/runtime/fold/versions/1.0.0/t3");
       const copy = path.join(root, "copy/t3");
       for (const file of [exe, otherExe, copy]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
@@ -137,7 +201,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       const throughAlias = path.join(root, "bin/t3-alias");
       const pruned = path.join(root, "bin/t3-pruned");
       yield* fs.symlink(root, path.join(root, "alias"));
-      yield* fs.symlink(path.join(root, "alias/runtime/versions/1.0.0/t3"), throughAlias);
+      yield* fs.symlink(path.join(root, "alias/runtime/fold/versions/1.0.0/t3"), throughAlias);
       yield* fs.symlink(path.join(versionsDir, "0.9.0/t3"), pruned);
       // Another program inside a version is not a launcher.
       const sibling = path.join(root, "bin/t3-sibling");
@@ -156,7 +220,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
           path.join(root, "missing"),
         ].join("\n") + "\n",
       );
-      for (const dir of [versionsDir, path.join(root, "alias/runtime/versions")]) {
+      for (const dir of [root, path.join(root, "alias")]) {
         assert.deepStrictEqual(yield* findRecordedLaunchers(dir), [
           ours,
           throughAlias,
@@ -172,7 +236,7 @@ it.layer(NodeServices.layer)("t3 uninstall launcher", (it) => {
       yield* fs.writeFileString(edited, `@echo off\r\nset "T3CODE_HOME=D:\\other"\r\n"${exe}" %*`);
       yield* fs.writeFileString(path.join(root, "runtime/launchers"), `${cmd}\r\n${edited}\r\n`);
       assert.deepStrictEqual(
-        yield* findRecordedLaunchers(versionsDir).pipe(
+        yield* findRecordedLaunchers(root).pipe(
           Effect.provideService(HostProcess.Platform, "win32"),
         ),
         [cmd],

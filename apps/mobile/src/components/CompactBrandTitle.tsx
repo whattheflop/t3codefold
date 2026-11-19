@@ -1,5 +1,6 @@
+import { useMobileStageLabel } from "./useMobileStageLabel";
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceColumns";
-import Constants from "expo-constants";
+import { useGT } from "gt-react-native";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 
@@ -7,10 +8,10 @@ import { AppText as Text } from "./ui/AppText";
 import { FoldAndroidBrandTitle } from "./FoldAndroidBrandTitle";
 import { T3Wordmark } from "./T3Wordmark";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
-import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
 
 const BRAND_MAX_FONT_SCALE = 1.4;
+const WORDMARK_SUFFIX = "Code Fold";
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
@@ -25,7 +26,8 @@ export function CompactBrandTitle(
     readonly fit?: boolean;
   } = {},
 ) {
-  const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
+  const gt = useGT();
+  const stageLabel = useMobileStageLabel();
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
@@ -42,7 +44,7 @@ export function CompactBrandTitle(
         props.fit && showStage ? (event) => setFullWidth(event.nativeEvent.layout.width) : undefined
       }
       aria-level={1}
-      accessibilityLabel={props.accessibilityLabel ?? "T3 Code Fold, Threads"}
+      accessibilityLabel={props.accessibilityLabel ?? gt("T3 Code Fold, Threads")}
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -59,7 +61,7 @@ export function CompactBrandTitle(
         className="font-t3-medium text-foreground-muted"
         style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale, flexShrink: 1 }}
       >
-        Code Fold
+        {WORDMARK_SUFFIX}
       </Text>
       {stageLabel && showStage ? (
         <View className="rounded-full bg-subtle px-1.5 py-0.5">

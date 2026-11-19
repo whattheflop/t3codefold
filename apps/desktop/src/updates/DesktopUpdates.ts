@@ -545,7 +545,9 @@ export const make = Effect.gen(function* () {
   ) {
     yield* Effect.annotateCurrentSpan({ channel });
     const allowsPrerelease = channel === "nightly";
-    if (!config.mockUpdates) yield* electronUpdater.setFeedURL(foldDesktopFeed(channel));
+    if (!mockUpdates && policy.feedUrl === undefined) {
+      yield* electronUpdater.setFeedURL(foldDesktopFeed(channel));
+    }
     yield* electronUpdater.setChannel(channel);
     yield* electronUpdater.setAllowPrerelease(allowsPrerelease);
     // An older build can lack migrations this one ran. Only a guarded track switch's own check

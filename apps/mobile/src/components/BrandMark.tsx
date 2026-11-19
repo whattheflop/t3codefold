@@ -1,18 +1,17 @@
-import Constants from "expo-constants";
+import { useMobileStageLabel } from "./useMobileStageLabel";
 import { Image } from "expo-image";
+import { T } from "gt-react-native";
 import { View } from "react-native";
 
 import { AppText as Text } from "./ui/AppText";
 import { T3_CODE_BRAND_MARK_SOURCE } from "./brandAssets";
-import { MOBILE_APP_NAME, resolveMobileStageLabel } from "../lib/mobileBranding";
-
-const appVariant = Constants.expoConfig?.extra?.appVariant;
-const DEFAULT_STAGE_LABEL = resolveMobileStageLabel(appVariant);
+import { MOBILE_APP_NAME } from "../lib/mobileBranding";
 
 export function BrandMark(props: { readonly compact?: boolean; readonly stageLabel?: string }) {
+  const defaultStageLabel = useMobileStageLabel();
   const compact = props.compact ?? false;
   const iconSize = compact ? 32 : 44;
-  const stageLabel = props.stageLabel ?? DEFAULT_STAGE_LABEL;
+  const stageLabel = props.stageLabel ?? defaultStageLabel;
 
   return (
     <View className="flex-row items-center gap-3">
@@ -40,7 +39,7 @@ export function BrandMark(props: { readonly compact?: boolean; readonly stageLab
         </View>
         {!compact ? (
           <Text className="text-xs font-medium text-foreground-muted">
-            Mobile control surface for your live coding environments
+            <T>Mobile control surface for your live coding environments</T>
           </Text>
         ) : null}
       </View>
