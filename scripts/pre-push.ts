@@ -395,6 +395,7 @@ function main() {
     name === "@t3tools/desktop" ||
     name === "@t3tools/ssh" ||
     name === "@t3tools/shared" ||
+    name === "@t3tools/mobile" ||
     name === "@t3tools/scripts" ||
     name === "@t3tools/task-cache";
   const testGroups = [
